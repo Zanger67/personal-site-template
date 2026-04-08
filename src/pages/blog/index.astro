@@ -20,12 +20,12 @@ const posts = (await getCollection('blog'))
   <ul class="post-list">
     {posts.map(post => (
       <li>
-        <a href={`${base}/blog/${post.slug}`}>
+        <a href={`${base}/blog/${post.id}`}>
           <span class="post-title">{post.data.title}</span>
           <span class="post-date">
             {post.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             {' – '}
-            {getReadingTime(post.body)}
+            {getReadingTime(post.body!)}
           </span>
         </a>
         <p class="post-desc">{post.data.description}</p>

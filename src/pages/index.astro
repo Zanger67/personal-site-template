@@ -101,7 +101,7 @@ const projects = [
           <ul class="link-list">
             {posts.map(post => (
               <li>
-                <a href={`${base}/blog/${post.slug}`}>{post.data.title}</a>
+                <a href={`${base}/blog/${post.id}`}>{post.data.title}</a>
                 <span class="muted"> &mdash; {post.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
               </li>
             ))}
