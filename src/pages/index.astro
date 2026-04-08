@@ -5,6 +5,7 @@ import affiliations from '../data/affiliations.json';
 import publications from '../data/publications.json';
 
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
+const profileShape: 'circle' | 'rectangle' = 'circle';
 
 interface OrgGroup {
   entity: string;
@@ -114,7 +115,7 @@ const projects = [
       <img
         src={`${base}/images/profile.svg`}
         alt="Profile photo"
-        class="profile-img"
+        class:list={['profile-img', { 'profile-rect': profileShape === 'rectangle' }]}
         width="150"
         height="150"
       />
@@ -191,6 +192,13 @@ const projects = [
     border-radius: 50%;
     display: block;
     margin-bottom: 1.25rem;
+    object-fit: cover;
+  }
+
+  .profile-img.profile-rect {
+    border-radius: 8px;
+    width: 100%;
+    height: auto;
   }
 
   .sidebar-section h3 {
@@ -305,6 +313,11 @@ const projects = [
       width: 72px;
       height: 72px;
       margin-bottom: 0;
+    }
+
+    .profile-img.profile-rect {
+      width: 96px;
+      height: auto;
     }
   }
 </style>
