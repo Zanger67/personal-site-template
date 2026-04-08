@@ -4,7 +4,7 @@ import { getCollection } from 'astro:content';
 import affiliations from '../data/affiliations.json';
 import publications from '../data/publications.json';
 
-const base = import.meta.env.BASE_URL;
+const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 
 interface OrgGroup {
   entity: string;
