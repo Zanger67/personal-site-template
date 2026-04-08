@@ -9,6 +9,19 @@
   --border: #d4ddd5;
   --max-width: 680px;
   --max-width-wide: 880px;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --bg: #1a1e1a;
+  --bg-alt: #252a25;
+  --text: #e0e4e0;
+  --text-muted: #8a9a8d;
+  --accent: #7ab882;
+  --accent-hover: #8ec896;
+  --accent-light: #2a3a2c;
+  --border: #3a453b;
+  color-scheme: dark;
 }
 
 *,

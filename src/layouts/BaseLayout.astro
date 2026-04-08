@@ -42,8 +42,12 @@ const ogImage = new URL(image, Astro.site).href;
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&family=Iosevka+Charon+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <script is:inline>
-      const saved = localStorage.getItem('font');
-      if (saved) document.documentElement.setAttribute('data-font', saved);
+      const t = localStorage.getItem('theme');
+      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+      const f = localStorage.getItem('font');
+      if (f) document.documentElement.setAttribute('data-font', f);
     </script>
   </head>
   <body>
