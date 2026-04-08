@@ -1,0 +1,168 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import affiliations from '../data/affiliations.json';
+
+interface Affiliation {
+  entity: string;
+  role: string;
+  startDate: string;
+  endDate: string | null;
+  url: string | null;
+}
+
+interface OrgGroup {
+  entity: string;
+  url: string | null;
+  roles: { role: string; startDate: string; endDate: string | null }[];
+}
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return 'Present';
+  const [year, month] = dateStr.split('-');
+  const date = new Date(parseInt(year), parseInt(month) - 1);
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+function groupByEntity(items: Affiliation[]): OrgGroup[] {
+  const groups: OrgGroup[] = [];
+  const seen = new Map<string, OrgGroup>();
+  for (const item of items) {
+    if (seen.has(item.entity)) {
+      seen.get(item.entity)!.roles.push(item);
+    } else {
+      const group: OrgGroup = {
+        entity: item.entity,
+        url: item.url,
+        roles: [{ role: item.role, startDate: item.startDate, endDate: item.endDate }],
+      };
+      groups.push(group);
+      seen.set(item.entity, group);
+    }
+  }
+  return groups;
+}
+
+const currentGroups = groupByEntity(affiliations.current);
+const pastGroups = groupByEntity(affiliations.past);
+---
+
+<BaseLayout title="Experience — Buzz" description="Current and past affiliations.">
+  <h1>Experience</h1>
+  <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+    Current and past affiliations.
+  </p>
+
+  <h2>Current</h2>
+  <div class="groups">
+    {currentGroups.map(group => (
+      <div class="org-group">
+        <div class="org-name">
+          {group.url
+            ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
+            : group.entity}
+        </div>
+        <div class="roles">
+          {group.roles.map((r, i) => {
+            const multi = group.roles.length > 1;
+            const isLast = i === group.roles.length - 1;
+            const glyph = multi ? (isLast ? '└' : '├') : '';
+            return (
+              <div class:list={['role-row', { indented: !multi }]}>
+                {multi && <span class="bracket">{glyph}</span>}
+                <span class="role-name">{r.role}</span>
+                <span class="role-dates">{formatDate(r.startDate)} &mdash; {formatDate(r.endDate)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <h2>Past</h2>
+  <div class="groups">
+    {pastGroups.map(group => (
+      <div class="org-group">
+        <div class="org-name">
+          {group.url
+            ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
+            : group.entity}
+        </div>
+        <div class="roles">
+          {group.roles.map((r, i) => {
+            const multi = group.roles.length > 1;
+            const isLast = i === group.roles.length - 1;
+            const glyph = multi ? (isLast ? '└' : '├') : '';
+            return (
+              <div class:list={['role-row', { indented: !multi }]}>
+                {multi && <span class="bracket">{glyph}</span>}
+                <span class="role-name">{r.role}</span>
+                <span class="role-dates">{formatDate(r.startDate)} &mdash; {formatDate(r.endDate)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ))}
+  </div>
+</BaseLayout>
+
+<style>
+  h2 {
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .groups {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .org-group {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.25rem;
+  }
+
+  .org-group:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .org-name {
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+  }
+
+  .role-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    padding: 0.15rem 0;
+  }
+
+  .role-row.indented {
+    padding-left: 1.2rem;
+  }
+
+  .bracket {
+    font-family: monospace;
+    color: var(--text-muted);
+    width: 1.2rem;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .role-name {
+    font-size: 0.92rem;
+    color: var(--text-muted);
+  }
+
+  .role-dates {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    margin-left: auto;
+    padding-left: 1rem;
+  }
+</style>

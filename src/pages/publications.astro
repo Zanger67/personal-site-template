@@ -1,0 +1,62 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import publications from '../data/publications.json';
+---
+
+<BaseLayout title="Publications — Buzz" description="Selected publications and research.">
+  <h1>Publications</h1>
+  <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+    Selected publications and research.
+  </p>
+
+  {publications.length === 0 && <p>Nothing here yet.</p>}
+
+  <ol class="pub-list">
+    {publications.map(pub => (
+      <li>
+        <span class="pub-title">
+          {pub.url
+            ? <a href={pub.url} target="_blank" rel="noopener noreferrer">{pub.title}</a>
+            : pub.title}
+        </span>
+        <span class="pub-authors">{pub.authors.join(', ')}</span>
+        <span class="pub-venue">{pub.venue}, {pub.date}</span>
+      </li>
+    ))}
+  </ol>
+</BaseLayout>
+
+<style>
+  .pub-list {
+    list-style: none;
+    padding: 0;
+    counter-reset: pub;
+  }
+
+  .pub-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pub-list li:last-child {
+    border-bottom: none;
+  }
+
+  .pub-title {
+    font-weight: 500;
+  }
+
+  .pub-authors {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+
+  .pub-venue {
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--text-muted);
+  }
+</style>
