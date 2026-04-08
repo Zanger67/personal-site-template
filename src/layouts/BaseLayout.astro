@@ -21,7 +21,13 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalURL} />
-
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&family=Iosevka+Charon+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <script is:inline>
+      const saved = localStorage.getItem('font');
+      if (saved) document.documentElement.setAttribute('data-font', saved);
+    </script>
   </head>
   <body>
     <Header />

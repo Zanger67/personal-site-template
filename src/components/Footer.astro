@@ -13,9 +13,37 @@ const links = [
         <li><a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a></li>
       ))}
     </ul>
-    <p>&copy; {new Date().getFullYear()} Buzz the Yellow Jacket</p>
+    <div class="footer-right">
+      <label class="font-picker">
+        <span class="font-label">favourite fonts</span>
+        <select id="font-select">
+          <option value="atkinson-hyperlegible">Atkinson Hyperlegible</option>
+          <option value="inter">Inter</option>
+          <option value="ibm-plex-mono">IBM Plex Mono</option>
+          <option value="iosevka-charon">Iosevka Charon Mono</option>
+        </select>
+      </label>
+      <p>&copy; {new Date().getFullYear()} Buzz the Yellow Jacket</p>
+    </div>
   </div>
 </footer>
+
+<script>
+  const select = document.getElementById('font-select') as HTMLSelectElement;
+  const saved = localStorage.getItem('font') || 'atkinson-hyperlegible';
+
+  select.value = saved;
+
+  select.addEventListener('change', () => {
+    const value = select.value;
+    if (value === 'atkinson-hyperlegible') {
+      document.documentElement.removeAttribute('data-font');
+    } else {
+      document.documentElement.setAttribute('data-font', value);
+    }
+    localStorage.setItem('font', value);
+  });
+</script>
 
 <style>
   .site-footer {
@@ -24,7 +52,7 @@ const links = [
   }
 
   .footer-inner {
-    max-width: var(--max-width);
+    max-width: var(--max-width-wide);
     margin: 0 auto;
     padding: 1.5rem 1.25rem;
     display: flex;
@@ -40,6 +68,40 @@ const links = [
     gap: 1rem;
     padding: 0;
     margin: 0;
+  }
+
+  .footer-right {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .font-picker {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .font-label {
+    font-size: 0.75rem;
+    color: var(--border);
+    cursor: default;
+  }
+
+  select {
+    font-size: 0.75rem;
+    color: var(--border);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.1rem 0.3rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  select:hover {
+    color: var(--text-muted);
+    border-color: var(--text-muted);
   }
 
   p { margin: 0; }
