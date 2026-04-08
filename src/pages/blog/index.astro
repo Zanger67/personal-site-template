@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
+import { getReadingTime } from '../../utils/reading-time';
 
 const posts = (await getCollection('blog'))
   .filter(post => !post.data.draft)
@@ -22,6 +23,8 @@ const posts = (await getCollection('blog'))
           <span class="post-title">{post.data.title}</span>
           <span class="post-date">
             {post.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {' – '}
+            {getReadingTime(post.body)}
           </span>
         </a>
         <p class="post-desc">{post.data.description}</p>

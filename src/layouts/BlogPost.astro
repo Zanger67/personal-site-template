@@ -5,9 +5,10 @@ interface Props {
   title: string;
   date: Date;
   description: string;
+  readingTime: string;
 }
 
-const { title, date, description } = Astro.props;
+const { title, date, description, readingTime } = Astro.props;
 const formattedDate = date.toLocaleDateString('en-US', {
   year: 'numeric',
   month: 'long',
@@ -19,11 +20,18 @@ const formattedDate = date.toLocaleDateString('en-US', {
   <article class="prose">
     <header>
       <h1>{title}</h1>
-      <time datetime={date.toISOString()} style="color: var(--text-muted); font-size: 0.9rem;">
-        {formattedDate}
-      </time>
+      <span class="post-meta">
+        <time datetime={date.toISOString()}>{formattedDate}</time> – {readingTime}
+      </span>
     </header>
     <hr />
     <slot />
   </article>
 </BaseLayout>
+
+<style>
+  .post-meta {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+</style>
