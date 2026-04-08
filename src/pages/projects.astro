@@ -3,11 +3,18 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import ProjectCard from '../components/ProjectCard.astro';
 import { getCollection } from 'astro:content';
 
-function projectSortKey(p: { data: { endDate?: Date; startDate: Date } }): number {
-  return (p.data.endDate ?? p.data.startDate).valueOf();
+type ProjectEntry = { data: { endDate?: Date; startDate: Date } };
+function projectSort(a: ProjectEntry, b: ProjectEntry): number {
+  // Present (no endDate) items first
+  if (!a.data.endDate && b.data.endDate) return -1;
+  if (a.data.endDate && !b.data.endDate) return 1;
+  // By endDate descending
+  const endDiff = (b.data.endDate?.valueOf() ?? 0) - (a.data.endDate?.valueOf() ?? 0);
+  if (endDiff !== 0) return endDiff;
+  // Tiebreak by startDate descending
+  return b.data.startDate.valueOf() - a.data.startDate.valueOf();
 }
-const allProjects = (await getCollection('projects'))
-  .sort((a, b) => projectSortKey(b) - projectSortKey(a));
+const allProjects = (await getCollection('projects')).sort(projectSort);
 
 const pinned = allProjects.filter(p => p.data.pinned);
 const rest = allProjects.filter(p => !p.data.pinned);

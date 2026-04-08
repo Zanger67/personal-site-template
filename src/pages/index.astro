@@ -37,11 +37,15 @@ const posts = (await getCollection('blog'))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
   .slice(0, 3);
 
-function projectSortKey(p: { data: { endDate?: Date; startDate: Date } }): number {
-  return (p.data.endDate ?? p.data.startDate).valueOf();
+type ProjectEntry = { data: { endDate?: Date; startDate: Date } };
+function projectSort(a: ProjectEntry, b: ProjectEntry): number {
+  if (!a.data.endDate && b.data.endDate) return -1;
+  if (a.data.endDate && !b.data.endDate) return 1;
+  const endDiff = (b.data.endDate?.valueOf() ?? 0) - (a.data.endDate?.valueOf() ?? 0);
+  if (endDiff !== 0) return endDiff;
+  return b.data.startDate.valueOf() - a.data.startDate.valueOf();
 }
-const allProjects = (await getCollection('projects'))
-  .sort((a, b) => projectSortKey(b) - projectSortKey(a));
+const allProjects = (await getCollection('projects')).sort(projectSort);
 const projects = [
   ...allProjects.filter(p => p.data.pinned),
   ...allProjects.filter(p => !p.data.pinned),
