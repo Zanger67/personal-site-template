@@ -1,0 +1,58 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  url?: string;
+  tags?: string[];
+}
+
+const { title, description, url, tags = [] } = Astro.props;
+---
+
+<div class="project-card">
+  <h3>
+    {url ? <a href={url} target="_blank" rel="noopener noreferrer">{title}</a> : title}
+  </h3>
+  <p>{description}</p>
+  {tags.length > 0 && (
+    <div class="tags">
+      {tags.map(tag => <span class="tag">{tag}</span>)}
+    </div>
+  )}
+</div>
+
+<style>
+  .project-card {
+    padding: 1.25rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .project-card:last-child {
+    border-bottom: none;
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    margin-bottom: 0.3rem;
+  }
+
+  p {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .tag {
+    font-size: 0.75rem;
+    color: var(--accent);
+    background: var(--accent-light);
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+  }
+</style>

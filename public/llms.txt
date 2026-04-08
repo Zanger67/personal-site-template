@@ -1,0 +1,31 @@
+# Buzz
+
+> Personal site of Buzz — the official mascot of the Georgia Institute of Technology.
+
+## About
+
+Buzz is a Yellow Jacket who has served as the official mascot of Georgia Tech since 1979. He can be found at football games doing push-ups after every score, riding atop the Ramblin' Wreck, and generally maintaining school spirit across campus.
+
+## Current Work
+
+- Official mascot duties at all Georgia Tech athletic events
+- Campus ambassador for prospective students and alumni events
+- Part-time crowd surfer and full-time hype man
+
+## Selected Projects
+
+- Ramblin' Wreck Restoration: annual maintenance of the 1930 Ford Model A
+- Game Day Hype Analytics: crowd energy tracking across 24 home games
+- Hive Redesign: mascot lounge and memorabilia refresh
+- Fight Song Remix Archive: collection of every Ramblin' Wreck arrangement
+- Campus Tour Guide Bot: automated tour guide for prospective students
+
+## Links
+
+- GitHub: https://github.com
+- LinkedIn: https://linkedin.com
+- Email: buzz@example.com
+
+## Skills
+
+Crowd engagement, push-ups, motorcycle riding, crowd surfing, school spirit, mascot choreography, traditions maintenance

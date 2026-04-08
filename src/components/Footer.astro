@@ -1,0 +1,46 @@
+---
+const links = [
+  { href: 'https://github.com', label: 'GitHub' },
+  { href: 'https://linkedin.com', label: 'LinkedIn' },
+  { href: 'mailto:buzz@example.com', label: 'Email' },
+];
+---
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <ul>
+      {links.map(link => (
+        <li><a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a></li>
+      ))}
+    </ul>
+    <p>&copy; {new Date().getFullYear()} Buzz the Yellow Jacket</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+  }
+
+  .footer-inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  ul {
+    display: flex;
+    list-style: none;
+    gap: 1rem;
+    padding: 0;
+    margin: 0;
+  }
+
+  p { margin: 0; }
+</style>

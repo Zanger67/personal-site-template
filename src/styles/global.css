@@ -1,0 +1,118 @@
+:root {
+  --bg: #fafcfa;
+  --bg-alt: #f0f5f1;
+  --text: #1a1a1a;
+  --text-muted: #6b7b6e;
+  --accent: #5a8f62;
+  --accent-hover: #4a7a52;
+  --accent-light: #e6efe7;
+  --border: #d4ddd5;
+  --max-width: 680px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+  background-color: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+h1 { font-size: 1.75rem; margin-bottom: 0.75rem; }
+h2 { font-size: 1.35rem; margin-bottom: 0.5rem; }
+h3 { font-size: 1.1rem; margin-bottom: 0.4rem; }
+
+p { margin-bottom: 1rem; }
+
+ul, ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+li { margin-bottom: 0.25rem; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+
+code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--bg-alt);
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+}
+
+pre {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+blockquote {
+  border-left: 3px solid var(--accent-light);
+  padding-left: 1rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+/* Prose content (blog posts, project pages) */
+.prose h2 { margin-top: 2rem; }
+.prose h3 { margin-top: 1.5rem; }
+.prose a { text-decoration: underline; text-underline-offset: 2px; }
+.prose a:hover { color: var(--accent-hover); }

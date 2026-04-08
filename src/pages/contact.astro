@@ -1,0 +1,51 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Contact — Buzz" description="Get in touch with Buzz.">
+  <h1>Contact</h1>
+  <p>
+    Want to book me for an event or just say hello? Reach out below.
+  </p>
+
+  <ul class="contact-list">
+    <li>
+      <strong>Email</strong>
+      <a href="mailto:buzz@example.com">buzz@example.com</a>
+    </li>
+    <li>
+      <strong>LinkedIn</strong>
+      <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer">linkedin.com/in/buzz</a>
+    </li>
+    <li>
+      <strong>GitHub</strong>
+      <a href="https://github.com" target="_blank" rel="noopener noreferrer">github.com/buzz</a>
+    </li>
+  </ul>
+</BaseLayout>
+
+<style>
+  .contact-list {
+    list-style: none;
+    padding: 0;
+    margin-top: 1.5rem;
+  }
+
+  .contact-list li {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+  }
+
+  .contact-list li:last-child {
+    border-bottom: none;
+  }
+
+  strong {
+    min-width: 5rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+</style>

@@ -1,0 +1,77 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('blog'))
+  .filter(post => !post.data.draft)
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+---
+
+<BaseLayout title="Blog — Buzz" description="Dispatches from the hive.">
+  <h1>Blog</h1>
+  <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+    Dispatches from the hive.
+  </p>
+
+  {posts.length === 0 && <p>Nothing here yet. Check back soon.</p>}
+
+  <ul class="post-list">
+    {posts.map(post => (
+      <li>
+        <a href={`/blog/${post.slug}`}>
+          <span class="post-title">{post.data.title}</span>
+          <span class="post-date">
+            {post.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+        </a>
+        <p class="post-desc">{post.data.description}</p>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>
+
+<style>
+  .post-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .post-list li {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .post-list li:last-child {
+    border-bottom: none;
+  }
+
+  .post-list a {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    text-decoration: none;
+  }
+
+  .post-title {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .post-list a:hover .post-title {
+    color: var(--accent);
+  }
+
+  .post-date {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .post-desc {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 0.3rem;
+    margin-bottom: 0;
+  }
+</style>

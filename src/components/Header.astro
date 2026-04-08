@@ -1,0 +1,77 @@
+---
+const navLinks = [
+  { href: '/', label: 'Home' },
+  { href: '/projects', label: 'Projects' },
+  { href: '/blog', label: 'Blog' },
+  { href: '/contact', label: 'Contact' },
+];
+
+const currentPath = Astro.url.pathname;
+---
+
+<header class="site-header">
+  <nav>
+    <a href="/" class="site-title">Buzz</a>
+    <ul>
+      {navLinks.map(link => (
+        <li>
+          <a
+            href={link.href}
+            class:list={[{ active: currentPath === link.href || (link.href !== '/' && currentPath.startsWith(link.href)) }]}
+          >
+            {link.label}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+</header>
+
+<style>
+  .site-header {
+    border-bottom: 1px solid var(--border);
+  }
+
+  nav {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .site-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .site-title:hover {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  ul {
+    display: flex;
+    list-style: none;
+    gap: 1.25rem;
+    padding: 0;
+    margin: 0;
+  }
+
+  li a {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding-bottom: 2px;
+  }
+
+  li a:hover,
+  li a.active {
+    color: var(--accent);
+    border-bottom: 1.5px solid var(--accent);
+  }
+</style>

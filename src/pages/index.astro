@@ -1,0 +1,110 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('blog'))
+  .filter(post => !post.data.draft)
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .slice(0, 3);
+
+const projects = (await getCollection('projects'))
+  .sort((a, b) => a.data.order - b.data.order)
+  .slice(0, 3);
+---
+
+<BaseLayout title="Buzz — Georgia Tech Mascot">
+  <section class="intro">
+    <h1>Hi, I'm Buzz.</h1>
+    <p>
+      Official mascot of the Georgia Institute of Technology since 1979.
+      Full-time hype man, crowd surfer, and defender of the White and Gold.
+    </p>
+    <p>
+      I do push-ups after touchdowns, ride the Ramblin' Wreck, and occasionally
+      <a href="/projects">take on side projects</a>.
+    </p>
+  </section>
+
+  {projects.length > 0 && (
+    <section>
+      <div class="section-header">
+        <h2>Projects</h2>
+        <a href="/projects">View all &rarr;</a>
+      </div>
+      <ul class="link-list">
+        {projects.map(project => (
+          <li>
+            <a href={project.data.url || project.data.repo || '#'}
+               target="_blank" rel="noopener noreferrer">
+              {project.data.title}
+            </a>
+            <span class="muted"> &mdash; {project.data.description}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  {posts.length > 0 && (
+    <section>
+      <div class="section-header">
+        <h2>Recent Posts</h2>
+        <a href="/blog">View all &rarr;</a>
+      </div>
+      <ul class="link-list">
+        {posts.map(post => (
+          <li>
+            <a href={`/blog/${post.slug}`}>{post.data.title}</a>
+            <span class="muted"> &mdash; {post.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+</BaseLayout>
+
+<style>
+  .intro {
+    margin-bottom: 2.5rem;
+  }
+
+  .intro h1 {
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  section {
+    margin-bottom: 2rem;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+
+  .section-header h2 {
+    margin-bottom: 0;
+  }
+
+  .section-header a {
+    font-size: 0.85rem;
+  }
+
+  .link-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .link-list li {
+    padding: 0.4rem 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .muted {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+  }
+</style>
