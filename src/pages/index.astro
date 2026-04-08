@@ -4,6 +4,8 @@ import { getCollection } from 'astro:content';
 import affiliations from '../data/affiliations.json';
 import publications from '../data/publications.json';
 
+const base = import.meta.env.BASE_URL;
+
 interface OrgGroup {
   entity: string;
   url: string | null;
@@ -48,14 +50,14 @@ const projects = [
       <p class="intro">
         Official mascot of the Georgia Institute of Technology since 1979.
         I do push-ups after touchdowns, ride the Ramblin' Wreck, and occasionally
-        <a href="/projects">take on side projects</a>.
+        <a href={`${base}/projects`}>take on side projects</a>.
       </p>
 
       {projects.length > 0 && (
         <section>
           <div class="section-header">
             <h2>Projects</h2>
-            <a href="/projects">View all &rarr;</a>
+            <a href={`${base}/projects`}>View all &rarr;</a>
           </div>
           <ul class="link-list">
             {projects.map(project => (
@@ -75,7 +77,7 @@ const projects = [
         <section>
           <div class="section-header">
             <h2>Publications</h2>
-            <a href="/publications">View all &rarr;</a>
+            <a href={`${base}/publications`}>View all &rarr;</a>
           </div>
           <ul class="link-list">
             {publications.slice(0, 3).map(pub => (
@@ -94,12 +96,12 @@ const projects = [
         <section>
           <div class="section-header">
             <h2>Recent Posts</h2>
-            <a href="/blog">View all &rarr;</a>
+            <a href={`${base}/blog`}>View all &rarr;</a>
           </div>
           <ul class="link-list">
             {posts.map(post => (
               <li>
-                <a href={`/blog/${post.slug}`}>{post.data.title}</a>
+                <a href={`${base}/blog/${post.slug}`}>{post.data.title}</a>
                 <span class="muted"> &mdash; {post.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
               </li>
             ))}
@@ -110,7 +112,7 @@ const projects = [
 
     <aside class="sidebar">
       <img
-        src="/images/profile.svg"
+        src={`${base}/images/profile.svg`}
         alt="Profile photo"
         class="profile-img"
         width="150"
@@ -141,7 +143,7 @@ const projects = [
             </div>
           ))}
         </div>
-        <a href="/experience" class="view-all">All experience &rarr;</a>
+        <a href={`${base}/experience`} class="view-all">All experience &rarr;</a>
       </div>
     </aside>
   </div>
