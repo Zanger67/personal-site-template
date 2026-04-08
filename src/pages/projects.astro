@@ -3,8 +3,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import ProjectCard from '../components/ProjectCard.astro';
 import { getCollection } from 'astro:content';
 
+function projectSortKey(p: { data: { endDate?: Date; startDate: Date } }): number {
+  return (p.data.endDate ?? p.data.startDate).valueOf();
+}
 const allProjects = (await getCollection('projects'))
-  .sort((a, b) => a.data.order - b.data.order);
+  .sort((a, b) => projectSortKey(b) - projectSortKey(a));
 
 const pinned = allProjects.filter(p => p.data.pinned);
 const rest = allProjects.filter(p => !p.data.pinned);

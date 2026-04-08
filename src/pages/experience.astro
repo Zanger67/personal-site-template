@@ -26,6 +26,17 @@ function formatDate(dateStr: string | null): string {
   return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
+function dateRange(start: string | null, end: string | null): string | null {
+  if (!start && !end) return null;
+  if (start && !end) return `${formatDate(start)} \u2013 Present`;
+  if (!start && end) return `... \u2013 ${formatDate(end)}`;
+  return `${formatDate(start)} \u2013 ${formatDate(end)}`;
+}
+
+function sortKey(item: { endDate: string | null; startDate: string }): number {
+  return new Date(item.endDate ?? item.startDate).valueOf();
+}
+
 function groupByEntity(items: Affiliation[]): OrgGroup[] {
   const groups: OrgGroup[] = [];
   const seen = new Map<string, OrgGroup>();
@@ -42,11 +53,36 @@ function groupByEntity(items: Affiliation[]): OrgGroup[] {
       seen.set(item.entity, group);
     }
   }
+  for (const group of groups) {
+    group.roles.sort((a, b) => sortKey(b) - sortKey(a));
+  }
   return groups;
 }
 
 const currentGroups = groupByEntity(affiliations.current);
 const pastGroups = groupByEntity(affiliations.past);
+
+interface LeaderGroup {
+  org: string;
+  roles: typeof leadership;
+}
+
+function groupLeadership(items: typeof leadership): LeaderGroup[] {
+  const groups: LeaderGroup[] = [];
+  const seen = new Map<string, typeof leadership>();
+  for (const item of items) {
+    if (seen.has(item.organization)) {
+      seen.get(item.organization)!.push(item);
+    } else {
+      const roles = [item];
+      groups.push({ org: item.organization, roles });
+      seen.set(item.organization, roles);
+    }
+  }
+  return groups;
+}
+
+const leaderGroups = groupLeadership(leadership);
 ---
 
 <BaseLayout title="Experience — Buzz" description="Current and past affiliations.">
@@ -73,7 +109,7 @@ const pastGroups = groupByEntity(affiliations.past);
               <div class:list={['role-row', { indented: !multi }]}>
                 {multi && <span class="bracket">{glyph}</span>}
                 <span class="role-name">{r.role}</span>
-                <span class="role-dates">{formatDate(r.startDate)} &ndash; {formatDate(r.endDate)}</span>
+                <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
               </div>
             );
           })}
@@ -100,7 +136,7 @@ const pastGroups = groupByEntity(affiliations.past);
               <div class:list={['role-row', { indented: !multi }]}>
                 {multi && <span class="bracket">{glyph}</span>}
                 <span class="role-name">{r.role}</span>
-                <span class="role-dates">{formatDate(r.startDate)} &ndash; {formatDate(r.endDate)}</span>
+                <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
               </div>
             );
           })}
@@ -109,17 +145,26 @@ const pastGroups = groupByEntity(affiliations.past);
     ))}
   </div>
 
-  {leadership.length > 0 && (
+  {leaderGroups.length > 0 && (
     <>
       <h2>Leadership</h2>
       <div class="groups">
-        {leadership.map(item => (
+        {leaderGroups.map(group => (
           <div class="org-group">
-            <div class="org-name">{item.organization}</div>
-            <div class="role-row indented">
-              <span class="role-name">{item.role}</span>
-              <span class="role-dates">{formatDate(item.start)} &ndash; {formatDate(item.end)}</span>
-            </div>
+            <div class="org-name">{group.org}</div>
+            {group.roles.map((item, i) => {
+              const multi = group.roles.length > 1;
+              const isLast = i === group.roles.length - 1;
+              const glyph = multi ? (isLast ? '└' : '├') : '';
+              const dates = dateRange(item.start, item.end);
+              return (
+                <div class:list={['role-row', { indented: !multi }]}>
+                  {multi && <span class="bracket">{glyph}</span>}
+                  <span class="role-name">{item.role}</span>
+                  {dates && <span class="role-dates">{dates}</span>}
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
@@ -131,11 +176,9 @@ const pastGroups = groupByEntity(affiliations.past);
       <h2>Awards & Honors</h2>
       <div class="groups">
         {awards.map(award => (
-          <div class="org-group">
-            <div class="org-name">{award.name}</div>
-            <div class="role-row indented">
-              <span class="role-dates">{formatDate(award.date)}</span>
-            </div>
+          <div class="award-row">
+            <span class="award-name">{award.name}</span>
+            <span class="role-dates">{formatDate(award.date)}</span>
           </div>
         ))}
       </div>
@@ -214,6 +257,23 @@ const pastGroups = groupByEntity(affiliations.past);
     white-space: nowrap;
     margin-left: auto;
     padding-left: 1rem;
+  }
+
+  .award-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .award-row:last-child {
+    border-bottom: none;
+  }
+
+  .award-name {
+    font-weight: 500;
+    font-size: 0.92rem;
   }
 
   .involvement-list {

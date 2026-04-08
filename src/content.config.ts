@@ -21,6 +21,9 @@ const projects = defineCollection({
     url: z.string().optional(),
     repo: z.string().optional(),
     tags: z.array(z.string()).optional().default([]),
+    // Tags linking project to an experience/role (e.g. lab name, employer)
+    affiliations: z.array(z.string()).optional().default([]),
+    // TODO: publications should also support affiliations (partner orgs, labs)
     pinned: z.boolean().optional().default(false),
     order: z.number().optional().default(0),
   }),

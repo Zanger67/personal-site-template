@@ -37,8 +37,11 @@ const posts = (await getCollection('blog'))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
   .slice(0, 3);
 
+function projectSortKey(p: { data: { endDate?: Date; startDate: Date } }): number {
+  return (p.data.endDate ?? p.data.startDate).valueOf();
+}
 const allProjects = (await getCollection('projects'))
-  .sort((a, b) => a.data.order - b.data.order);
+  .sort((a, b) => projectSortKey(b) - projectSortKey(a));
 const projects = [
   ...allProjects.filter(p => p.data.pinned),
   ...allProjects.filter(p => !p.data.pinned),
@@ -234,6 +237,14 @@ const projects = [
     border-radius: 8px;
     width: 100%;
     height: auto;
+  }
+
+  .sidebar-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .sidebar-section:last-child {
+    margin-bottom: 0;
   }
 
   .sidebar-section h3 {
