@@ -45,7 +45,7 @@ const ogImage = new URL(image, Astro.site).href;
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&family=Iosevka+Charon+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <script is:inline>
       const t = localStorage.getItem('theme');
-      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      if (t !== 'light') {
         document.documentElement.setAttribute('data-theme', 'dark');
       }
       const f = localStorage.getItem('font');
