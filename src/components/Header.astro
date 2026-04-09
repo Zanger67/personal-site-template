@@ -82,20 +82,6 @@ const currentPath = Astro.url.pathname;
     }
   });
 
-  const miscToggle = document.querySelector('.misc-toggle');
-  const miscDropdown = document.querySelector('.misc-dropdown');
-  if (miscToggle && miscDropdown) {
-    miscToggle.addEventListener('click', () => {
-      const open = miscDropdown.classList.toggle('open');
-      miscToggle.setAttribute('aria-expanded', String(open));
-    });
-    document.addEventListener('click', (e) => {
-      if (!miscDropdown.contains(e.target as Node)) {
-        miscDropdown.classList.remove('open');
-        miscToggle.setAttribute('aria-expanded', 'false');
-      }
-    });
-  }
 </script>
 
 <style>
@@ -208,7 +194,7 @@ const currentPath = Astro.url.pathname;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   }
 
-  .misc-dropdown.open .misc-menu {
+  .misc-dropdown:hover .misc-menu {
     display: flex;
   }
 
