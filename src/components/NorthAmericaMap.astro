@@ -85,7 +85,7 @@ const dcAreaRegions = continentalRegions.filter(r => dcAreaIds.has(r.id));
         <rect x="858" y="502" width="72" height="60" class="inset-border" rx="2" />
         <text x="862" y="512" class="inset-label">DC</text>
         <g clip-path="url(#dc-clip)">
-          <g transform="translate(-1906, -1008) scale(3.5)">
+          <g class="dc-inset-regions" transform="translate(-1347, -702) scale(2.8)">
             {dcAreaRegions.map((r) => (
               <path
                 d={r.d}
@@ -97,6 +97,9 @@ const dcAreaRegions = continentalRegions.filter(r => dcAreaIds.has(r.id));
             ))}
           </g>
         </g>
+        {/* Leader lines from DC on main map to inset */}
+        <line x1="800" y1="441" x2="858" y2="510" class="dc-leader" />
+        <line x1="800" y1="441" x2="858" y2="540" class="dc-leader" />
       </g>
 
       <g class="cities">
@@ -245,6 +248,21 @@ const dcAreaRegions = continentalRegions.filter(r => dcAreaIds.has(r.id));
     stroke: var(--accent);
     stroke-width: 0.8;
     stroke-dasharray: none;
+  }
+
+  .dc-inset-regions .region {
+    stroke-width: 0.2;
+    stroke-dasharray: 0.8 0.6;
+  }
+
+  .dc-inset-regions .region:hover {
+    stroke-width: 0.3;
+  }
+
+  .dc-leader {
+    stroke: var(--border);
+    stroke-width: 0.5;
+    stroke-dasharray: 2 2;
   }
 
   .region.visited:hover {
