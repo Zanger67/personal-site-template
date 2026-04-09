@@ -168,12 +168,11 @@ const projects = [
                   : group.entity}
               </div>
               {group.roles.map((role, i) => {
-                const multi = group.roles.length > 1;
                 const isLast = i === group.roles.length - 1;
-                const glyph = multi ? (isLast ? '└' : '├') : '';
+                const glyph = isLast ? '└' : '├';
                 return (
-                  <div class:list={['aff-role-row', { indented: !multi }]}>
-                    {multi && <span class="bracket">{glyph}</span>}
+                  <div class="aff-role-row">
+                    <span class="bracket">{glyph}</span>
                     <span class="aff-role">{role}</span>
                   </div>
                 );

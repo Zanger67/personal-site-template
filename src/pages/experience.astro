@@ -42,12 +42,12 @@ function groupByEntity(items: Affiliation[]): OrgGroup[] {
   const seen = new Map<string, OrgGroup>();
   for (const item of items) {
     if (seen.has(item.entity)) {
-      seen.get(item.entity)!.roles.push(item);
+      seen.get(item.entity)!.roles.push({ ...item, role: item.roleDetail || item.role });
     } else {
       const group: OrgGroup = {
         entity: item.entity,
         url: item.url,
-        roles: [{ role: item.role, startDate: item.startDate, endDate: item.endDate }],
+        roles: [{ role: item.roleDetail || item.role, startDate: item.startDate, endDate: item.endDate }],
       };
       groups.push(group);
       seen.set(item.entity, group);
@@ -102,12 +102,11 @@ const leaderGroups = groupLeadership(leadership);
         </div>
         <div class="roles">
           {group.roles.map((r, i) => {
-            const multi = group.roles.length > 1;
             const isLast = i === group.roles.length - 1;
-            const glyph = multi ? (isLast ? '└' : '├') : '';
+            const glyph = isLast ? '└' : '├';
             return (
-              <div class:list={['role-row', { indented: !multi }]}>
-                {multi && <span class="bracket">{glyph}</span>}
+              <div class="role-row">
+                <span class="bracket">{glyph}</span>
                 <span class="role-name">{r.role}</span>
                 <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
               </div>
@@ -129,12 +128,11 @@ const leaderGroups = groupLeadership(leadership);
         </div>
         <div class="roles">
           {group.roles.map((r, i) => {
-            const multi = group.roles.length > 1;
             const isLast = i === group.roles.length - 1;
-            const glyph = multi ? (isLast ? '└' : '├') : '';
+            const glyph = isLast ? '└' : '├';
             return (
-              <div class:list={['role-row', { indented: !multi }]}>
-                {multi && <span class="bracket">{glyph}</span>}
+              <div class="role-row">
+                <span class="bracket">{glyph}</span>
                 <span class="role-name">{r.role}</span>
                 <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
               </div>
@@ -153,13 +151,12 @@ const leaderGroups = groupLeadership(leadership);
           <div class="org-group">
             <div class="org-name">{group.org}</div>
             {group.roles.map((item, i) => {
-              const multi = group.roles.length > 1;
               const isLast = i === group.roles.length - 1;
-              const glyph = multi ? (isLast ? '└' : '├') : '';
+              const glyph = isLast ? '└' : '├';
               const dates = dateRange(item.start, item.end);
               return (
-                <div class:list={['role-row', { indented: !multi }]}>
-                  {multi && <span class="bracket">{glyph}</span>}
+                <div class="role-row">
+                  <span class="bracket">{glyph}</span>
                   <span class="role-name">{item.role}</span>
                   {dates && <span class="role-dates">{dates}</span>}
                 </div>
@@ -174,14 +171,14 @@ const leaderGroups = groupLeadership(leadership);
   {awards.length > 0 && (
     <>
       <h2>Awards & Honors</h2>
-      <div class="groups">
+      <ul class="involvement-list">
         {awards.map(award => (
-          <div class="award-row">
-            <span class="award-name">{award.name}</span>
+          <li class="award-row">
+            <span class="inv-name">{award.name}</span>
             <span class="role-dates">{formatDate(award.date)}</span>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </>
   )}
 
@@ -261,19 +258,8 @@ const leaderGroups = groupLeadership(leadership);
 
   .award-row {
     display: flex;
-    align-items: baseline;
     justify-content: space-between;
-    padding: 0.4rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .award-row:last-child {
-    border-bottom: none;
-  }
-
-  .award-name {
-    font-weight: 500;
-    font-size: 0.92rem;
+    align-items: baseline;
   }
 
   .involvement-list {
