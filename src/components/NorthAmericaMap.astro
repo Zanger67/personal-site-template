@@ -1,5 +1,5 @@
 ---
-import { regions, alaskaInset, hawaiiInset, greatLakes, dcAreaHiRes } from '../data/map-paths';
+import { regions, alaskaInset, alaskaSimple, hawaiiInset, greatLakes, dcAreaHiRes } from '../data/map-paths';
 import mapConfig from '../data/map-config.json';
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
 const { class: className } = Astro.props;
 const visitedSet = new Set(mapConfig.visited);
 const activeSet = new Set(mapConfig.activeCities);
-const continentalRegions = regions.filter(r => r.id !== 'US-AK' && r.id !== 'US-HI');
+const continentalRegions = [...regions.filter(r => r.id !== 'US-HI' && r.id !== 'US-AK'), alaskaSimple];
 const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
 // Use high-res 10m data for DC inset instead of the 50m continental paths
 ---
@@ -65,6 +65,7 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
             class:list={['region', { visited: visitedSet.has(alaskaInset.id) }]}
             data-abbr={alaskaInset.abbr}
             data-name={alaskaInset.name}
+            data-region={alaskaInset.id}
           />
         </g>
       </g>
@@ -81,6 +82,7 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
             class:list={['region', { visited: visitedSet.has(hawaiiInset.id) }]}
             data-abbr={hawaiiInset.abbr}
             data-name={hawaiiInset.name}
+            data-region={hawaiiInset.id}
           />
         </g>
       </g>
