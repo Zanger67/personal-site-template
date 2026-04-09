@@ -188,7 +188,9 @@ const leaderGroups = groupLeadership(leadership);
       <ul class="involvement-list">
         {involvements.map(inv => (
           <li>
-            <span class="inv-name">{inv.name}</span>
+            <span class="inv-name">{inv.url
+              ? <a href={inv.url} target="_blank" rel="noopener noreferrer">{inv.name}</a>
+              : inv.name}</span>
             {inv.role && <span class="inv-role"> &mdash; {inv.role}</span>}
           </li>
         ))}
