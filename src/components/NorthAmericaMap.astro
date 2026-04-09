@@ -1,5 +1,5 @@
 ---
-import { regions, alaskaInset, hawaiiInset } from '../data/map-paths';
+import { regions, alaskaInset, hawaiiInset, greatLakes } from '../data/map-paths';
 import mapConfig from '../data/map-config.json';
 
 interface Props {
@@ -39,6 +39,16 @@ const dcAreaRegions = continentalRegions.filter(r => dcAreaIds.has(r.id));
             class:list={['region', { visited: visitedSet.has(r.id) }]}
             data-abbr={r.abbr}
             data-name={r.name}
+          />
+        ))}
+      </g>
+
+      <g class="lakes">
+        {greatLakes.map((lake) => (
+          <path
+            d={lake.d}
+            fill-rule={lake.fillRule || undefined}
+            class="lake"
           />
         ))}
       </g>
@@ -236,6 +246,14 @@ const dcAreaRegions = continentalRegions.filter(r => dcAreaIds.has(r.id));
     stroke-dasharray: 3 2;
     cursor: pointer;
     transition: fill 0.15s ease, stroke 0.15s ease;
+  }
+
+  .lake {
+    fill: var(--bg);
+    stroke: var(--border);
+    stroke-width: 0.4;
+    stroke-dasharray: 1.5 1.5;
+    pointer-events: none;
   }
 
   .region.visited {
