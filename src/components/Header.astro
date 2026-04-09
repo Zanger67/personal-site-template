@@ -34,18 +34,20 @@ const currentPath = Astro.url.pathname;
         ))}
         <li class="misc-dropdown">
           <button class="misc-toggle" aria-expanded="false">Misc</button>
-          <ul class="misc-menu">
-            {miscLinks.map(link => (
-              <li>
-                <a
-                  href={link.href}
-                  class:list={[{ active: currentPath === link.href || currentPath.startsWith(link.href) }]}
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <div class="misc-menu">
+            <ul>
+              {miscLinks.map(link => (
+                <li>
+                  <a
+                    href={link.href}
+                    class:list={[{ active: currentPath === link.href || currentPath.startsWith(link.href) }]}
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
         </li>
       </ul>
       <button id="theme-toggle" aria-label="Toggle dark mode">
@@ -181,30 +183,38 @@ const currentPath = Astro.url.pathname;
   .misc-menu {
     display: none;
     position: absolute;
-    top: calc(100% + 0.5rem);
+    top: 100%;
     right: 0;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.4rem 0;
-    min-width: 120px;
-    flex-direction: column;
-    gap: 0;
+    padding-top: 0.4rem;
     z-index: 10;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   }
 
   .misc-dropdown:hover .misc-menu {
-    display: flex;
+    display: block;
+  }
+
+  .misc-menu ul {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.15rem 0;
+    padding-left: 0;
+    margin: 0;
+    min-width: 120px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    list-style: none;
+    display: block;
+    gap: 0;
   }
 
   .misc-menu li {
-    list-style: none;
+    margin: 0;
+    padding: 0;
   }
 
   .misc-menu li a {
     display: block;
-    padding: 0.35rem 0.75rem;
+    padding: 0.15rem 0.75rem;
     font-size: 0.85rem;
     white-space: nowrap;
     border-bottom: none;
