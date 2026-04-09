@@ -27,7 +27,7 @@ const cityTypes = {
       <span class="tooltip-name" id="tooltip-name"></span>
     </div>
     <svg
-      viewBox="380 225 550 345"
+      viewBox="372 222 561 351"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
       aria-label="Map of visited places in North America"
@@ -65,7 +65,7 @@ const cityTypes = {
       <g class="inset-group">
         <rect x="475" y="521" width="65" height="42" class="inset-border" rx="2" />
         <text x="479" y="531" class="inset-label">HI</text>
-        <g transform="translate(449, 490) scale(1.1)">
+        <g transform="translate(392, 478) scale(2.2)">
           <path
             id={hawaiiInset.id}
             d={hawaiiInset.d}
@@ -87,10 +87,18 @@ const cityTypes = {
               y2={city.y + city.labelOffset.dy}
               class="city-line"
             />
-            {city.type === 'current' || city.type === 'hometown' ? (
+            {city.type === 'current' ? (
               <polygon
                 points={`${city.x},${city.y - 3.5} ${city.x + 1.2},${city.y - 1.2} ${city.x + 3.5},${city.y - 1.2} ${city.x + 1.7},${city.y + 0.5} ${city.x + 2.3},${city.y + 3.5} ${city.x},${city.y + 1.5} ${city.x - 2.3},${city.y + 3.5} ${city.x - 1.7},${city.y + 0.5} ${city.x - 3.5},${city.y - 1.2} ${city.x - 1.2},${city.y - 1.2}`}
                 class="city-star"
+              />
+            ) : city.type === 'hometown' ? (
+              <rect
+                x={city.x - 2.5}
+                y={city.y - 2.5}
+                width="5"
+                height="5"
+                class="city-square"
               />
             ) : (
               <circle cx={city.x} cy={city.y} r="2.5" class="city-dot" />
@@ -119,10 +127,13 @@ const cityTypes = {
       <svg class="legend-icon" viewBox="0 0 10 10" width="10" height="10">
         <polygon points="5,1 6.2,3.8 9,3.8 6.9,5.5 7.6,8.5 5,6.5 2.4,8.5 3.1,5.5 1,3.8 3.8,3.8" fill="var(--accent)" />
       </svg>
-      current / hometown
+      current
     </span>
     <span class="legend-item">
-      <span class="legend-dot"></span> past city
+      <span class="legend-square"></span> hometown
+    </span>
+    <span class="legend-item">
+      <span class="legend-dot"></span> past
     </span>
   </div>
 </div>
@@ -187,7 +198,7 @@ const cityTypes = {
     line-height: 1.3;
   }
 
-  svg {
+  svg:not(.legend-icon) {
     display: block;
     width: 100%;
     height: auto;
@@ -241,6 +252,10 @@ const cityTypes = {
     fill: var(--accent);
   }
 
+  .city-square {
+    fill: var(--accent);
+  }
+
   .city-line {
     stroke: var(--text-muted);
     stroke-width: 0.5;
@@ -286,6 +301,14 @@ const cityTypes = {
     background: var(--accent-light);
     border-style: solid;
     border-color: var(--accent);
+  }
+
+  .legend-square {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--accent);
+    border-radius: 1px;
   }
 
   .legend-dot {
