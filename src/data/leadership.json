@@ -1,14 +1,26 @@
 [
   {
     "organization": "ACC Mascot Council",
-    "role": "Chair",
-    "start": "2021-01",
-    "end": "2023-05"
+    "url": null,
+    "location": null,
+    "roles": [
+      {
+        "role": "Chair",
+        "start": "2021-01",
+        "end": "2023-05"
+      }
+    ]
   },
   {
     "organization": "Yellow Jacket Spirit Squad",
-    "role": "Captain",
-    "start": "2019-08",
-    "end": "2023-05"
+    "url": null,
+    "location": null,
+    "roles": [
+      {
+        "role": "Captain",
+        "start": "2019-08",
+        "end": "2023-05"
+      }
+    ]
   }
 ]

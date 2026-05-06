@@ -1,0 +1,51 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import favourites from '../data/favourites.json';
+
+const { categories } = favourites as {
+  categories: {
+    name?: string;
+    description?: string;
+    items: { title: string; url: string; description?: string }[];
+  }[];
+};
+
+const allItems = categories.flatMap(c => c.items);
+---
+
+<BaseLayout
+  title="Favourite Corners of the Internet — Buzz"
+  description="A small, growing list of corners of the web worth bookmarking."
+>
+  <h1>Favourite Corners of the Internet</h1>
+  <p class="subtitle">
+    A small, growing list of corners of the web that have stuck with me.
+  </p>
+
+  <ul class="link-list">
+    {allItems.map(item => (
+      <li>
+        <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>
+
+<style>
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .link-list {
+    padding-left: 1.25rem;
+    margin: 0;
+  }
+
+  .link-list li {
+    padding: 0.15rem 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+</style>

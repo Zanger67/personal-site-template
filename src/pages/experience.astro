@@ -3,19 +3,23 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import affiliations from '../data/affiliations.json';
 import leadership from '../data/leadership.json';
 import awards from '../data/awards.json';
+import conferences from '../data/conferences.json';
 import involvements from '../data/involvements.json';
 
 interface Affiliation {
   entity: string;
   role: string;
+  roleDetail?: string;
   startDate: string;
   endDate: string | null;
   url: string | null;
+  location?: string | null;
 }
 
 interface OrgGroup {
   entity: string;
   url: string | null;
+  location: string | null;
   roles: { role: string; startDate: string; endDate: string | null }[];
 }
 
@@ -42,11 +46,14 @@ function groupByEntity(items: Affiliation[]): OrgGroup[] {
   const seen = new Map<string, OrgGroup>();
   for (const item of items) {
     if (seen.has(item.entity)) {
-      seen.get(item.entity)!.roles.push({ ...item, role: item.roleDetail || item.role });
+      const g = seen.get(item.entity)!;
+      g.roles.push({ role: item.roleDetail || item.role, startDate: item.startDate, endDate: item.endDate });
+      if (!g.location && item.location) g.location = item.location;
     } else {
       const group: OrgGroup = {
         entity: item.entity,
         url: item.url,
+        location: item.location ?? null,
         roles: [{ role: item.roleDetail || item.role, startDate: item.startDate, endDate: item.endDate }],
       };
       groups.push(group);
@@ -62,27 +69,21 @@ function groupByEntity(items: Affiliation[]): OrgGroup[] {
 const currentGroups = groupByEntity(affiliations.current);
 const pastGroups = groupByEntity(affiliations.past);
 
-interface LeaderGroup {
-  org: string;
-  roles: typeof leadership;
+interface LeaderRole {
+  role: string;
+  url?: string | null;
+  start: string | null;
+  end: string | null;
 }
 
-function groupLeadership(items: typeof leadership): LeaderGroup[] {
-  const groups: LeaderGroup[] = [];
-  const seen = new Map<string, typeof leadership>();
-  for (const item of items) {
-    if (seen.has(item.organization)) {
-      seen.get(item.organization)!.push(item);
-    } else {
-      const roles = [item];
-      groups.push({ org: item.organization, roles });
-      seen.set(item.organization, roles);
-    }
-  }
-  return groups;
+interface LeaderOrg {
+  organization: string;
+  url: string | null;
+  location?: string | null;
+  roles: LeaderRole[];
 }
 
-const leaderGroups = groupLeadership(leadership);
+const leaderGroups = leadership as LeaderOrg[];
 ---
 
 <BaseLayout title="Experience — Buzz" description="Current and past affiliations.">
@@ -95,10 +96,13 @@ const leaderGroups = groupLeadership(leadership);
   <div class="groups">
     {currentGroups.map(group => (
       <div class="org-group">
-        <div class="org-name">
-          {group.url
-            ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
-            : group.entity}
+        <div class="entity-row">
+          <span class="org-name">
+            {group.url
+              ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
+              : group.entity}
+          </span>
+          {group.location && <span class="org-location">{group.location}</span>}
         </div>
         <div class="roles">
           {group.roles.map((r, i) => {
@@ -121,10 +125,13 @@ const leaderGroups = groupLeadership(leadership);
   <div class="groups">
     {pastGroups.map(group => (
       <div class="org-group">
-        <div class="org-name">
-          {group.url
-            ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
-            : group.entity}
+        <div class="entity-row">
+          <span class="org-name">
+            {group.url
+              ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
+              : group.entity}
+          </span>
+          {group.location && <span class="org-location">{group.location}</span>}
         </div>
         <div class="roles">
           {group.roles.map((r, i) => {
@@ -149,15 +156,25 @@ const leaderGroups = groupLeadership(leadership);
       <div class="groups">
         {leaderGroups.map(group => (
           <div class="org-group">
-            <div class="org-name">{group.org}</div>
+            <div class="entity-row">
+              <span class="org-name">
+                {group.url
+                  ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.organization}</a>
+                  : group.organization}
+              </span>
+              {group.location && <span class="org-location">{group.location}</span>}
+            </div>
             {group.roles.map((item, i) => {
               const isLast = i === group.roles.length - 1;
               const glyph = isLast ? '└' : '├';
               const dates = dateRange(item.start, item.end);
+              const roleUrl = item.url ?? null;
               return (
                 <div class="role-row">
                   <span class="bracket">{glyph}</span>
-                  <span class="role-name">{item.role}</span>
+                  <span class="role-name">{roleUrl
+                    ? <a href={roleUrl} target="_blank" rel="noopener noreferrer">{item.role}</a>
+                    : item.role}</span>
                   {dates && <span class="role-dates">{dates}</span>}
                 </div>
               );
@@ -174,8 +191,26 @@ const leaderGroups = groupLeadership(leadership);
       <ul class="involvement-list">
         {awards.map(award => (
           <li class="award-row">
-            <span class="inv-name">{award.name}</span>
+            <span class="inv-name">{award.url
+              ? <a href={award.url} target="_blank" rel="noopener noreferrer">{award.name}</a>
+              : award.name}</span>
             <span class="role-dates">{formatDate(award.date)}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  )}
+
+  {conferences.length > 0 && (
+    <>
+      <h2>Conferences</h2>
+      <ul class="involvement-list">
+        {conferences.map(conf => (
+          <li class="award-row">
+            <span class="inv-name">{conf.url
+              ? <a href={conf.url} target="_blank" rel="noopener noreferrer">{conf.name}</a>
+              : conf.name}</span>
+            <span class="role-dates">{formatDate(conf.date)}</span>
           </li>
         ))}
       </ul>
@@ -221,9 +256,22 @@ const leaderGroups = groupLeadership(leadership);
     padding-bottom: 0;
   }
 
+  .entity-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 0.3rem;
+  }
+
   .org-name {
     font-weight: 500;
-    margin-bottom: 0.3rem;
+  }
+
+  .org-location {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    margin-left: auto;
   }
 
   .role-row {
@@ -242,8 +290,7 @@ const leaderGroups = groupLeadership(leadership);
   }
 
   .role-name {
-    font-size: 0.92rem;
-    color: var(--text-muted);
+    font-size: 0.95rem;
   }
 
   .role-dates {

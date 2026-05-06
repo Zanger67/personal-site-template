@@ -1,0 +1,42 @@
+{
+  "categories": [
+    {
+      "name": "Oddly Satisfying",
+      "description": "Single-purpose pages that exist for no reason and yet, here we are.",
+      "items": [
+        {
+          "title": "Rotating Hexagons",
+          "url": "https://example.com/rotating-hexagons",
+          "description": "Hexagons. Rotating. That's the whole site."
+        },
+        {
+          "title": "Buzzing Sound Generator",
+          "url": "https://example.com/buzz",
+          "description": "Procedurally generated bee buzz, tunable in real time."
+        }
+      ]
+    },
+    {
+      "name": "Reading",
+      "description": "Long-form things I keep coming back to.",
+      "items": [
+        {
+          "title": "The Hive Mind Blog",
+          "url": "https://example.com/hive-mind",
+          "description": "Essays on collective decision-making in colonies."
+        }
+      ]
+    },
+    {
+      "name": "Tools",
+      "description": "Small utilities that punch above their weight.",
+      "items": [
+        {
+          "title": "Stinger CLI",
+          "url": "https://example.com/stinger",
+          "description": "Tiny command-line helper for jacket-related tasks."
+        }
+      ]
+    }
+  ]
+}
