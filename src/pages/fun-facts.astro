@@ -1,15 +1,41 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import funFacts from '../data/fun-facts.json';
+
+const { facts } = funFacts as { facts: string[] };
 ---
 
-<BaseLayout title="Fun Facts — Buzz">
+<BaseLayout
+  title="Fun Facts — Buzz"
+  description="A small, growing collection of fun facts."
+>
   <h1>Fun Facts</h1>
-  <p class="wip">This page is a work in progress.</p>
+  <p class="subtitle">
+    A small and growing collection of personal facts that may be entertaining to some readers.
+  </p>
+
+  <ul class="fact-list">
+    {facts.map(fact => (
+      <li set:html={fact} />
+    ))}
+  </ul>
 </BaseLayout>
 
 <style>
-  .wip {
+  .subtitle {
     color: var(--text-muted);
-    font-style: italic;
+    font-size: 0.92rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .fact-list {
+    padding-left: 1.25rem;
+    margin: 0;
+  }
+
+  .fact-list li {
+    padding: 0.2rem 0;
+    font-size: 0.95rem;
+    line-height: 1.55;
   }
 </style>
