@@ -9,6 +9,8 @@
   --border: #d4ddd5;
   --max-width: 680px;
   --max-width-wide: 880px;
+  --maple-leaf-color: var(--accent);
+  --maple-leaf-opacity: 0.10;
   color-scheme: light;
 }
 
@@ -21,6 +23,7 @@ html[data-theme="dark"] {
   --accent-hover: #8ec896;
   --accent-light: #2a3a2c;
   --border: #3a453b;
+  --maple-leaf-opacity: 0.12;
   color-scheme: dark;
 }
 

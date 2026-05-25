@@ -51,6 +51,8 @@ const links = [
   .site-footer {
     border-top: 1px solid var(--border);
     margin-top: auto;
+    /* Opaque so it occludes the part of the maple leaf (z-index: -1) behind it. */
+    background: var(--bg);
   }
 
   .footer-inner {

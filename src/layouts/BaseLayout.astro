@@ -1,6 +1,7 @@
 ---
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import MapleLeaf from '../components/MapleLeaf.astro';
 import '../styles/global.css';
 
 interface Props {
@@ -58,5 +59,6 @@ const ogImage = new URL(image, Astro.site).href;
       <slot />
     </main>
     <Footer />
+    <MapleLeaf />
   </body>
 </html>
