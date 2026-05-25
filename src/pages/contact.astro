@@ -1,5 +1,22 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import contactsData from '../data/contacts.json';
+
+interface SubLink {
+  label?: string;
+  url: string;
+  display: string;
+}
+
+interface ContactItem {
+  label: string;
+  value?: string;
+  url?: string;
+  display?: string;
+  subs?: SubLink[];
+}
+
+const contacts = contactsData as ContactItem[];
 ---
 
 <BaseLayout title="Contact — Buzz" description="Get in touch with Buzz.">
@@ -9,43 +26,90 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   </p>
 
   <ul class="contact-list">
-    <li>
-      <strong>Email</strong>
-      <span>buzz [at] example [dot] com</span>
-    </li>
-    <li>
-      <strong>LinkedIn</strong>
-      <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer">linkedin.com/in/buzz</a>
-    </li>
-    <li>
-      <strong>GitHub</strong>
-      <a href="https://github.com" target="_blank" rel="noopener noreferrer">github.com/buzz</a>
-    </li>
+    {contacts.map(item => {
+      const subs = item.subs ?? [];
+      return (
+        <li>
+          <strong>{item.label}</strong>
+          <div class="value-cell">
+            {item.url
+              ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.display}</a>
+              : <span>{item.value}</span>}
+            {subs.length > 0 && (
+              <div class="sub-links">
+                {subs.map((sub, i) => {
+                  const glyph = i === subs.length - 1 ? '└' : '├';
+                  return (
+                    <div class="sub-row">
+                      <span class="bracket">{glyph}</span>
+                      <a href={sub.url} target="_blank" rel="noopener noreferrer">{sub.label ?? sub.display}</a>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </li>
+      );
+    })}
   </ul>
 </BaseLayout>
 
 <style>
+  /* Single grid shared across all rows so the label column auto-sizes
+     to the widest label and every value link lines up in one column. */
   .contact-list {
     list-style: none;
     padding: 0;
     margin-top: 1.5rem;
+    display: grid;
+    grid-template-columns: max-content 1fr;
   }
 
-  .contact-list li {
+  .contact-list > li {
+    display: contents;
+  }
+
+  .contact-list > li > strong {
     padding: 0.75rem 0;
     border-bottom: 1px solid var(--border);
-    display: flex;
-    gap: 1rem;
-    align-items: baseline;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    white-space: nowrap;
   }
 
-  .contact-list li:last-child {
+  .contact-list > li > .value-cell {
+    padding: 0.75rem 0 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    min-width: 0;
+  }
+
+  .contact-list > li:last-child > strong,
+  .contact-list > li:last-child > .value-cell {
     border-bottom: none;
   }
 
-  strong {
-    min-width: 5rem;
-    font-size: 0.9rem;
-    color: var(--text-muted);
+  .sub-links {
+    margin-top: 0.35rem;
+    display: flex;
+    flex-direction: column;
   }
+
+  .sub-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    padding: 0.15rem 0;
+  }
+
+  /* Bracket left edge sits at the link column start, so └ lines up
+     with the first character of the link on the row above. */
+  .bracket {
+    font-family: monospace;
+    color: var(--text-muted);
+    width: 1.2rem;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
 </style>

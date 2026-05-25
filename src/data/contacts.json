@@ -1,0 +1,23 @@
+[
+  {
+    "label": "Email",
+    "value": "buzz [at] example [dot] com"
+  },
+  {
+    "label": "LinkedIn",
+    "url": "https://linkedin.com",
+    "display": "linkedin.com/in/buzz"
+  },
+  {
+    "label": "GitHub",
+    "url": "https://github.com",
+    "display": "github.com/buzz",
+    "subs": [
+      {
+        "label": "BuzzLabs",
+        "url": "https://github.com/orgs/buzzlabs/",
+        "display": "github.com/orgs/buzzlabs"
+      }
+    ]
+  }
+]
