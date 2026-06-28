@@ -673,11 +673,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   }
   .tl-bar .o::before { content: ', '; }
   /* Leading variant: when the org has a short form it prefixes the title as
-     "Short Org – Role". The org is now the stable label, so it keeps its width
-     while the *title* surrenders first; the separator sits after the org. */
+     "Short Org · Role". The org is now the stable label, so it keeps its width
+     while the *title* surrenders first; the separator sits after the org.
+     Non-breaking spaces flank the dot so the trailing one isn't trimmed at the
+     end of the org's (nowrap) line — a normal space there disappears. */
   .tl-bar .o.lead { flex: 0 1 auto; }
   .tl-bar .o.lead::before { content: none; }
-  .tl-bar .o.lead::after { content: ' – '; }
+  .tl-bar .o.lead::after { content: '\00a0·\00a0'; }
   .tl-bar:has(.o.lead) .t { flex: 0 1000 auto; }
   .tl-bar:hover { border-color: var(--accent); }
   .tl-bar:hover { text-decoration: none; }
@@ -1236,7 +1238,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
           el.style.borderLeftColor = colorOf[it.type] || 'var(--border)';
           // Organisation label on the bar. When the org has an explicit short
           // form (entityShort differs from the full entity), it's compact enough
-          // to *lead* the bar as "Short Org – Role"; there the title surrenders
+          // to *lead* the bar as "Short Org · Role"; there the title surrenders
           // width first (see .o.lead CSS). Otherwise the (long) org trails the
           // title "space permitting", giving up width long before the title does.
           // Skipped entirely when the org would just echo the title
@@ -1246,7 +1248,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
           el.addEventListener('click', () => selectItem(it));
           const span = document.createElement('span'); span.className = 't'; span.textContent = it.title;
           if (shortOrg) {
-            el.title = `${shortOrg} – ${it.title} · ${it.dateLabel}`;
+            el.title = `${shortOrg} · ${it.title} · ${it.dateLabel}`;
             const osp = document.createElement('span'); osp.className = 'o lead'; osp.textContent = shortOrg;
             el.appendChild(osp);
             el.appendChild(span);
