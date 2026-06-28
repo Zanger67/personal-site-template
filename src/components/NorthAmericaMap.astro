@@ -431,6 +431,22 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
 
     let currentRegionId: string | null = null;
 
+    // Shared region borders are drawn twice (once by each neighbour). On hover only
+    // the hovered path switches to a solid stroke, but SVG paints in DOM order with no
+    // z-index, so a neighbour that comes later in the document re-covers the shared edge
+    // with its dashed stroke. Raise the hovered path(s) to the end of their group so the
+    // solid stroke always paints last; remember their original slot to restore on leave.
+    let raisedRegions: { el: Element; parent: Node; next: Node | null }[] = [];
+
+    function restoreRaised() {
+      // Undo in reverse so each insertBefore reference is still valid.
+      for (let i = raisedRegions.length - 1; i >= 0; i--) {
+        const { el, parent, next } = raisedRegions[i];
+        parent.insertBefore(el, next);
+      }
+      raisedRegions = [];
+    }
+
     function showTooltip(region: Element) {
       const regionId = region.getAttribute('data-region');
       if (regionId === currentRegionId) return;
@@ -441,6 +457,7 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
           el.classList.remove('hovered');
         });
       }
+      restoreRaised();
 
       currentRegionId = regionId;
       tooltipAbbr.textContent = region.getAttribute('data-abbr') || '';
@@ -450,10 +467,15 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
       void tooltip.offsetWidth;
       tooltip.classList.add('visible');
 
-      // Highlight all matching paths
+      // Highlight all matching paths and raise them above their neighbours.
       if (regionId) {
         svg!.querySelectorAll(`.region[data-region="${regionId}"]`).forEach(el => {
           el.classList.add('hovered');
+          const parent = el.parentNode;
+          if (parent) {
+            raisedRegions.push({ el, parent, next: el.nextSibling });
+            parent.appendChild(el);
+          }
         });
       }
     }
@@ -465,6 +487,7 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
         });
         currentRegionId = null;
       }
+      restoreRaised();
       tooltip.classList.remove('visible');
     }
 
