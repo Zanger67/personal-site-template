@@ -16,6 +16,18 @@ const miscLinks = [
 ];
 
 const currentPath = Astro.url.pathname;
+
+const stripTrailing = (p: string) => p.replace(/\/+$/, '') || '/';
+const homeHref = stripTrailing(`${base}/`);
+const current = stripTrailing(currentPath);
+
+// The home link should only be active on the home page itself. Every other
+// link is active on its own page and any nested route beneath it.
+const isActive = (href: string) => {
+  const target = stripTrailing(href);
+  if (target === homeHref) return current === target;
+  return current === target || current.startsWith(`${target}/`);
+};
 ---
 
 <header class="site-header">
@@ -27,7 +39,7 @@ const currentPath = Astro.url.pathname;
           <li>
             <a
               href={link.href}
-              class:list={[{ active: currentPath === link.href || (link.href !== '/' && currentPath.startsWith(link.href)) }]}
+              class:list={[{ active: isActive(link.href) }]}
             >
               {link.label}
             </a>
@@ -41,7 +53,7 @@ const currentPath = Astro.url.pathname;
                 <li>
                   <a
                     href={link.href}
-                    class:list={[{ active: currentPath === link.href || currentPath.startsWith(link.href) }]}
+                    class:list={[{ active: isActive(link.href) }]}
                   >
                     {link.label}
                   </a>

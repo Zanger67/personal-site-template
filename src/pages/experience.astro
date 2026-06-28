@@ -1,11 +1,27 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
 import affiliations from '../data/affiliations.json';
+import education from '../data/education.json';
+import publications from '../data/publications.json';
 import leadership from '../data/leadership.json';
+import involvements from '../data/involvements.json';
 import awards from '../data/awards.json';
 import conferences from '../data/conferences.json';
-import involvements from '../data/involvements.json';
+import misc from '../data/misc.json';
 
+// ===========================================================================
+// This page hosts two views of the same career data, swapped via a selector
+// at the top. The "Timeline" view (default) is a Gantt-style chart; the
+// "Experience" view is an organisation-grouped list. The selector toggles
+// which <section class="view …"> is shown; only the active timeline view gets
+// the wide layout (see the gated `main:has(.view-timeline.active)` rules).
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// EXPERIENCE (list) view — org-grouped tree of current/past/leadership roles
+// plus awards, conferences and involvements.
+// ---------------------------------------------------------------------------
 interface Affiliation {
   entity: string;
   role: string;
@@ -32,9 +48,9 @@ function formatDate(dateStr: string | null): string {
 
 function dateRange(start: string | null, end: string | null): string | null {
   if (!start && !end) return null;
-  if (start && !end) return `${formatDate(start)} \u2013 Present`;
-  if (!start && end) return `... \u2013 ${formatDate(end)}`;
-  return `${formatDate(start)} \u2013 ${formatDate(end)}`;
+  if (start && !end) return `${formatDate(start)} – Present`;
+  if (!start && end) return `... – ${formatDate(end)}`;
+  return `${formatDate(start)} – ${formatDate(end)}`;
 }
 
 function sortKey(item: { endDate: string | null; startDate: string }): number {
@@ -84,157 +100,587 @@ interface LeaderOrg {
 }
 
 const leaderGroups = leadership as LeaderOrg[];
+
+// ---------------------------------------------------------------------------
+// TIMELINE view — ported from jackswitzer.com/projects "Timeline" view,
+// adapted to our data and colour scheme. Years are rows (newest first);
+// months are columns; each item is a lane-packed horizontal bar. Summer
+// (May–Aug) columns are shaded. Clicking a bar selects its "group" (same
+// category + same organisation), dims everything else, and opens a drawer.
+// ---------------------------------------------------------------------------
+type CatKey = 'education' | 'work' | 'research' | 'awards' | 'projects' | 'clubs' | 'misc';
+const CATEGORIES: { key: CatKey; label: string; color: string }[] = [
+  { key: 'education', label: 'Education', color: '#5b8def' },
+  { key: 'work',      label: 'Work',      color: 'var(--accent)' },
+  { key: 'research',  label: 'Research',  color: '#a06fd6' },
+  { key: 'awards',    label: 'awards/pubs', color: '#d4a017' },
+  { key: 'projects',  label: 'Projects',  color: '#e0883c' },
+  { key: 'clubs',     label: 'Clubs',     color: '#e06c84' },
+  { key: 'misc',      label: 'Misc.',     color: '#3aa6ad' },
+];
+const TYPE_ORDER: Record<CatKey, number> = { education: 0, work: 1, research: 2, awards: 3, projects: 4, clubs: 5, misc: 6 };
+const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const SUMMER_COLS = [4, 5, 6, 7]; // May–Aug
+
+interface Item {
+  id: number;
+  title: string;
+  type: CatKey;
+  start: number;
+  end: number | null;
+  dateLabel: string;
+  description: string | null;
+  subtitle: string | null;   // org · location context line (clubs/work-style items)
+  links: { label: string; url: string }[];
+  // Grouping: items in the same group stay lit together when one is selected.
+  entity: string;          // organisation / institution / (project = own title)
+  group: string;           // `${type}::${entity}`
+  affiliations: string[];  // (projects) org/role names this project is tagged to
+  // Explicit item-to-item links (independent of org/group). `slug` is a stable
+  // human-readable handle other items reference; `relatedSlugs` are the handles
+  // this item declares (transient — resolved into `related` ids below, then
+  // dropped); `related` is the resolved set of linked ids, made bidirectional.
+  slug: string | null;
+  relatedSlugs: string[];
+  related: number[];
+  main: boolean;           // cross-cutting "main"/highlights flag (orthogonal to type)
+  cats: CatKey[];          // every category this item matches (primary `type` first).
+                           // Extras let one item appear under multiple filters (e.g. a
+                           // lab role that is both Research and Work). Colour/lane still
+                           // follow the primary `type`.
+}
+
+function parseDate(v: string | Date | null | undefined): Date | null {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  const [y, m, d] = v.split('-');
+  return new Date(parseInt(y), m ? parseInt(m) - 1 : 0, d ? parseInt(d) : 1);
+}
+const fmtMonth = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+let _id = 0;
+interface ItemOpts {
+  title: string; type: CatKey; start: any; end?: any; point?: boolean;
+  entity?: string; description?: string | null; subtitle?: string | null; links?: ({ label: string; url: string | null | undefined })[];
+  affiliations?: string[]; main?: boolean; also?: CatKey[];
+  slug?: string | null; related?: string[];
+}
+function mkItem(o: ItemOpts): Item | null {
+  const s = parseDate(o.start);
+  if (!s) return null;
+  let start: number, end: number | null, dateLabel: string;
+  if (o.point) {
+    const yearOnly = typeof o.start === 'string' && o.start.length === 4;
+    const e = new Date(s.getFullYear(), s.getMonth() + 1, 1); // one month
+    start = s.getTime(); end = e.getTime(); dateLabel = yearOnly ? o.start : fmtMonth(s);
+  } else {
+    const e = parseDate(o.end);
+    start = s.getTime(); end = e ? e.getTime() : null;
+    dateLabel = e ? `${fmtMonth(s)} – ${fmtMonth(e)}` : `${fmtMonth(s)} – Present`;
+  }
+  const links = (o.links || []).filter((l): l is { label: string; url: string } => !!l && !!l.url);
+  const description = o.description || null;
+  const entity = o.entity || o.title;
+  const cats = Array.from(new Set<CatKey>([o.type, ...(o.also || [])]));
+  return {
+    id: _id++, title: o.title, type: o.type, start, end, dateLabel,
+    description, subtitle: o.subtitle || null, links, entity, group: `${o.type}::${entity}`,
+    affiliations: o.affiliations || [],
+    slug: o.slug || null, relatedSlugs: o.related || [], related: [],
+    main: !!o.main, cats,
+  };
+}
+
+const projects = await getCollection('projects');
+
+const items: Item[] = [
+  ...(education as any[]).map(e => mkItem({
+    title: e.degree, type: 'education', start: e.start, end: e.end, entity: e.institution,
+    description: [e.institution, e.honors].filter(Boolean).join(' · '),
+    links: [{ label: 'Website', url: e.url }], main: e.main,
+    slug: e.slug, related: e.related,
+  })),
+  ...([...affiliations.current, ...affiliations.past] as any[]).map(a => mkItem({
+    // `categories` (optional): first entry is the primary (colour/lane); the rest are
+    // extra filters this role also shows under. Defaults to a plain "work" role.
+    title: a.role, type: (a.categories?.[0] ?? 'work') as CatKey, also: (a.categories?.slice(1) ?? []) as CatKey[],
+    start: a.startDate, end: a.endDate, entity: a.entity,
+    description: [a.entity, a.location].filter(Boolean).join(' · '),
+    links: [{ label: 'Website', url: a.url }], main: a.main,
+    slug: a.slug, related: a.related,
+  })),
+  ...(publications as any[]).map(p => mkItem({
+    // Publications share the "awards/pubs" category with awards/scholarships.
+    title: p.title, type: 'awards', start: p.date, point: true, entity: p.title,
+    description: [(p.authors && p.authors.length) ? p.authors.join(', ') : null, p.venue].filter(Boolean).join(' — '),
+    links: [{ label: 'Read', url: p.url }], main: p.main,
+    slug: p.slug, related: p.related,
+  })),
+  ...(awards as any[]).map(a => mkItem({
+    // Awards, honors & scholarships — point events under "awards/pubs".
+    title: a.name, type: 'awards', start: a.date, point: true, entity: a.name,
+    links: [{ label: 'View', url: a.url }], main: a.main,
+    slug: a.slug, related: a.related,
+  })),
+  ...(leadership as any[]).flatMap(org =>
+    org.roles.map((r: any) => mkItem({
+      // Clubs mirror work roles: the role is the title, while the organisation,
+      // location and an optional freeform detail line live in the drawer body.
+      title: r.role, type: 'clubs', start: r.start, end: r.end, entity: org.organization,
+      subtitle: [org.organization, r.location ?? org.location].filter(Boolean).join(' · ') || null,
+      description: r.description ?? null,
+      links: [{ label: 'Website', url: r.url ?? org.url }],
+      main: r.main ?? org.main,
+      slug: r.slug, related: r.related,
+    }))
+  ),
+  ...projects.map(p => mkItem({
+    title: p.data.title, type: 'projects', start: p.data.startDate, end: p.data.endDate, entity: p.data.title,
+    description: p.data.description, affiliations: p.data.affiliations || [],
+    links: [{ label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }], main: p.data.main,
+    slug: p.data.slug, related: p.data.related,
+  })),
+  // "Misc." — a catch-all for conferences attended and any other one-off timeline
+  // events worth noting (talks, trips, ceremonies, milestones, etc.). Conferences
+  // come from conferences.json; freeform entries from misc.json. Both render as
+  // point markers, unless a misc entry sets an `end` (then it becomes a ranged bar).
+  ...(conferences as any[]).map(c => mkItem({
+    title: c.name, type: 'misc', start: c.date, point: true, entity: c.name,
+    subtitle: c.location || null, description: c.description ?? null,
+    links: [{ label: 'View', url: c.url }], main: c.main,
+    slug: c.slug, related: c.related,
+  })),
+  ...(misc as any[]).map(m => mkItem({
+    title: m.name, type: 'misc', start: m.date, end: m.end, point: !m.end, entity: m.name,
+    subtitle: m.location || null, description: m.description ?? null,
+    links: [{ label: 'View', url: m.url }], main: m.main,
+    slug: m.slug, related: m.related,
+  })),
+].filter((s): s is Item => s !== null);
+
+// Resolve slug-based cross-links into concrete item ids and make them
+// bidirectional: if A declares B as related, B is linked back to A too. Only an
+// item that sets a `slug` can be referenced; the referencing item just lists
+// that slug in its `related`. Unknown slugs and self-links are ignored.
+const bySlug = new Map<string, Item>();
+for (const it of items) if (it.slug && !bySlug.has(it.slug)) bySlug.set(it.slug, it);
+const relSets = new Map<number, Set<number>>(items.map(it => [it.id, new Set<number>()]));
+for (const it of items) {
+  for (const slug of it.relatedSlugs) {
+    const target = bySlug.get(slug);
+    if (!target || target.id === it.id) continue;
+    relSets.get(it.id)!.add(target.id);
+    relSets.get(target.id)!.add(it.id);
+  }
+}
+for (const it of items) {
+  it.related = [...relSets.get(it.id)!];
+  delete (it as Partial<Item>).relatedSlugs; // transient — keep out of the client payload
+}
+
+const undated = (involvements as any[]).map(i => ({
+  title: i.name, category: 'clubs' as CatKey, detail: i.role ?? null, url: i.url ?? null, main: !!i.main,
+}));
+
+const nowYear = new Date().getFullYear();
+const yearsOf = items.flatMap(it => [new Date(it.start).getFullYear(), new Date(it.end ?? Date.now()).getFullYear()]);
+const minYear = Math.min(...yearsOf);
+const maxYear = Math.max(...yearsOf, nowYear);
+const years: number[] = [];
+for (let y = maxYear; y >= minYear; y--) years.push(y);
+
+const counts: Record<string, number> = { all: items.length + undated.length };
+for (const c of CATEGORIES) {
+  counts[c.key] = items.filter(s => s.cats.includes(c.key)).length + undated.filter(u => u.category === c.key).length;
+}
+counts.main = items.filter(s => s.main).length + undated.filter(u => u.main).length;
+
+// Only surface a filter (and legend entry) for categories that actually have
+// at least one item; likewise hide the Main filter when nothing is flagged.
+const shownCategories = CATEGORIES.filter(c => counts[c.key] > 0);
+const showMain = counts.main > 0;
+
+const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_COLS };
 ---
 
-<BaseLayout title="Experience — Buzz" description="Current and past affiliations.">
+<BaseLayout title="Experience — Buzz" description="Current and past affiliations, shown as an interactive timeline or an organisation-grouped list.">
+  <script is:inline>
+    // Runs before the view markup is parsed: honour the URL's view up-front so a
+    // reload on the list view renders the list straight away — no flash of the
+    // timeline and no replay of its shrink. The module script below removes
+    // `view-init` after the first paint, re-enabling transitions for clicks.
+    (function () {
+      var de = document.documentElement;
+      de.classList.add('view-init');
+      de.dataset.initialView = location.hash.replace('#', '') === 'list' ? 'list' : 'timeline';
+    })();
+  </script>
   <h1>Experience</h1>
-  <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-    Current and past affiliations.
-  </p>
 
-  <h2>Current</h2>
-  <div class="groups">
-    {currentGroups.map(group => (
-      <div class="org-group">
-        <div class="entity-row">
-          <span class="org-name">
-            {group.url
-              ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
-              : group.entity}
-          </span>
-          {group.location && <span class="org-location">{group.location}</span>}
-        </div>
-        <div class="roles">
-          {group.roles.map((r, i) => {
-            const isLast = i === group.roles.length - 1;
-            const glyph = isLast ? '└' : '├';
-            return (
-              <div class="role-row">
-                <span class="bracket">{glyph}</span>
-                <span class="role-name">{r.role}</span>
-                <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    ))}
+  <div class="view-switch" role="group" aria-label="Choose how to view experience">
+    <button class="view-btn active" data-view="timeline" aria-pressed="true">Timeline</button>
+    <button class="view-btn" data-view="list" aria-pressed="false">List</button>
   </div>
 
-  <h2>Past</h2>
-  <div class="groups">
-    {pastGroups.map(group => (
-      <div class="org-group">
-        <div class="entity-row">
-          <span class="org-name">
-            {group.url
-              ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
-              : group.entity}
-          </span>
-          {group.location && <span class="org-location">{group.location}</span>}
-        </div>
-        <div class="roles">
-          {group.roles.map((r, i) => {
-            const isLast = i === group.roles.length - 1;
-            const glyph = isLast ? '└' : '├';
-            return (
-              <div class="role-row">
-                <span class="bracket">{glyph}</span>
-                <span class="role-name">{r.role}</span>
-                <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    ))}
-  </div>
+  {/* ===================== TIMELINE VIEW (default) ===================== */}
+  <section class="view view-timeline active" data-view="timeline" aria-label="Timeline view">
+    <div class="tl-layout">
+      <div class="tl-content">
+        <p class="view-intro">
+          Years run down the page; months across. Summer months are shaded. Click any bar to see details and
+          highlight everything from the same organisation. Filter by category.
+        </p>
 
-  {leaderGroups.length > 0 && (
-    <>
-      <h2>Leadership</h2>
-      <div class="groups">
-        {leaderGroups.map(group => (
-          <div class="org-group">
-            <div class="entity-row">
-              <span class="org-name">
-                {group.url
-                  ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.organization}</a>
-                  : group.organization}
-              </span>
-              {group.location && <span class="org-location">{group.location}</span>}
+        <div class="tl-filters" role="group" aria-label="Filter timeline by category">
+          <button class="tl-filter active" data-filter="all">All <span class="count">{counts.all}</span></button>
+          {showMain && <button class="tl-filter tl-filter-main" data-filter="main">★ Main <span class="count">{counts.main}</span></button>}
+          {showMain && shownCategories.length > 0 && <span class="tl-filter-sep" aria-hidden="true"></span>}
+          {shownCategories.map(c => (
+            <button class="tl-filter" data-filter={c.key}>{c.label} <span class="count">{counts[c.key]}</span></button>
+          ))}
+        </div>
+
+        <div class="gantt-wrap">
+          <div class="gantt">
+            {years.map((year, i) => (
+              <div class="tl-row">
+                <div class="tl-rail">
+                  <div class="tl-year"><span>{year}</span></div>
+                  <div class="tl-rail-line"></div>
+                </div>
+                <div class="tl-panel">
+                  <div class="tl-months">
+                    {MONTH_LABELS.map((m, mi) => (
+                      <div class:list={['tl-month', { summer: SUMMER_COLS.includes(mi) }]}>{m}</div>
+                    ))}
+                  </div>
+                  <div class="tl-body" data-year={year}>
+                    <div class="tl-grid">
+                      {MONTH_LABELS.map((_, mi) => (
+                        <div class:list={['tl-grid-cell', { summer: SUMMER_COLS.includes(mi) }]}></div>
+                      ))}
+                    </div>
+                    <div class="tl-bars"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div class="tl-legend">
+          {shownCategories.map(c => (
+            <span class="leg"><span class="sw" style={`background:${c.color}`}></span>{c.label}</span>
+          ))}
+          <span class="leg leg-summer"><span class="sw sw-summer"></span>Summer</span>
+        </div>
+
+        {undated.length > 0 && (
+          <div class="undated">
+            <span class="undated-label">Ongoing / undated</span>
+            <div class="undated-items">
+              {undated.map(u => (
+                <span class="undated-item" data-category={u.category} data-main={String(u.main)} style={`--cat: ${CATEGORIES.find(c => c.key === u.category)!.color}`}>
+                  {u.url ? <a href={u.url} target="_blank" rel="noopener noreferrer">{u.title}</a> : u.title}
+                  {u.detail && <span class="undated-detail"> — {u.detail}</span>}
+                </span>
+              ))}
             </div>
-            {group.roles.map((item, i) => {
+          </div>
+        )}
+      </div>
+
+      {/* ===== INFO TAB — the sticky detail panel that slides in on the right
+          when a bar is clicked. Its top stays pinned to the viewport and it
+          scrolls independently of the timeline. (a.k.a. `.tl-detail`.) ===== */}
+      <aside class="tl-detail" aria-hidden="true">
+        <div class="tl-detail-panel">
+          <button class="tl-detail-close" aria-label="Close details (Esc)">
+            <svg class="tl-detail-close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span class="tl-detail-close-label">esc</span>
+          </button>
+          <div class="tl-detail-body"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  {/* ===================== EXPERIENCE (list) VIEW ===================== */}
+  <section class="view view-list" data-view="list" aria-label="Experience list view" hidden>
+    <p class="view-intro">Current and past affiliations.</p>
+
+    <h2>Current</h2>
+    <div class="groups">
+      {currentGroups.map(group => (
+        <div class="org-group">
+          <div class="entity-row">
+            <span class="org-name">
+              {group.url
+                ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
+                : group.entity}
+            </span>
+            {group.location && <span class="org-location">{group.location}</span>}
+          </div>
+          <div class="roles">
+            {group.roles.map((r, i) => {
               const isLast = i === group.roles.length - 1;
               const glyph = isLast ? '└' : '├';
-              const dates = dateRange(item.start, item.end);
-              const roleUrl = item.url ?? null;
               return (
                 <div class="role-row">
                   <span class="bracket">{glyph}</span>
-                  <span class="role-name">{roleUrl
-                    ? <a href={roleUrl} target="_blank" rel="noopener noreferrer">{item.role}</a>
-                    : item.role}</span>
-                  {dates && <span class="role-dates">{dates}</span>}
+                  <span class="role-name">{r.role}</span>
+                  <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
                 </div>
               );
             })}
           </div>
-        ))}
-      </div>
-    </>
-  )}
+        </div>
+      ))}
+    </div>
 
-  {awards.length > 0 && (
-    <>
-      <h2>Awards & Honors</h2>
-      <ul class="involvement-list">
-        {awards.map(award => (
-          <li class="award-row">
-            <span class="inv-name">{award.url
-              ? <a href={award.url} target="_blank" rel="noopener noreferrer">{award.name}</a>
-              : award.name}</span>
-            <span class="role-dates">{formatDate(award.date)}</span>
-          </li>
-        ))}
-      </ul>
-    </>
-  )}
+    <h2>Past</h2>
+    <div class="groups">
+      {pastGroups.map(group => (
+        <div class="org-group">
+          <div class="entity-row">
+            <span class="org-name">
+              {group.url
+                ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
+                : group.entity}
+            </span>
+            {group.location && <span class="org-location">{group.location}</span>}
+          </div>
+          <div class="roles">
+            {group.roles.map((r, i) => {
+              const isLast = i === group.roles.length - 1;
+              const glyph = isLast ? '└' : '├';
+              return (
+                <div class="role-row">
+                  <span class="bracket">{glyph}</span>
+                  <span class="role-name">{r.role}</span>
+                  <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
 
-  {conferences.length > 0 && (
-    <>
-      <h2>Conferences</h2>
-      <ul class="involvement-list">
-        {conferences.map(conf => (
-          <li class="award-row">
-            <span class="inv-name">{conf.url
-              ? <a href={conf.url} target="_blank" rel="noopener noreferrer">{conf.name}</a>
-              : conf.name}</span>
-            <span class="role-dates">{formatDate(conf.date)}</span>
-          </li>
-        ))}
-      </ul>
-    </>
-  )}
+    {leaderGroups.length > 0 && (
+      <>
+        <h2>Leadership</h2>
+        <div class="groups">
+          {leaderGroups.map(group => (
+            <div class="org-group">
+              <div class="entity-row">
+                <span class="org-name">
+                  {group.url
+                    ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.organization}</a>
+                    : group.organization}
+                </span>
+                {group.location && <span class="org-location">{group.location}</span>}
+              </div>
+              {group.roles.map((item, i) => {
+                const isLast = i === group.roles.length - 1;
+                const glyph = isLast ? '└' : '├';
+                const dates = dateRange(item.start, item.end);
+                const roleUrl = item.url ?? null;
+                return (
+                  <div class="role-row">
+                    <span class="bracket">{glyph}</span>
+                    <span class="role-name">{roleUrl
+                      ? <a href={roleUrl} target="_blank" rel="noopener noreferrer">{item.role}</a>
+                      : item.role}</span>
+                    {dates && <span class="role-dates">{dates}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </>
+    )}
 
-  {involvements.length > 0 && (
-    <>
-      <h2>Involvements</h2>
-      <ul class="involvement-list">
-        {involvements.map(inv => (
-          <li>
-            <span class="inv-name">{inv.url
-              ? <a href={inv.url} target="_blank" rel="noopener noreferrer">{inv.name}</a>
-              : inv.name}</span>
-            {inv.role && <span class="inv-role"> &mdash; {inv.role}</span>}
-          </li>
-        ))}
-      </ul>
-    </>
-  )}
+    {awards.length > 0 && (
+      <>
+        <h2>Awards & Honors</h2>
+        <ul class="involvement-list">
+          {awards.map(award => (
+            <li class="award-row">
+              <span class="inv-name">{award.url
+                ? <a href={award.url} target="_blank" rel="noopener noreferrer">{award.name}</a>
+                : award.name}</span>
+              <span class="role-dates">{formatDate(award.date)}</span>
+            </li>
+          ))}
+        </ul>
+      </>
+    )}
+
+    {conferences.length > 0 && (
+      <>
+        <h2>Conferences</h2>
+        <ul class="involvement-list">
+          {conferences.map(conf => (
+            <li class="award-row">
+              <span class="inv-name">{conf.url
+                ? <a href={conf.url} target="_blank" rel="noopener noreferrer">{conf.name}</a>
+                : conf.name}</span>
+              <span class="role-dates">{formatDate(conf.date)}</span>
+            </li>
+          ))}
+        </ul>
+      </>
+    )}
+
+    {involvements.length > 0 && (
+      <>
+        <h2>Involvements</h2>
+        <ul class="involvement-list">
+          {involvements.map(inv => (
+            <li>
+              <span class="inv-name">{inv.url
+                ? <a href={inv.url} target="_blank" rel="noopener noreferrer">{inv.name}</a>
+                : inv.name}</span>
+              {inv.role && <span class="inv-role"> &mdash; {inv.role}</span>}
+            </li>
+          ))}
+        </ul>
+      </>
+    )}
+  </section>
+
+  <script type="application/json" id="tl-data" set:html={JSON.stringify(items)}></script>
+  <script type="application/json" id="tl-cfg" set:html={JSON.stringify(cfg)}></script>
 </BaseLayout>
 
+<!-- Page-only: width + globally-styled JS-created bars. Width rules are gated on
+     the timeline view being the active one, so the list view keeps the default
+     (narrower) page width. -->
+<style is:global>
+  /* Keep the width transition on `main` at all times (the switcher is always
+     present) so the page animates smoothly when SHRINKING to the list view too —
+     not just when growing back to the timeline. Slow, ease-in-out for a gentle
+     expand/retract. */
+  main:has(.view-switch) { transition: max-width 0.55s cubic-bezier(0.4, 0, 0.2, 1); }
+  main:has(.view-timeline.active) { max-width: 1080px; }
+  /* Drawer-open width = closed content (1040) + drawer (360) + main padding (40).
+     Because this width and the drawer's flex-basis share the same transition,
+     the timeline's own width stays constant while the drawer slides in. */
+  main:has(.view-timeline.active .tl-detail.open) { max-width: 1440px; }
+  /* Always reserve the page scrollbar gutter so widths don't jump on scroll. */
+  html:has(.view-timeline.active) { scrollbar-gutter: stable; }
+
+  /* Pre-hydration: the inline script at the top of the page sets these on <html>
+     from the URL hash BEFORE the view markup is parsed, so a reload on the list
+     view shows the list immediately — no timeline flash, no shrink replay. All
+     rules are gated on `.view-init`, which the view script removes once the
+     correct view has painted; normal class/[hidden] control + the width
+     transition then take over. */
+  html.view-init main { transition: none !important; }
+  html.view-init[data-initial-view='list'] main:has(.view-timeline.active) { max-width: var(--max-width); }
+  html.view-init[data-initial-view='list'] .view-timeline { display: none; }
+  html.view-init[data-initial-view='list'] .view-list { display: block; }
+  /* …and match the selector's active button to the initial view, so the
+     "Timeline" button doesn't flash highlighted before the script flips it. */
+  html.view-init[data-initial-view='list'] .view-btn[data-view='timeline'].active {
+    background: var(--bg);
+    color: var(--text-muted);
+  }
+  html.view-init[data-initial-view='list'] .view-btn[data-view='list'] {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .tl-bar {
+    position: absolute; display: flex; align-items: center; gap: 0.25rem;
+    padding: 0 0.375rem; font-size: 10px; overflow: hidden; white-space: nowrap;
+    background: var(--bg); border: 1px solid color-mix(in srgb, var(--text-muted) 55%, var(--border)); border-left-width: 3px;
+    color: var(--text); text-decoration: none; box-sizing: border-box; cursor: pointer;
+    transition: opacity 0.15s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tl-bar .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+  .tl-bar:hover { border-color: var(--accent); }
+  .tl-bar:hover { text-decoration: none; }
+  /* Selection emphasis, layered above the dimmed background:
+     sel-primary = the selected role + its continuations (same role, other years) — filled box, strong border
+     sel-related = same organisation (other roles) / tagged projects — lighter fill + border
+     dim         = everything unrelated */
+  .tl-bar.sel-related {
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    z-index: 1;
+  }
+  .tl-bar.sel-primary {
+    background: color-mix(in srgb, var(--accent) 24%, var(--bg));
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+    z-index: 2;
+  }
+  .tl-bar.sel-primary .t { font-weight: 700; }
+  /* Dim by fading colours toward --bg rather than lowering opacity: an opaque
+     box keeps the summer band fully behind it, so the bar stays continuous and
+     unbroken across the May–Aug shaded columns instead of letting it bleed
+     through. (border-left colour is set inline in JS → override with !important.) */
+  .tl-bar.dim {
+    background: var(--bg);
+    border-color: color-mix(in srgb, var(--border) 45%, var(--bg));
+    border-left-color: color-mix(in srgb, var(--border) 60%, var(--bg)) !important;
+    color: color-mix(in srgb, var(--text-muted) 45%, var(--bg));
+    box-shadow: none;
+  }
+
+  /* Detail drawer content (built in client JS → needs global styles) */
+  .d-title { font-size: 1.1rem; margin: 0 1.5rem 0.4rem 0; line-height: 1.3; }
+  .d-meta { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.85rem; }
+  .d-subtitle { font-size: 0.88rem; color: var(--text); margin: -0.4rem 0 0.8rem; line-height: 1.45; }
+  .d-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+  .d-desc { font-size: 0.9rem; margin-bottom: 0.9rem; line-height: 1.6; }
+  .d-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+  .d-links a { font-size: 0.82rem; padding: 0.25rem 0.6rem; border: 1px solid var(--border); border-radius: 4px; text-decoration: none; color: var(--accent); }
+  .d-links a:hover { border-color: var(--accent); }
+  .d-related-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0.25rem 0 0.6rem; }
+  .d-timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+  .d-timeline::before { content: ''; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 1px; background: var(--border); }
+  .d-tl-item { position: relative; padding-left: 1rem; margin-bottom: 0.55rem; }
+  .d-tl-item:last-child { margin-bottom: 0; }
+  .d-tl-dot { position: absolute; left: 0; top: 0.3rem; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg); }
+  .d-tl-link { display: flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; text-align: left; background: none; border: none; padding: 0; cursor: pointer; font: inherit; width: 100%; }
+  .d-tl-title { font-size: 0.8rem; color: var(--text); line-height: 1.3; }
+  .d-tl-link:hover .d-tl-title { color: var(--accent); }
+  .d-tl-date { font-size: 0.68rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .d-tl-desc { font-size: 0.68rem; color: var(--text-muted); line-height: 1.45; margin-top: 0.15rem; white-space: normal; text-align: left; }
+</style>
+
 <style>
+  /* View selector ---------------------------------------------------------- */
+  .view-switch {
+    display: inline-flex;
+    margin: 0.25rem 0 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .view-btn {
+    font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.4rem 1.1rem;
+    border: none;
+    cursor: pointer;
+    background: var(--bg);
+    color: var(--text-muted);
+    transition: background 0.12s, color 0.12s;
+  }
+  .view-btn + .view-btn { border-left: 1px solid var(--border); }
+  .view-btn:hover { color: var(--text); }
+  .view-btn.active { background: var(--accent); color: var(--bg); }
+
+  .view-intro { color: var(--text-muted); margin-bottom: 1rem; }
+
+  /* ---- Experience (list) view ------------------------------------------- */
   h2 {
     margin-top: 2rem;
     margin-bottom: 0.75rem;
@@ -330,4 +776,449 @@ const leaderGroups = leadership as LeaderOrg[];
     color: var(--text-muted);
     font-size: 0.85rem;
   }
+
+  /* ---- Timeline view ----------------------------------------------------- */
+  .gantt { --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace; }
+  .gantt-wrap { overflow-x: auto; }
+
+  /* Layout: timeline + the sliding INFO TAB -------------------------------- */
+  /* The "info tab" is the detail panel that slides out on the right when a bar
+     is clicked. (Referred to as the "info tab" throughout; the class names keep
+     the older `tl-detail` prefix.) */
+  .tl-layout { display: flex; align-items: flex-start; }
+  /* Fill the (animating) container so the month columns visibly widen as the
+     page grows into the timeline view. The info tab still never resizes the
+     timeline: `main`'s width and the info tab's flex-basis transition with the
+     SAME duration/easing, so (container − info tab) — this element's width —
+     holds constant while the tab slides in. */
+  .tl-content { flex: 1 1 auto; min-width: 0; }
+  /* The info-tab column is `position: sticky`: scroll well down the timeline,
+     click a bar, and the info tab opens at the top of what you're looking at
+     right now — not back up at the top of the page. The parent's
+     align-items:flex-start keeps this column short while .tl-layout stays as
+     tall as the timeline, which is exactly the travel room sticky needs to ride
+     down the page with you. The sticky MUST live here (not on the inner panel):
+     overflow:hidden — needed to clip the slide-open animation — turns this box
+     into the panel's scroll container, so a sticky placed inside it would never
+     engage.
+       --tl-detail-top is the buffer above the info tab when scrolled to the very
+     top (the page header: title + view switch), measured in JS. At rest the tab
+     sits at that FULL buffer (normal flow); we pin it at HALF the buffer, so as
+     you scroll down the gap eases from the full header height to a tighter
+     half-gap and holds there. Falls back to 1rem before/without JS. */
+  .tl-detail {
+    --tl-detail-w: 360px;
+    flex: 0 0 0; overflow: hidden;
+    position: sticky; top: calc(var(--tl-detail-top, 1rem) / 2); align-self: flex-start;
+    max-height: calc(100vh - var(--tl-detail-top, 1rem) / 2 - 1rem);
+    transition: flex-basis 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  /* Fixed px width (not %) so the main timeline boundary never moves when the
+     info tab's scrollbar appears/disappears or its content scrolls. */
+  .tl-detail.open { flex-basis: var(--tl-detail-w); border-left: 1px solid var(--border); }
+  /* The info tab's OWN scroll — independent of the page and the timeline. When
+     the details run long, they scroll inside this panel while the sticky column
+     above keeps the info tab's top pinned to the viewport.
+       The panel is locked to its FINAL open width (the column's flex-basis minus
+     its 1px open border) rather than filling the animating container. So the
+     content is laid out once at full width and the text never re-wraps as the
+     tab opens: the `overflow: hidden` column just reveals more of the
+     already-formed panel, making it read as the info tab being pulled out
+     instead of slowly unwrapping. */
+  .tl-detail-panel {
+    width: calc(var(--tl-detail-w) - 1px);
+    max-height: calc(100vh - var(--tl-detail-top, 1rem) / 2 - 1rem); overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding: 0.25rem 0.25rem 1rem 1.25rem;
+  }
+  .tl-detail-close {
+    float: right; display: inline-flex; align-items: center; gap: 0.3rem;
+    background: none; border: none; cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.05em;
+    line-height: 1; color: var(--text-muted);
+  }
+  .tl-detail-close:hover { color: var(--text); }
+  .tl-detail-close-icon { width: 1em; height: 1em; }
+
+  /* Filter buttons -------------------------------------------------------- */
+  .tl-filters { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 1.25rem; }
+  .tl-filter {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 0.3rem 0.75rem; border: none; cursor: pointer;
+    background: var(--border); color: var(--text); transition: background 0.12s, color 0.12s;
+  }
+  .tl-filter:hover { background: var(--text); color: var(--bg); }
+  .tl-filter.active { background: var(--accent); color: var(--bg); }
+  .tl-filter .count { opacity: 0.7; }
+  /* "Main" is a cross-cutting flag, not a category — set it apart from the type filters. */
+  .tl-filter-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0.15rem 0.35rem; }
+
+  /* Year row -------------------------------------------------------------- */
+  .tl-row { display: flex; align-items: stretch; }
+  .tl-rail { width: 3.5rem; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+  .tl-rail-line { width: 2px; flex: 1; background: var(--border); min-height: 12px; }
+  .tl-year { background: var(--text); color: var(--bg); padding: 0.25rem 0.5rem; text-align: center; }
+  .tl-year span { font-family: var(--mono); font-size: 0.85rem; font-weight: 700; }
+  .tl-panel { flex: 1; border: 1px solid var(--border); background: var(--bg); }
+
+  /* Month header */
+  .tl-months { position: relative; height: 1rem; border-bottom: 1px solid var(--border); display: flex; }
+  .tl-month {
+    flex: 1; text-align: center; font-family: var(--mono); font-size: 8px; line-height: 1rem;
+    border-right: 1px solid var(--border); color: var(--text-muted);
+  }
+  .tl-month:last-child { border-right: 0; }
+  .tl-month.summer { background: color-mix(in srgb, var(--border) 80%, transparent); color: var(--text-muted); }
+
+  /* Body: gridlines + summer band + bars */
+  .tl-body { position: relative; min-height: 60px; }
+  .tl-grid { position: absolute; inset: 0; display: flex; pointer-events: none; }
+  .tl-grid-cell { flex: 1; border-right: 1px solid color-mix(in srgb, var(--border) 45%, transparent); }
+  .tl-grid-cell:last-child { border-right: 0; }
+  .tl-grid-cell.summer { background: color-mix(in srgb, var(--border) 55%, transparent); }
+  .tl-bars { position: absolute; inset: 0; }
+
+  /* Detail panel content is built in client JS — styled globally (see is:global). */
+
+  /* Legend ---------------------------------------------------------------- */
+  .tl-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; padding-top: 0.75rem; font-size: 9px; }
+  .leg { display: flex; align-items: center; gap: 0.25rem; color: var(--text-muted); }
+  .leg .sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .leg-summer { margin-left: 0.5rem; padding-left: 0.5rem; border-left: 1px solid var(--border); }
+  .sw-summer { background: color-mix(in srgb, var(--border) 70%, transparent); border: 1px solid var(--border); border-radius: 0 !important; }
+
+  /* Undated list ---------------------------------------------------------- */
+  .undated { margin-top: 1.5rem; }
+  .undated-label {
+    display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-muted); margin-bottom: 0.5rem;
+  }
+  .undated-items { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .undated-item {
+    font-size: 0.82rem; padding: 0.2rem 0.6rem; border-radius: 999px;
+    border: 1px solid var(--border); border-left: 3px solid var(--cat);
+  }
+  .undated-detail { color: var(--text-muted); }
 </style>
+
+<script>
+  const dataEl = document.getElementById('tl-data');
+  const cfgEl = document.getElementById('tl-cfg');
+  if (dataEl && cfgEl) {
+    interface Item {
+      id: number; title: string; type: string; start: number; end: number | null; dateLabel: string;
+      description: string | null; subtitle: string | null; links: { label: string; url: string }[];
+      entity: string; group: string; affiliations: string[]; related: number[];
+      main: boolean; cats: string[];
+    }
+    const items: Item[] = JSON.parse(dataEl.textContent || '[]');
+    const cfg = JSON.parse(cfgEl.textContent || '{}');
+    const byId: Record<number, Item> = {};
+    for (const it of items) byId[it.id] = it;
+    const colorOf: Record<string, string> = {};
+    const labelOf: Record<string, string> = {};
+    for (const c of cfg.categories) { colorOf[c.key] = c.color; labelOf[c.key] = c.label; }
+    const order: Record<string, number> = cfg.typeOrder;
+    const now = Date.now();
+
+    const activeIn = (it: Item, t: number, r: number) => it.start < r && (it.end ?? now) > t;
+    function pct(it: Item, t: number, r: number) {
+      const a = it.end ?? now;
+      const s = it.start < t ? t : it.start;
+      const L = r - t;
+      return { sp: Math.max(0, (s - t) / L * 100), ep: Math.min(100, ((a > r ? r : a) - t) / L * 100) };
+    }
+
+    // `drawer` is the INFO TAB (the sliding detail panel); `drawerBody` is its
+    // scrollable contents. See the .tl-detail CSS for the sticky/scroll setup.
+    const drawer = document.querySelector<HTMLElement>('.tl-detail')!;
+    const drawerBody = document.querySelector<HTMLElement>('.tl-detail-body')!;
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('.tl-row'));
+
+    // --- selection state ---
+    let selectedId: number | null = null;
+    let selectedGroup: string | null = null;
+    let selectedEntity: string | null = null;
+    let selectedTitle: string | null = null;
+    let selectedRelated: number[] = [];
+
+    function inForeground(it: Item): boolean {
+      if (selectedGroup === null) return true;
+      if (it.group === selectedGroup) return true;
+      // projects tagged (via affiliations) to the selected organisation stay lit
+      if (it.type === 'projects' && selectedEntity && it.affiliations.includes(selectedEntity)) return true;
+      // explicit item-to-item links (bidirectional, resolved at build time)
+      if (selectedRelated.includes(it.id)) return true;
+      return false;
+    }
+    function applySelection() {
+      const sel = selectedGroup !== null;
+      for (const bar of Array.from(document.querySelectorAll<HTMLElement>('.tl-bar'))) {
+        const it = byId[parseInt(bar.dataset.id!)];
+        if (!it) continue;
+        const fg = inForeground(it);
+        // primary = the same role (same org + same title), incl. its continuations
+        // across years; related = anything else still lit (other roles at the same
+        // org, tagged projects); the rest is dimmed.
+        const primary = sel && it.group === selectedGroup && it.title === selectedTitle;
+        bar.classList.toggle('dim', sel && !fg);
+        bar.classList.toggle('sel-primary', primary);
+        bar.classList.toggle('sel-related', sel && fg && !primary);
+      }
+    }
+
+    function buildDrawer(it: Item) {
+      drawerBody.innerHTML = '';
+      const h = document.createElement('h2'); h.className = 'd-title'; h.textContent = it.title;
+      const meta = document.createElement('div'); meta.className = 'd-meta';
+      const dot = document.createElement('span'); dot.className = 'd-dot'; dot.style.background = colorOf[it.type];
+      const mt = document.createElement('span'); mt.textContent = `${labelOf[it.type] || it.type} · ${it.dateLabel}`;
+      meta.appendChild(dot); meta.appendChild(mt);
+      drawerBody.appendChild(h); drawerBody.appendChild(meta);
+
+      if (it.subtitle) {
+        const sub = document.createElement('div'); sub.className = 'd-subtitle'; sub.textContent = it.subtitle;
+        drawerBody.appendChild(sub);
+      }
+      if (it.description) {
+        const p = document.createElement('p'); p.className = 'd-desc'; p.textContent = it.description;
+        drawerBody.appendChild(p);
+      }
+      if (it.links.length) {
+        const wrap = document.createElement('div'); wrap.className = 'd-links';
+        for (const l of it.links) {
+          const a = document.createElement('a'); a.href = l.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          a.textContent = l.label; wrap.appendChild(a);
+        }
+        drawerBody.appendChild(wrap);
+      }
+      // Everything highlighted alongside this item (same organisation + tagged
+      // projects), shown as a compact vertical timeline (newest first).
+      const related = items.filter(x => x.id !== it.id && inForeground(x));
+      if (related.length) {
+        related.sort((a, b) => {
+          const ka = a.end ?? Number.MAX_SAFE_INTEGER, kb = b.end ?? Number.MAX_SAFE_INTEGER;
+          return kb - ka || b.start - a.start;
+        });
+        const lab = document.createElement('div'); lab.className = 'd-related-label'; lab.textContent = 'Related';
+        const ul = document.createElement('ul'); ul.className = 'd-timeline';
+        for (const r of related) {
+          const li = document.createElement('li'); li.className = 'd-tl-item';
+          const dot = document.createElement('span'); dot.className = 'd-tl-dot'; dot.style.background = colorOf[r.type];
+          const btn = document.createElement('button'); btn.className = 'd-tl-link';
+          btn.addEventListener('click', () => selectItem(r, { scroll: true }));
+          const t = document.createElement('span'); t.className = 'd-tl-title'; t.textContent = r.title;
+          const d = document.createElement('span'); d.className = 'd-tl-date'; d.textContent = r.dateLabel;
+          btn.appendChild(t); btn.appendChild(d);
+          if (r.description) {
+            const desc = document.createElement('span'); desc.className = 'd-tl-desc'; desc.textContent = r.description;
+            btn.appendChild(desc);
+          }
+          li.appendChild(dot); li.appendChild(btn);
+          ul.appendChild(li);
+        }
+        drawerBody.appendChild(lab); drawerBody.appendChild(ul);
+      }
+    }
+
+    // Open / close the INFO TAB (the sliding detail panel).
+    function openDrawer(it: Item) { buildDrawer(it); drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); }
+    function closeDrawer() { drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); }
+
+    // Bring a freshly-selected item's bar into view (used when jumping to a
+    // related item from the info tab). An item can span several year rows — one
+    // bar per year — so we target the occurrence CLOSEST to where you're already
+    // looking. If that occurrence is already comfortably on-screen we only nudge
+    // a little in its direction (a directional hint); otherwise we scroll it to
+    // a comfortable spot in the viewport. Vertical only — years run down the
+    // page, and the header isn't sticky so the whole viewport height is usable.
+    function scrollToItem(it: Item) {
+      const bars = Array.from(document.querySelectorAll<HTMLElement>('.tl-bar'))
+        .filter(b => b.dataset.id === String(it.id) && b.offsetParent !== null);
+      if (!bars.length) return;  // filtered out / not rendered → nothing to scroll to
+      const vh = window.innerHeight;
+      const vCenter = vh / 2;
+      // Pick the occurrence whose centre is nearest the viewport centre, i.e.
+      // the closest one / the one needing the least scrolling.
+      let rect: DOMRect | null = null, bestDist = Infinity;
+      for (const bar of bars) {
+        const r = bar.getBoundingClientRect();
+        const dist = Math.abs(r.top + r.height / 2 - vCenter);
+        if (dist < bestDist) { bestDist = dist; rect = r; }
+      }
+      if (!rect) return;
+      const center = rect.top + rect.height / 2;
+      const margin = vh * 0.12;  // comfort padding kept clear at top & bottom
+      const inView = rect.top >= margin && rect.bottom <= vh - margin;
+      let delta: number;
+      if (inView) {
+        // already visible → gentle nudge toward it (capped), scaled by how far
+        // off-centre it sits; a bar already near the centre barely moves.
+        const dir = center < vCenter ? -1 : 1;
+        delta = dir * Math.min(Math.abs(center - vCenter) * 0.35, 80);
+      } else {
+        // off-screen or clipped → scroll its centre to ~40% down the viewport.
+        delta = center - vh * 0.4;
+      }
+      if (Math.abs(delta) < 1) return;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollBy({ top: delta, left: 0, behavior: reduce ? 'auto' : 'smooth' });
+    }
+
+    function selectItem(it: Item, opts?: { scroll?: boolean }) {
+      if (selectedId === it.id) { deselect(); return; }
+      selectedId = it.id; selectedGroup = it.group; selectedEntity = it.entity; selectedTitle = it.title;
+      selectedRelated = it.related || [];
+      applySelection();
+      openDrawer(it); // every item opens the info tab — even sparse ones show title/category/related
+      if (opts?.scroll) scrollToItem(it);
+    }
+    function deselect() {
+      selectedId = selectedGroup = null; selectedEntity = selectedTitle = null;
+      selectedRelated = [];
+      applySelection(); closeDrawer();
+    }
+
+    function layout(filter: string) {
+      let lastVisible: HTMLElement | null = null;
+      for (const row of rows) {
+        const body = row.querySelector('.tl-body') as HTMLElement;
+        const bars = body.querySelector('.tl-bars') as HTMLElement;
+        const y = parseInt(body.dataset.year!);
+        const t = new Date(y, 0, 1).getTime();
+        const r = new Date(y + 1, 0, 1).getTime();
+        let act = items.filter(it => activeIn(it, t, r));
+        if (filter === 'main') act = act.filter(it => it.main);
+        else if (filter !== 'all') act = act.filter(it => it.cats.includes(filter));
+        bars.innerHTML = '';
+        // (.tl-row sets display:flex, which overrides the [hidden] default, so toggle display directly)
+        if (!act.length) { row.style.display = 'none'; continue; }  // skip empty years entirely
+        row.style.display = ''; lastVisible = row;
+        act.sort((p, q) => {
+          const d = (order[p.type] ?? 5) - (order[q.type] ?? 5);
+          return d !== 0 ? d : p.start - q.start;
+        });
+        const lanes: number[] = [];
+        const laneOf: Record<number, number> = {};
+        for (const it of act) {
+          const { sp, ep } = pct(it, t, r);
+          let c = -1;
+          for (let i = 0; i < lanes.length; i++) { if (lanes[i] <= sp + 0.5) { c = i; lanes[i] = ep + 1; break; } }
+          if (c === -1) { c = lanes.length; lanes.push(ep + 1); }
+          laneOf[it.id] = c;
+        }
+        const b = Math.max(...act.map(it => laneOf[it.id])) + 1;
+        body.style.height = Math.max(36 * b + 12, 60) + 'px';
+        for (const it of act) {
+          const { sp, ep } = pct(it, t, r);
+          const lane = laneOf[it.id];
+          const el = document.createElement('div');
+          el.classList.add('tl-bar');
+          el.dataset.id = String(it.id);
+          el.style.left = sp + '%';
+          el.style.width = `max(${Math.max(ep - sp, 2)}%, 40px)`;
+          el.style.top = (36 * lane + 4) + 'px';
+          el.style.height = '28px';
+          el.style.borderLeftColor = colorOf[it.type] || 'var(--border)';
+          el.title = `${it.title} · ${it.dateLabel}`;
+          el.addEventListener('click', () => selectItem(it));
+          const span = document.createElement('span'); span.className = 't'; span.textContent = it.title;
+          el.appendChild(span);
+          bars.appendChild(el);
+        }
+      }
+      // Hide the trailing connector line on the last visible year.
+      for (const row of rows) {
+        const line = row.querySelector('.tl-rail-line') as HTMLElement | null;
+        if (line) line.style.display = row === lastVisible ? 'none' : '';
+      }
+      applySelection();
+    }
+
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.tl-filter'));
+    const chips = Array.from(document.querySelectorAll<HTMLElement>('.undated-item'));
+
+    // --- view switching (Timeline ⇄ Experience list) ---
+    const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-btn'));
+    const timelineView = document.querySelector<HTMLElement>('.view-timeline');
+    const listView = document.querySelector<HTMLElement>('.view-list');
+    let currentView = 'timeline';
+    let currentFilter = 'all';
+
+    // One hash carries both bits of state: `#list` selects the list view;
+    // any category key (or nothing) selects the timeline view at that filter.
+    function syncHash() {
+      let h = '';
+      if (currentView === 'list') h = 'list';
+      else if (currentFilter !== 'all') h = currentFilter;
+      history.replaceState(null, '', h ? `#${h}` : location.pathname);
+    }
+
+    function setView(v: string) {
+      currentView = v;
+      const tlActive = v === 'timeline';
+      viewButtons.forEach(b => {
+        const on = b.dataset.view === v;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
+      if (timelineView) { timelineView.hidden = !tlActive; timelineView.classList.toggle('active', tlActive); }
+      if (listView) listView.hidden = tlActive;
+      if (!tlActive) deselect(); // close the drawer / clear selection when leaving the timeline
+      syncHash();
+    }
+
+    function setFilter(f: string) {
+      currentFilter = f;
+      // Keep the info tab open when switching filters IF the selected item still
+      // belongs to the new category (it matches "all", or "main" when flagged, or
+      // lists the category in its `cats`). Otherwise clear the selection and close
+      // the tab — the selected bar is about to be filtered out.
+      const sel = selectedId !== null ? byId[selectedId] : null;
+      const keepSelection = !!sel && (f === 'all' || (f === 'main' ? sel.main : sel.cats.includes(f)));
+      if (!keepSelection) {
+        selectedId = selectedGroup = null; selectedEntity = selectedTitle = null; selectedRelated = []; closeDrawer();
+      }
+      buttons.forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+      chips.forEach(c => {
+        c.hidden = !(f === 'all' || (f === 'main' ? c.dataset.main === 'true' : c.dataset.category === f));
+      });
+      layout(f);
+      syncHash();
+    }
+
+    buttons.forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter!)));
+    viewButtons.forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view!)));
+    document.querySelector('.tl-detail-close')?.addEventListener('click', () => deselect());
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') deselect(); });
+
+    // Measure the gap above the info tab at rest — i.e. the page header (title +
+    // view switch) that sits above .tl-layout — and expose it as --tl-detail-top.
+    // The CSS shows that FULL gap when scrolled to the top and pins the tab at
+    // HALF of it once it sticks (see the .tl-detail rule). Re-measure on resize
+    // and once fonts load, since both can change the header's height.
+    const tlLayout = document.querySelector<HTMLElement>('.tl-layout')!;
+    function syncDetailTop() {
+      const top = tlLayout.getBoundingClientRect().top + window.scrollY;
+      drawer.style.setProperty('--tl-detail-top', `${Math.round(top)}px`);
+    }
+    syncDetailTop();
+    window.addEventListener('resize', syncDetailTop);
+    document.fonts?.ready.then(syncDetailTop);
+
+    // Initial state from the hash. Always build the timeline first (so its bars
+    // are ready even when the list view is shown first), then pick the view.
+    const initial = location.hash.replace('#', '');
+    const isFilter = buttons.some(b => b.dataset.filter === initial);
+    setFilter(isFilter ? initial : 'all');
+    setView(initial === 'list' ? 'list' : 'timeline');
+
+    // The view above now matches what the pre-hydration CSS already painted, so
+    // drop `view-init` (after a frame, to be sure the initial state has painted)
+    // to re-enable the width transition for subsequent view switches.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.documentElement.classList.remove('view-init');
+    }));
+  }
+</script>
