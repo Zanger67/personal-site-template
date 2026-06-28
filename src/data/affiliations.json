@@ -2,6 +2,7 @@
   "current": [
     {
       "entity": "Georgia Institute of Technology",
+      "entityShort": "Georgia Tech",
       "role": "Official Mascot",
       "startDate": "1979-11",
       "endDate": null,
@@ -11,6 +12,7 @@
     },
     {
       "entity": "Georgia Institute of Technology",
+      "entityShort": "Georgia Tech",
       "role": "Spirit Coordinator",
       "categories": ["research", "work"],
       "startDate": "1985-08",
@@ -20,6 +22,7 @@
     },
     {
       "entity": "Georgia Tech Athletic Association",
+      "entityShort": "GT Athletics",
       "role": "Game Day Director",
       "startDate": "2005-01",
       "endDate": null,
@@ -30,6 +33,7 @@
   "past": [
     {
       "entity": "ACC Mascot Council",
+      "entityShort": "ACC",
       "role": "Chair",
       "startDate": "2021-01",
       "endDate": "2023-05",
@@ -38,6 +42,7 @@
     },
     {
       "entity": "ACC Mascot Council",
+      "entityShort": "ACC",
       "role": "Representative",
       "startDate": "2018-01",
       "endDate": "2020-12",
@@ -46,6 +51,7 @@
     },
     {
       "entity": "Capital One Mascot Challenge",
+      "entityShort": "Capital One",
       "role": "Finalist",
       "startDate": "2014-09",
       "endDate": "2014-12",
@@ -62,6 +68,7 @@
     },
     {
       "entity": "Coca-Cola Campus Ambassadors",
+      "entityShort": "Coca-Cola",
       "role": "Brand Mascot Partner",
       "startDate": "2010-03",
       "endDate": "2015-12",

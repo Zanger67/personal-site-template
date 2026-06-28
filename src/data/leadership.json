@@ -1,6 +1,7 @@
 [
   {
     "organization": "ACC Mascot Council",
+    "organizationShort": "ACC",
     "url": "https://example.com/acc-mascot-council",
     "location": "Atlanta, GA",
     "roles": [
@@ -14,6 +15,7 @@
   },
   {
     "organization": "Yellow Jacket Spirit Squad",
+    "organizationShort": "YJ Spirit Squad",
     "url": "https://example.com/yj-spirit-squad",
     "location": "Atlanta, GA",
     "roles": [
@@ -23,6 +25,12 @@
         "end": "2023-05",
         "main": true,
         "description": "Captained the mascot squad through football and basketball seasons, mentored new mascots, and choreographed game-day routines."
+      },
+      {
+        "role": "Member",
+        "start": "2017-08",
+        "end": "2024-05",
+        "description": "General squad member — the blanket affiliation that brackets the Captain term. On the timeline it runs until Captain begins and resumes after it ends."
       }
     ]
   }

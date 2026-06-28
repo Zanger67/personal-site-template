@@ -1,15 +1,17 @@
 [
   {
     "institution": "Georgia Institute of Technology",
+    "institutionShort": "Georgia Tech",
     "degree": "MS Mascot Sciences",
     "start": "2023-08",
     "end": null,
     "url": "https://gatech.edu",
     "main": true,
-    "related": ["pub-aerodynamics"]
+    "relationGroups": ["aerodynamics"]
   },
   {
     "institution": "Georgia Institute of Technology",
+    "institutionShort": "Georgia Tech",
     "degree": "BS Spirit Engineering",
     "start": "2019-08",
     "end": "2023-05",

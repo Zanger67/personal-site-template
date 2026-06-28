@@ -134,15 +134,14 @@ interface Item {
   links: { label: string; url: string }[];
   // Grouping: items in the same group stay lit together when one is selected.
   entity: string;          // organisation / institution / (project = own title)
+  entityShort: string;     // shortform org label for the compact bar; defaults to `entity`
   group: string;           // `${type}::${entity}`
   affiliations: string[];  // (projects) org/role names this project is tagged to
-  // Explicit item-to-item links (independent of org/group). `slug` is a stable
-  // human-readable handle other items reference; `relatedSlugs` are the handles
-  // this item declares (transient — resolved into `related` ids below, then
-  // dropped); `related` is the resolved set of linked ids, made bidirectional.
-  slug: string | null;
-  relatedSlugs: string[];
-  related: number[];
+  // Relation-groups: free-form shared tags that link items across the whole
+  // timeline. Selecting an item highlights every other item that shares any of
+  // its relation-groups (independent of category/org). Many-to-many — give
+  // items the same tag and they group; no per-pair linking required.
+  relationGroups: string[];
   main: boolean;           // cross-cutting "main"/highlights flag (orthogonal to type)
   cats: CatKey[];          // every category this item matches (primary `type` first).
                            // Extras let one item appear under multiple filters (e.g. a
@@ -152,7 +151,12 @@ interface Item {
 
 function parseDate(v: string | Date | null | undefined): Date | null {
   if (!v) return null;
-  if (v instanceof Date) return v;
+  // Content-collection dates (z.coerce.date) arrive as UTC-midnight Date objects,
+  // while JSON dates are strings parsed as LOCAL midnight below. Rebuild Date
+  // inputs from their UTC parts so both paths land on the same local day — without
+  // this, a UTC-midnight date rolls back a day (and sometimes a month) in any
+  // timezone behind UTC, e.g. a Feb-only project rendering as "Jan – Feb".
+  if (v instanceof Date) return new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate());
   const [y, m, d] = v.split('-');
   return new Date(parseInt(y), m ? parseInt(m) - 1 : 0, d ? parseInt(d) : 1);
 }
@@ -161,9 +165,9 @@ const fmtMonth = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', ye
 let _id = 0;
 interface ItemOpts {
   title: string; type: CatKey; start: any; end?: any; point?: boolean;
-  entity?: string; description?: string | null; subtitle?: string | null; links?: ({ label: string; url: string | null | undefined })[];
+  entity?: string; entityShort?: string | null; description?: string | null; subtitle?: string | null; links?: ({ label: string; url: string | null | undefined })[];
   affiliations?: string[]; main?: boolean; also?: CatKey[];
-  slug?: string | null; related?: string[];
+  relationGroups?: string[];
 }
 function mkItem(o: ItemOpts): Item | null {
   const s = parseDate(o.start);
@@ -181,64 +185,143 @@ function mkItem(o: ItemOpts): Item | null {
   const links = (o.links || []).filter((l): l is { label: string; url: string } => !!l && !!l.url);
   const description = o.description || null;
   const entity = o.entity || o.title;
+  const entityShort = o.entityShort || entity; // falls back to the long-form org
   const cats = Array.from(new Set<CatKey>([o.type, ...(o.also || [])]));
   return {
     id: _id++, title: o.title, type: o.type, start, end, dateLabel,
-    description, subtitle: o.subtitle || null, links, entity, group: `${o.type}::${entity}`,
+    description, subtitle: o.subtitle || null, links, entity, entityShort, group: `${o.type}::${entity}`,
     affiliations: o.affiliations || [],
-    slug: o.slug || null, relatedSlugs: o.related || [], related: [],
+    relationGroups: o.relationGroups || [],
     main: !!o.main, cats,
   };
+}
+
+// ---------------------------------------------------------------------------
+// "Member" as a blanket role. A role literally named "Member" represents
+// general involvement with an org during any stretch NOT covered by a more
+// specific role at that same org. On the timeline we carve the Member bar so it
+// yields to each specific role and resumes in the gaps between them: when a
+// specific role starts the Member ends; when that role ends, if the Member span
+// still has time left, it picks back up. A Member span fully covered by specific
+// roles produces no bar at all. Detection is by the role name being exactly
+// "member" (case-insensitive); everything else at the org counts as "more
+// specific". This shapes the timeline only — the list view still shows the
+// Member's full, uncarved span.
+const PRESENT = Number.POSITIVE_INFINITY;
+const toMs = (d: string | null): number => { const p = parseDate(d); return p ? p.getTime() : PRESENT; };
+const monthStr = (ms: number): string => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const isMemberRole = (role: string | null | undefined): boolean => (role ?? '').trim().toLowerCase() === 'member';
+
+// Return the member's [start, end) window minus the union of the specific roles'
+// windows, as a list of gap segments. `end` is null on a segment that runs to an
+// open-ended ("Present") member end so it keeps rendering as ongoing.
+function carveMemberRanges(
+  memberStart: string,
+  memberEnd: string | null,
+  specifics: { start: string | null; end: string | null }[],
+): { start: string; end: string | null }[] {
+  const mStart = toMs(memberStart);
+  const open = memberEnd == null;                 // member runs to "Present"
+  const mEnd = open ? PRESENT : toMs(memberEnd);
+  if (!(mEnd > mStart)) return [];
+
+  // Specific role windows, clipped to the member window, earliest first.
+  const blocks = specifics
+    .map(s => ({ start: Math.max(toMs(s.start), mStart), end: Math.min(s.end == null ? PRESENT : toMs(s.end), mEnd) }))
+    .filter(b => b.end > b.start)
+    .sort((a, b) => a.start - b.start);
+
+  const out: { start: string; end: string | null }[] = [];
+  const emit = (a: number, b: number) => { if (b > a) out.push({ start: monthStr(a), end: b === mEnd && open ? null : monthStr(b) }); };
+  let cursor = mStart;
+  for (const b of blocks) {
+    if (b.start > cursor) emit(cursor, b.start); // gap before this specific role
+    if (b.end > cursor) cursor = b.end;          // advance past it (merges overlaps)
+  }
+  emit(cursor, mEnd);                            // trailing gap after the last role
+  return out;
+}
+
+// Replace each "Member" affiliation with its carved segments (timeline only).
+// Specific roles are the org's other (non-Member) affiliations, regardless of
+// which one's in current vs past. A Member with no concrete start is left as-is.
+function expandAffiliationMembers(list: any[]): any[] {
+  const out: any[] = [];
+  for (const a of list) {
+    if (!isMemberRole(a.role) || !a.startDate) { out.push(a); continue; }
+    const specifics = list
+      .filter(o => o !== a && o.entity === a.entity && !isMemberRole(o.role))
+      .map(o => ({ start: o.startDate, end: o.endDate ?? null }));
+    for (const seg of carveMemberRanges(a.startDate, a.endDate ?? null, specifics))
+      out.push({ ...a, startDate: seg.start, endDate: seg.end });
+  }
+  return out;
+}
+
+// Same carve for leadership, scoped within each org's own `roles` list.
+function expandLeadershipMembers(orgs: any[]): any[] {
+  return orgs.map(org => {
+    const roles: any[] = [];
+    for (const r of org.roles) {
+      if (!isMemberRole(r.role) || !r.start) { roles.push(r); continue; }
+      const specifics = org.roles
+        .filter((o: any) => o !== r && !isMemberRole(o.role))
+        .map((o: any) => ({ start: o.start ?? null, end: o.end ?? null }));
+      for (const seg of carveMemberRanges(r.start, r.end ?? null, specifics))
+        roles.push({ ...r, start: seg.start, end: seg.end });
+    }
+    return { ...org, roles };
+  });
 }
 
 const projects = await getCollection('projects');
 
 const items: Item[] = [
   ...(education as any[]).map(e => mkItem({
-    title: e.degree, type: 'education', start: e.start, end: e.end, entity: e.institution,
+    title: e.degree, type: 'education', start: e.start, end: e.end, entity: e.institution, entityShort: e.institutionShort,
     description: [e.institution, e.honors].filter(Boolean).join(' · '),
     links: [{ label: 'Website', url: e.url }], main: e.main,
-    slug: e.slug, related: e.related,
+    relationGroups: e.relationGroups,
   })),
-  ...([...affiliations.current, ...affiliations.past] as any[]).map(a => mkItem({
+  ...(expandAffiliationMembers([...affiliations.current, ...affiliations.past]) as any[]).map(a => mkItem({
     // `categories` (optional): first entry is the primary (colour/lane); the rest are
     // extra filters this role also shows under. Defaults to a plain "work" role.
     title: a.role, type: (a.categories?.[0] ?? 'work') as CatKey, also: (a.categories?.slice(1) ?? []) as CatKey[],
-    start: a.startDate, end: a.endDate, entity: a.entity,
+    start: a.startDate, end: a.endDate, entity: a.entity, entityShort: a.entityShort,
     description: [a.entity, a.location].filter(Boolean).join(' · '),
     links: [{ label: 'Website', url: a.url }], main: a.main,
-    slug: a.slug, related: a.related,
+    relationGroups: a.relationGroups,
   })),
   ...(publications as any[]).map(p => mkItem({
     // Publications share the "awards/pubs" category with awards/scholarships.
     title: p.title, type: 'awards', start: p.date, point: true, entity: p.title,
     description: [(p.authors && p.authors.length) ? p.authors.join(', ') : null, p.venue].filter(Boolean).join(' — '),
     links: [{ label: 'Read', url: p.url }], main: p.main,
-    slug: p.slug, related: p.related,
+    relationGroups: p.relationGroups,
   })),
   ...(awards as any[]).map(a => mkItem({
     // Awards, honors & scholarships — point events under "awards/pubs".
     title: a.name, type: 'awards', start: a.date, point: true, entity: a.name,
     links: [{ label: 'View', url: a.url }], main: a.main,
-    slug: a.slug, related: a.related,
+    relationGroups: a.relationGroups,
   })),
-  ...(leadership as any[]).flatMap(org =>
+  ...expandLeadershipMembers(leadership as any[]).flatMap(org =>
     org.roles.map((r: any) => mkItem({
       // Clubs mirror work roles: the role is the title, while the organisation,
       // location and an optional freeform detail line live in the drawer body.
-      title: r.role, type: 'clubs', start: r.start, end: r.end, entity: org.organization,
+      title: r.role, type: 'clubs', start: r.start, end: r.end, entity: org.organization, entityShort: org.organizationShort,
       subtitle: [org.organization, r.location ?? org.location].filter(Boolean).join(' · ') || null,
       description: r.description ?? null,
       links: [{ label: 'Website', url: r.url ?? org.url }],
       main: r.main ?? org.main,
-      slug: r.slug, related: r.related,
+      relationGroups: r.relationGroups,
     }))
   ),
   ...projects.map(p => mkItem({
     title: p.data.title, type: 'projects', start: p.data.startDate, end: p.data.endDate, entity: p.data.title,
     description: p.data.description, affiliations: p.data.affiliations || [],
     links: [{ label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }], main: p.data.main,
-    slug: p.data.slug, related: p.data.related,
+    relationGroups: p.data.relationGroups,
   })),
   // "Misc." — a catch-all for conferences attended and any other one-off timeline
   // events worth noting (talks, trips, ceremonies, milestones, etc.). Conferences
@@ -248,35 +331,15 @@ const items: Item[] = [
     title: c.name, type: 'misc', start: c.date, point: true, entity: c.name,
     subtitle: c.location || null, description: c.description ?? null,
     links: [{ label: 'View', url: c.url }], main: c.main,
-    slug: c.slug, related: c.related,
+    relationGroups: c.relationGroups,
   })),
   ...(misc as any[]).map(m => mkItem({
     title: m.name, type: 'misc', start: m.date, end: m.end, point: !m.end, entity: m.name,
     subtitle: m.location || null, description: m.description ?? null,
     links: [{ label: 'View', url: m.url }], main: m.main,
-    slug: m.slug, related: m.related,
+    relationGroups: m.relationGroups,
   })),
 ].filter((s): s is Item => s !== null);
-
-// Resolve slug-based cross-links into concrete item ids and make them
-// bidirectional: if A declares B as related, B is linked back to A too. Only an
-// item that sets a `slug` can be referenced; the referencing item just lists
-// that slug in its `related`. Unknown slugs and self-links are ignored.
-const bySlug = new Map<string, Item>();
-for (const it of items) if (it.slug && !bySlug.has(it.slug)) bySlug.set(it.slug, it);
-const relSets = new Map<number, Set<number>>(items.map(it => [it.id, new Set<number>()]));
-for (const it of items) {
-  for (const slug of it.relatedSlugs) {
-    const target = bySlug.get(slug);
-    if (!target || target.id === it.id) continue;
-    relSets.get(it.id)!.add(target.id);
-    relSets.get(target.id)!.add(it.id);
-  }
-}
-for (const it of items) {
-  it.related = [...relSets.get(it.id)!];
-  delete (it as Partial<Item>).relatedSlugs; // transient — keep out of the client payload
-}
 
 const undated = (involvements as any[]).map(i => ({
   title: i.name, category: 'clubs' as CatKey, detail: i.role ?? null, url: i.url ?? null, main: !!i.main,
@@ -594,18 +657,33 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   }
 
   .tl-bar {
-    position: absolute; display: flex; align-items: center; gap: 0.25rem;
+    position: absolute; display: flex; align-items: center; gap: 0;
     padding: 0 0.375rem; font-size: 10px; overflow: hidden; white-space: nowrap;
     background: var(--bg); border: 1px solid color-mix(in srgb, var(--text-muted) 55%, var(--border)); border-left-width: 3px;
     color: var(--text); text-decoration: none; box-sizing: border-box; cursor: pointer;
     transition: opacity 0.15s ease, border-color 0.12s ease, box-shadow 0.12s ease;
   }
-  .tl-bar .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+  .tl-bar .t { font-weight: 500; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* Organisation suffix, shown after the title "space permitting". Its huge
+     flex-shrink makes it surrender width first, so a tight bar truncates (then
+     drops) the org before the title ever has to ellipsise. */
+  .tl-bar .o {
+    flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    color: var(--text-muted); font-weight: 400;
+  }
+  .tl-bar .o::before { content: ', '; }
+  /* Leading variant: when the org has a short form it prefixes the title as
+     "Short Org – Role". The org is now the stable label, so it keeps its width
+     while the *title* surrenders first; the separator sits after the org. */
+  .tl-bar .o.lead { flex: 0 1 auto; }
+  .tl-bar .o.lead::before { content: none; }
+  .tl-bar .o.lead::after { content: ' – '; }
+  .tl-bar:has(.o.lead) .t { flex: 0 1000 auto; }
   .tl-bar:hover { border-color: var(--accent); }
   .tl-bar:hover { text-decoration: none; }
   /* Selection emphasis, layered above the dimmed background:
      sel-primary = the selected role + its continuations (same role, other years) — filled box, strong border
-     sel-related = same organisation (other roles) / tagged projects — lighter fill + border
+     sel-related = same organisation (other roles) / tagged projects / shared relation-groups — lighter fill + border
      dim         = everything unrelated */
   .tl-bar.sel-related {
     background: color-mix(in srgb, var(--accent) 10%, var(--bg));
@@ -630,6 +708,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     color: color-mix(in srgb, var(--text-muted) 45%, var(--bg));
     box-shadow: none;
   }
+  /* Let the org suffix fade with the bar when dimmed (it sets its own muted
+     colour otherwise, which would keep it bright against a dimmed title). */
+  .tl-bar.dim .o { color: inherit; }
 
   /* Detail drawer content (built in client JS → needs global styles) */
   .d-title { font-size: 1.1rem; margin: 0 1.5rem 0.4rem 0; line-height: 1.3; }
@@ -909,13 +990,21 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     interface Item {
       id: number; title: string; type: string; start: number; end: number | null; dateLabel: string;
       description: string | null; subtitle: string | null; links: { label: string; url: string }[];
-      entity: string; group: string; affiliations: string[]; related: number[];
-      main: boolean; cats: string[];
+      entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[];
+      main: boolean; cats: string[]; laneKey?: string | null;
     }
     const items: Item[] = JSON.parse(dataEl.textContent || '[]');
     const cfg = JSON.parse(cfgEl.textContent || '{}');
     const byId: Record<number, Item> = {};
     for (const it of items) byId[it.id] = it;
+    // Lane chains: an org with a blanket "Member" role keeps ALL its roles on a
+    // single timeline lane (see layout()), so the carved member segments and the
+    // specific roles they yield to read as one continuous involvement instead of
+    // stair-stepping across lanes. Tag those items with their org as `laneKey`.
+    const memberEntities = new Set(
+      items.filter(it => it.title.trim().toLowerCase() === 'member').map(it => it.entity)
+    );
+    for (const it of items) it.laneKey = memberEntities.has(it.entity) ? it.entity : null;
     const colorOf: Record<string, string> = {};
     const labelOf: Record<string, string> = {};
     for (const c of cfg.categories) { colorOf[c.key] = c.color; labelOf[c.key] = c.label; }
@@ -941,15 +1030,15 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     let selectedGroup: string | null = null;
     let selectedEntity: string | null = null;
     let selectedTitle: string | null = null;
-    let selectedRelated: number[] = [];
+    let selectedGroups: string[] = [];
 
     function inForeground(it: Item): boolean {
       if (selectedGroup === null) return true;
       if (it.group === selectedGroup) return true;
       // projects tagged (via affiliations) to the selected organisation stay lit
       if (it.type === 'projects' && selectedEntity && it.affiliations.includes(selectedEntity)) return true;
-      // explicit item-to-item links (bidirectional, resolved at build time)
-      if (selectedRelated.includes(it.id)) return true;
+      // shared relation-group tags (many-to-many, matched live on selection)
+      if (selectedGroups.length && it.relationGroups.some(g => selectedGroups.includes(g))) return true;
       return false;
     }
     function applySelection() {
@@ -993,14 +1082,22 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         }
         drawerBody.appendChild(wrap);
       }
-      // Everything highlighted alongside this item (same organisation + tagged
-      // projects), shown as a compact vertical timeline (newest first).
-      const related = items.filter(x => x.id !== it.id && inForeground(x));
-      if (related.length) {
-        related.sort((a, b) => {
+      // Everything highlighted alongside this item (same organisation, tagged
+      // projects, shared relation-groups), shown as a compact vertical timeline
+      // (newest first). A role
+      // may be several bars — its own carved continuations, or just a multi-year
+      // span — so collapse by (group + title): drop the clicked item's own role
+      // and keep only the newest bar of every other role.
+      const roleKey = (x: Item) => x.group + ' ' + x.title;
+      const seenRoles = new Set<string>([roleKey(it)]);
+      const related = items
+        .filter(x => x.id !== it.id && inForeground(x))
+        .sort((a, b) => {
           const ka = a.end ?? Number.MAX_SAFE_INTEGER, kb = b.end ?? Number.MAX_SAFE_INTEGER;
           return kb - ka || b.start - a.start;
-        });
+        })
+        .filter(x => { const k = roleKey(x); if (seenRoles.has(k)) return false; seenRoles.add(k); return true; });
+      if (related.length) {
         const lab = document.createElement('div'); lab.className = 'd-related-label'; lab.textContent = 'Related';
         const ul = document.createElement('ul'); ul.className = 'd-timeline';
         for (const r of related) {
@@ -1069,14 +1166,14 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     function selectItem(it: Item, opts?: { scroll?: boolean }) {
       if (selectedId === it.id) { deselect(); return; }
       selectedId = it.id; selectedGroup = it.group; selectedEntity = it.entity; selectedTitle = it.title;
-      selectedRelated = it.related || [];
+      selectedGroups = it.relationGroups || [];
       applySelection();
       openDrawer(it); // every item opens the info tab — even sparse ones show title/category/related
       if (opts?.scroll) scrollToItem(it);
     }
     function deselect() {
       selectedId = selectedGroup = null; selectedEntity = selectedTitle = null;
-      selectedRelated = [];
+      selectedGroups = [];
       applySelection(); closeDrawer();
     }
 
@@ -1099,13 +1196,29 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
           const d = (order[p.type] ?? 5) - (order[q.type] ?? 5);
           return d !== 0 ? d : p.start - q.start;
         });
-        const lanes: number[] = [];
+        // Lane packing. Bars sharing a `laneKey` (a carved "Member" chain — the
+        // member segments plus the specific roles they yield to, all at one org)
+        // are kept on a single lane and butt up with no gap, so the role changes
+        // read as one continuous line. Unrelated bars keep a small gap and never
+        // land on a lane another chain has claimed.
+        const laneEnd: number[] = [];           // furthest-right occupied position per lane
+        const laneKey: (string | null)[] = [];  // chain a lane is reserved for (or null)
         const laneOf: Record<number, number> = {};
         for (const it of act) {
           const { sp, ep } = pct(it, t, r);
+          const key = it.laneKey ?? null;
           let c = -1;
-          for (let i = 0; i < lanes.length; i++) { if (lanes[i] <= sp + 0.5) { c = i; lanes[i] = ep + 1; break; } }
-          if (c === -1) { c = lanes.length; lanes.push(ep + 1); }
+          // 1) same-chain bars prefer the lane their chain already holds (zero gap)
+          if (key) for (let i = 0; i < laneEnd.length; i++) {
+            if (laneKey[i] === key && laneEnd[i] <= sp + 0.5) { c = i; break; }
+          }
+          // 2) otherwise the first lane that fits and isn't claimed by another chain
+          if (c === -1) for (let i = 0; i < laneEnd.length; i++) {
+            if (laneEnd[i] <= sp + 0.5 && (laneKey[i] === null || laneKey[i] === key)) { c = i; break; }
+          }
+          if (c === -1) { c = laneEnd.length; laneEnd.push(0); laneKey.push(null); }
+          laneEnd[c] = ep + (key ? 0 : 1); // no padding within a chain → bars touch
+          laneKey[c] = key;                // a chain claims its lane; null leaves it open
           laneOf[it.id] = c;
         }
         const b = Math.max(...act.map(it => laneOf[it.id])) + 1;
@@ -1121,10 +1234,30 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
           el.style.top = (36 * lane + 4) + 'px';
           el.style.height = '28px';
           el.style.borderLeftColor = colorOf[it.type] || 'var(--border)';
-          el.title = `${it.title} · ${it.dateLabel}`;
+          // Organisation label on the bar. When the org has an explicit short
+          // form (entityShort differs from the full entity), it's compact enough
+          // to *lead* the bar as "Short Org – Role"; there the title surrenders
+          // width first (see .o.lead CSS). Otherwise the (long) org trails the
+          // title "space permitting", giving up width long before the title does.
+          // Skipped entirely when the org would just echo the title
+          // (projects/awards/etc. set entity = title).
+          const shortOrg = it.entityShort && it.entityShort !== it.entity && it.entityShort !== it.title ? it.entityShort : '';
+          const longOrg = !shortOrg && it.entity && it.entity !== it.title ? it.entity : '';
           el.addEventListener('click', () => selectItem(it));
           const span = document.createElement('span'); span.className = 't'; span.textContent = it.title;
-          el.appendChild(span);
+          if (shortOrg) {
+            el.title = `${shortOrg} – ${it.title} · ${it.dateLabel}`;
+            const osp = document.createElement('span'); osp.className = 'o lead'; osp.textContent = shortOrg;
+            el.appendChild(osp);
+            el.appendChild(span);
+          } else {
+            el.title = `${it.title}${longOrg ? ', ' + longOrg : ''} · ${it.dateLabel}`;
+            el.appendChild(span);
+            if (longOrg) {
+              const osp = document.createElement('span'); osp.className = 'o'; osp.textContent = longOrg;
+              el.appendChild(osp);
+            }
+          }
           bars.appendChild(el);
         }
       }
@@ -1178,7 +1311,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       const sel = selectedId !== null ? byId[selectedId] : null;
       const keepSelection = !!sel && (f === 'all' || (f === 'main' ? sel.main : sel.cats.includes(f)));
       if (!keepSelection) {
-        selectedId = selectedGroup = null; selectedEntity = selectedTitle = null; selectedRelated = []; closeDrawer();
+        selectedId = selectedGroup = null; selectedEntity = selectedTitle = null; selectedGroups = []; closeDrawer();
       }
       buttons.forEach(b => b.classList.toggle('active', b.dataset.filter === f));
       chips.forEach(c => {

@@ -6,7 +6,7 @@
     "date": "2025",
     "url": null,
     "main": true,
-    "slug": "pub-aerodynamics"
+    "relationGroups": ["aerodynamics"]
   },
   {
     "title": "Crowd Engagement Dynamics at College Football Games: A Longitudinal Study",
