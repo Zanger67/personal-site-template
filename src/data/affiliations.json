@@ -6,11 +6,13 @@
       "startDate": "1979-11",
       "endDate": null,
       "url": "https://gatech.edu",
-      "location": null
+      "location": null,
+      "main": true
     },
     {
       "entity": "Georgia Institute of Technology",
       "role": "Spirit Coordinator",
+      "categories": ["research", "work"],
       "startDate": "1985-08",
       "endDate": null,
       "url": "https://gatech.edu",

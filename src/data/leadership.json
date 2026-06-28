@@ -1,25 +1,28 @@
 [
   {
     "organization": "ACC Mascot Council",
-    "url": null,
-    "location": null,
+    "url": "https://example.com/acc-mascot-council",
+    "location": "Atlanta, GA",
     "roles": [
       {
         "role": "Chair",
         "start": "2021-01",
-        "end": "2023-05"
+        "end": "2023-05",
+        "description": "Led the council's mascot-standards working group and coordinated cross-school spirit events across the conference."
       }
     ]
   },
   {
     "organization": "Yellow Jacket Spirit Squad",
-    "url": null,
-    "location": null,
+    "url": "https://example.com/yj-spirit-squad",
+    "location": "Atlanta, GA",
     "roles": [
       {
         "role": "Captain",
         "start": "2019-08",
-        "end": "2023-05"
+        "end": "2023-05",
+        "main": true,
+        "description": "Captained the mascot squad through football and basketball seasons, mentored new mascots, and choreographed game-day routines."
       }
     ]
   }

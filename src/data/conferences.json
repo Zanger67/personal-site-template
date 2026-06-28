@@ -1,12 +1,16 @@
 [
   {
     "name": "SEC Mascot Symposium",
-    "url": null,
-    "date": "2022-06"
+    "url": "https://example.com/sec-mascot-symposium",
+    "location": "Birmingham, AL",
+    "date": "2022-06",
+    "description": "Annual gathering of collegiate mascots and handlers; attended panels on crowd engagement and brand safety."
   },
   {
     "name": "Collegiate Mascot Handlers Conference",
-    "url": null,
-    "date": "2021-07"
+    "url": "https://example.com/cmhc",
+    "location": "Orlando, FL",
+    "date": "2021-07",
+    "description": "Workshops on mascot performance, choreography, and game-day logistics."
   }
 ]

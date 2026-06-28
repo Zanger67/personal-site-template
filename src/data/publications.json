@@ -4,7 +4,9 @@
     "authors": ["Buzz", "G. T. Ramblin"],
     "venue": "Journal of Mascot Sciences",
     "date": "2025",
-    "url": null
+    "url": null,
+    "main": true,
+    "slug": "pub-aerodynamics"
   },
   {
     "title": "Crowd Engagement Dynamics at College Football Games: A Longitudinal Study",
