@@ -720,6 +720,19 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
           {shownCategories.map(c => (
             <button class="tl-filter" data-filter={c.key}>{c.label} <span class="count">{counts[c.key]}</span></button>
           ))}
+          {/* Right-aligned legend: hover (or focus) the icon to reveal the colour key. */}
+          <div class="tl-legend-pop">
+            <button class="tl-legend-btn" type="button" aria-label="Show colour legend" aria-haspopup="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span class="tl-legend-btn-label">Legend</span>
+            </button>
+            <div class="tl-legend-box" role="tooltip">
+              {shownCategories.map(c => (
+                <span class="leg"><span class="sw" style={`background:${c.color}`}></span>{c.label}</span>
+              ))}
+              <span class="leg leg-summer"><span class="sw sw-summer"></span>Summer</span>
+            </div>
+          </div>
         </div>
 
         <div class="gantt-wrap">
@@ -1357,6 +1370,42 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .tl-filter .count { opacity: 0.7; }
   /* "Main" is a cross-cutting flag, not a category — set it apart from the type filters. */
   .tl-filter-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0.15rem 0.35rem; }
+
+  /* Legend popup — right-aligned hover icon in the filter row revealing the colour key. */
+  .tl-legend-pop { position: relative; margin-left: auto; display: flex; align-items: center; }
+  .tl-legend-btn {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 0.3rem 0.6rem; border: none; cursor: help;
+    background: var(--border); color: var(--text); transition: background 0.12s, color 0.12s;
+  }
+  .tl-legend-btn svg { width: 0.85rem; height: 0.85rem; flex-shrink: 0; }
+  .tl-legend-pop:hover .tl-legend-btn,
+  .tl-legend-pop:focus-within .tl-legend-btn { background: var(--text); color: var(--bg); }
+  .tl-legend-box {
+    position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 30;
+    display: grid; grid-template-columns: repeat(2, auto); gap: 0.6rem 1.75rem; white-space: nowrap;
+    background: var(--bg); border: 1px solid var(--border); padding: 1rem 1.2rem;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14); font-size: 0.82rem;
+    opacity: 0; visibility: hidden; transform: translateY(-3px); pointer-events: none;
+    transition: opacity 0.12s ease, visibility 0.12s ease, transform 0.12s ease;
+  }
+  .tl-legend-box .leg { gap: 0.45rem; color: var(--text); }
+  .tl-legend-box .sw { width: 13px; height: 13px; }
+  /* Invisible bridge across the gap so moving from icon to box never drops the hover. */
+  .tl-legend-box::before { content: ''; position: absolute; top: -0.4rem; left: 0; right: 0; height: 0.4rem; }
+  .tl-legend-pop:hover .tl-legend-box,
+  .tl-legend-pop:focus-within .tl-legend-box {
+    opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto;
+  }
+  /* Summer spans both columns with a divider above it, sitting under the category grid. */
+  .tl-legend-box .leg-summer {
+    grid-column: 1 / -1;
+    margin-left: 0; padding-left: 0; border-left: 0;
+    margin-top: 0.25rem; padding-top: 0.6rem; border-top: 1px solid var(--border);
+  }
+  .tl-legend-box .sw-summer { width: 13px; height: 13px; }
 
   /* Year row -------------------------------------------------------------- */
   .tl-row { display: flex; align-items: stretch; }
