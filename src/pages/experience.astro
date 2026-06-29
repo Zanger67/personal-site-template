@@ -39,6 +39,37 @@ function dateRange(start: string | null, end: string | null): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// "urls" — the listed extra-links format. ANY timeline entry (role, project,
+// publication, award, conference, …) may carry an optional
+// `urls: { title?, url }[]`. Each entry becomes an extra info-tab button,
+// appended AFTER the entry's main `url` (and a project's `repo`). `url` stays
+// the single "main" link and `repo` the GitHub one; `urls` is purely the added
+// list. A button shows its `title`; with none it falls back to the URL's host
+// label (e.g. "https://www.github.com/foo/bar" → "github").
+interface UrlEntry { title?: string | null; url?: string | null; }
+// Strip protocol + leading "www.", then take the registrable name — the label
+// before the public suffix: "github.com" → "github", "arxiv.org" → "arxiv".
+// (A bare host with no dot, e.g. "localhost", is returned whole; an unparseable
+// value falls back to itself so a label always renders.)
+function hostLabel(raw: string): string {
+  try {
+    const host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`)
+      .hostname.replace(/^www\./, '');
+    const parts = host.split('.').filter(Boolean);
+    return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || raw);
+  } catch {
+    return raw;
+  }
+}
+// Turn a `urls` list into info-tab links: drop empties, label each by its
+// `title` (trimmed) or the derived host label.
+function extraLinks(urls?: UrlEntry[] | null): { label: string; url: string }[] {
+  return (urls ?? [])
+    .filter((u): u is { title?: string | null; url: string } => !!u && !!u.url)
+    .map(u => ({ label: (u.title && u.title.trim()) || hostLabel(u.url!), url: u.url! }));
+}
+
+// ---------------------------------------------------------------------------
 // ORGANISATIONS — the single source for clubs/societies (was leadership.json +
 // involvements.json). Each org carries its specific `roles`, plus two optional
 // org-level fallback windows: `membership` (the blanket "general member" span,
@@ -49,7 +80,7 @@ function dateRange(start: string | null, end: string | null): string | null {
 // instead surfaces in the "Other involvements" strip below the chart — only a
 // role that sets its own `displayTimeline: true` still charts. The list view
 // ignores the flag — it's the full record. See organizations.json.
-interface Span { start: string | null; end: string | null; description?: string | null; url?: string | null; homepage?: boolean; }
+interface Span { start: string | null; end: string | null; description?: string | null; url?: string | null; urls?: UrlEntry[]; homepage?: boolean; }
 interface OrgRole {
   role: string;
   // Optional longer label used by the list view only (the bar keeps `role`).
@@ -60,6 +91,8 @@ interface OrgRole {
   main?: boolean;
   description?: string | null;
   url?: string | null;
+  // Extra info-tab buttons for this role, appended after its main `url`.
+  urls?: UrlEntry[];
   location?: string | null;
   relationGroups?: string[];
   // Affiliations only: timeline categories (first = primary colour/lane, rest are
@@ -73,6 +106,9 @@ interface Org {
   organization: string;
   organizationShort?: string;
   url?: string | null;
+  // Org-level extra links: appended to EVERY one of this org's role/membership
+  // bars (parallels how `url` is each bar's main-link fallback).
+  urls?: UrlEntry[];
   location?: string | null;
   displayTimeline?: boolean;
   main?: boolean;
@@ -112,13 +148,69 @@ function involvementRoleLabel(org: Org): string | null {
 // "Involvement". Membership/alumnus windows alone don't promote an org.
 const hasDatedRole = (org: Org): boolean => (org.roles ?? []).some(r => !!r.start);
 
-// Rows for a Leadership org's tree: its specific roles, then the blanket
-// `membership` shown at FULL (uncarved) span, then any `alumnus` tag.
-interface ListRole { role: string; start: string | null; end: string | null; url: string | null; }
-function listRolesFor(org: Org): ListRole[] {
-  const rows: ListRole[] = (org.roles ?? []).map(r => ({ role: r.roleDetail ?? r.role, start: r.start, end: r.end, url: r.url ?? null }));
-  if (org.membership) rows.push({ role: 'Member', start: org.membership.start, end: org.membership.end, url: org.membership.url ?? null });
-  if (org.alumnus) rows.push({ role: alumnusLabel(org.alumnus), start: org.alumnus.start, end: org.alumnus.end, url: null });
+// ---------------------------------------------------------------------------
+// LIST-VIEW INFO TAB dataset. The list view mirrors the timeline's click → info
+// tab: every clickable row registers a self-contained detail record (the same
+// fields the drawer renders — title, category, date, subtitle, description,
+// links) and the rendered row carries its `id` in `data-li`. The client reads
+// #tl-list-data, opens the identically-styled .tl-detail panel, and derives a
+// "Related" list from rows sharing this row's `entity` or a `relationGroup`.
+//   Links mirror the timeline: the main `url` first, then the listed `urls`
+// extras (deduped by URL). Build order is irrelevant — a row references its own
+// id — but each detail is registered as its row is built, so markup and dataset
+// stay in lockstep.
+interface ListDetail {
+  id: number; title: string; type: CatKey; dateLabel: string | null;
+  subtitle: string | null; description: string | null;
+  links: { label: string; url: string }[]; entity: string;
+  relationGroups: string[]; main: boolean;
+}
+const listItems: ListDetail[] = [];
+const pushDetail = (d: Omit<ListDetail, 'id'>): number => { const id = listItems.length; listItems.push({ id, ...d }); return id; };
+// Drop empty links, then de-dupe by URL (keep first) — same rule as mkItem.
+const detailLinks = (ls: { label: string; url: string | null | undefined }[]): { label: string; url: string }[] =>
+  ls.filter((l): l is { label: string; url: string } => !!l && !!l.url)
+    .filter((l, i, arr) => arr.findIndex(x => x.url === l.url) === i);
+
+// Rows for an org's tree: its specific roles, then the blanket `membership` shown
+// at FULL (uncarved) span, then any `alumnus` tag — registering a detail per row.
+// `club` is the only thing that differs between the two callers: it picks the
+// category (clubs vs the affiliation's own `categories`).
+interface ListRole { id: number; role: string; start: string | null; end: string | null; url: string | null; }
+function buildRoleRows(org: Org, club: boolean): ListRole[] {
+  const subtitleOf = (loc: string | null | undefined): string | null =>
+    [org.organization, loc ?? org.location].filter(Boolean).join(' · ') || null;
+  const catOf = (r?: OrgRole): CatKey => club ? 'clubs' : affilCats(org, r).type;
+  const rows: ListRole[] = [];
+  for (const r of org.roles ?? []) {
+    const id = pushDetail({
+      title: r.roleDetail ?? r.role, type: catOf(r), dateLabel: dateRange(r.start, r.end),
+      subtitle: subtitleOf(r.location), description: r.description ?? null,
+      links: detailLinks([{ label: 'Website', url: r.url ?? org.url }, ...extraLinks(r.urls), ...extraLinks(org.urls)]),
+      entity: org.organization, relationGroups: r.relationGroups ?? org.relationGroups ?? [],
+      main: r.main ?? org.main ?? false,
+    });
+    rows.push({ id, role: r.roleDetail ?? r.role, start: r.start, end: r.end, url: r.url ?? null });
+  }
+  if (org.membership) {
+    const id = pushDetail({
+      title: 'Member', type: catOf(), dateLabel: dateRange(org.membership.start, org.membership.end),
+      subtitle: subtitleOf(null), description: org.membership.description ?? null,
+      links: detailLinks([{ label: 'Website', url: org.membership.url ?? org.url }, ...extraLinks(org.membership.urls), ...extraLinks(org.urls)]),
+      entity: org.organization, relationGroups: org.relationGroups ?? [], main: !!org.main,
+    });
+    rows.push({ id, role: 'Member', start: org.membership.start, end: org.membership.end, url: org.membership.url ?? null });
+  }
+  if (org.alumnus) {
+    const id = pushDetail({
+      title: alumnusLabel(org.alumnus), type: catOf(),
+      dateLabel: dateRange(org.alumnus.start, org.alumnus.end) ?? alumnusLabel(org.alumnus),
+      subtitle: subtitleOf(null), description: org.alumnus.description ?? null,
+      links: detailLinks([{ label: 'Website', url: org.url }, ...extraLinks(org.urls)]),
+      entity: org.organization, relationGroups: org.relationGroups ?? [], main: !!org.main,
+    });
+    rows.push({ id, role: alumnusLabel(org.alumnus), start: org.alumnus.start, end: org.alumnus.end, url: null });
+  }
   return rows;
 }
 
@@ -126,12 +218,18 @@ const leaderListGroups = orgs.filter(hasDatedRole).map(o => ({
   organization: o.organization,
   url: o.url ?? null,
   location: o.location ?? null,
-  roles: listRolesFor(o),
+  roles: buildRoleRows(o, true),
 }));
 const involvementListItems = orgs.filter(o => !hasDatedRole(o)).map(o => ({
   name: o.organization,
   url: o.url ?? null,
   role: involvementRoleLabel(o),
+  liId: pushDetail({
+    title: o.organization, type: 'clubs', dateLabel: orgInvolvementRange(o),
+    subtitle: o.location ?? null, description: null,
+    links: detailLinks([{ label: 'Website', url: o.url }, ...extraLinks(o.urls)]),
+    entity: o.organization, relationGroups: o.relationGroups ?? [], main: !!o.main,
+  }),
 }));
 
 // AFFILIATIONS (work) list view — same {organization, url, location, roles}
@@ -144,10 +242,31 @@ const affilGroup = (o: Org) => ({
   organization: o.organization,
   url: o.url ?? null,
   location: o.location ?? null,
-  roles: listRolesFor(o).sort((a, b) => roleRecency(b) - roleRecency(a)),
+  roles: buildRoleRows(o, false).sort((a, b) => roleRecency(b) - roleRecency(a)),
 });
 const currentAffilGroups = affilOrgs.filter(o => orgActive(o)).map(affilGroup);
 const pastAffilGroups = affilOrgs.filter(o => !orgActive(o)).map(affilGroup);
+
+// Award & conference list rows, each registering an info-tab detail (point events,
+// so the date is a single month; an entry with no date shows none).
+const awardRows = (awards as any[]).map(a => ({
+  ...a,
+  liId: pushDetail({
+    title: a.name, type: 'awards', dateLabel: a.date ? formatDate(a.date) : null,
+    subtitle: null, description: a.description ?? null,
+    links: detailLinks([{ label: 'View', url: a.url }, ...extraLinks(a.urls)]),
+    entity: a.name, relationGroups: a.relationGroups ?? [], main: !!a.main,
+  }),
+}));
+const conferenceRows = (conferences as any[]).map(c => ({
+  ...c,
+  liId: pushDetail({
+    title: c.name, type: 'misc', dateLabel: c.date ? formatDate(c.date) : null,
+    subtitle: c.location ?? null, description: c.description ?? null,
+    links: detailLinks([{ label: 'View', url: c.url }, ...extraLinks(c.urls)]),
+    entity: c.name, relationGroups: c.relationGroups ?? [], main: !!c.main,
+  }),
+}));
 
 // ---------------------------------------------------------------------------
 // TIMELINE view — ported from jackswitzer.com/projects "Timeline" view,
@@ -247,7 +366,12 @@ function mkItem(o: ItemOpts): Item | null {
     endMonthNum = ex ? monthNum(ex) : null;
     dateLabel = e ? `${fmtMonth(s)} – ${fmtMonth(e)}` : `${fmtMonth(s)} – Present`;
   }
-  const links = (o.links || []).filter((l): l is { label: string; url: string } => !!l && !!l.url);
+  // Drop empties, then de-dupe by URL (keep the first) so a `urls` entry that
+  // repeats the main `url`/`repo` — or an org-level link already on the role —
+  // doesn't render the same destination twice.
+  const links = (o.links || [])
+    .filter((l): l is { label: string; url: string } => !!l && !!l.url)
+    .filter((l, i, arr) => arr.findIndex(x => x.url === l.url) === i);
   const description = o.description || null;
   const entity = o.entity || o.title;
   const entityShort = o.entityShort || entity; // falls back to the long-form org
@@ -358,7 +482,7 @@ const items: Item[] = [
   ...(education as any[]).map(e => mkItem({
     title: e.degree, type: 'education', start: e.start, end: e.end, entity: e.institution, entityShort: e.institutionShort,
     description: [e.institution, e.honors].filter(Boolean).join(' · '),
-    links: [{ label: 'Website', url: e.url }], main: e.main,
+    links: [{ label: 'Website', url: e.url }, ...extraLinks(e.urls)], main: e.main,
     relationGroups: e.relationGroups,
   })),
   // Work affiliations share the org shape, so they build exactly like clubs
@@ -369,7 +493,7 @@ const items: Item[] = [
       start: r.start, end: r.end, entity: org.organization, entityShort: org.organizationShort,
       subtitle: [org.organization, r.location ?? org.location].filter(Boolean).join(' · ') || null,
       description: r.description ?? null,
-      links: [{ label: 'Website', url: r.url ?? org.url }],
+      links: [{ label: 'Website', url: r.url ?? org.url }, ...extraLinks(r.urls), ...extraLinks(org.urls)],
       main: r.main ?? org.main,
       relationGroups: r.relationGroups ?? org.relationGroups,
     })),
@@ -379,7 +503,7 @@ const items: Item[] = [
       start: seg.start, end: seg.end, entity: org.organization, entityShort: org.organizationShort,
       subtitle: [org.organization, org.location].filter(Boolean).join(' · ') || null,
       description: org.membership?.description ?? null,
-      links: [{ label: 'Website', url: org.membership?.url ?? org.url }],
+      links: [{ label: 'Website', url: org.membership?.url ?? org.url }, ...extraLinks(org.membership?.urls), ...extraLinks(org.urls)],
       main: org.main,
       relationGroups: org.relationGroups,
     })),
@@ -388,13 +512,13 @@ const items: Item[] = [
     // Publications share the "awards/pubs" category with awards/scholarships.
     title: p.title, type: 'awards', start: p.date, point: true, entity: p.title,
     description: [(p.authors && p.authors.length) ? p.authors.join(', ') : null, p.venue].filter(Boolean).join(' — '),
-    links: [{ label: 'Read', url: p.url }], main: p.main,
+    links: [{ label: 'Read', url: p.url }, ...extraLinks(p.urls)], main: p.main,
     relationGroups: p.relationGroups,
   })),
   ...(awards as any[]).map(a => mkItem({
     // Awards, honors & scholarships — point events under "awards/pubs".
     title: a.name, type: 'awards', start: a.date, point: true, entity: a.name,
-    links: [{ label: 'View', url: a.url }], main: a.main,
+    links: [{ label: 'View', url: a.url }, ...extraLinks(a.urls)], main: a.main,
     relationGroups: a.relationGroups,
   })),
   ...orgs.flatMap(org => [
@@ -405,7 +529,7 @@ const items: Item[] = [
       title: r.role, type: 'clubs', start: r.start, end: r.end, entity: org.organization, entityShort: org.organizationShort,
       subtitle: [org.organization, r.location ?? org.location].filter(Boolean).join(' · ') || null,
       description: r.description ?? null,
-      links: [{ label: 'Website', url: r.url ?? org.url }],
+      links: [{ label: 'Website', url: r.url ?? org.url }, ...extraLinks(r.urls), ...extraLinks(org.urls)],
       main: r.main ?? org.main,
       relationGroups: r.relationGroups ?? org.relationGroups,
     })),
@@ -415,7 +539,7 @@ const items: Item[] = [
       title: 'Member', type: 'clubs', start: seg.start, end: seg.end, entity: org.organization, entityShort: org.organizationShort,
       subtitle: [org.organization, org.location].filter(Boolean).join(' · ') || null,
       description: org.membership?.description ?? null,
-      links: [{ label: 'Website', url: org.membership?.url ?? org.url }],
+      links: [{ label: 'Website', url: org.membership?.url ?? org.url }, ...extraLinks(org.membership?.urls), ...extraLinks(org.urls)],
       main: org.main,
       relationGroups: org.relationGroups,
     })),
@@ -423,7 +547,7 @@ const items: Item[] = [
   ...projects.map(p => mkItem({
     title: p.data.title, type: 'projects', start: p.data.startDate, end: p.data.endDate, entity: p.data.title,
     description: p.data.description, affiliations: p.data.affiliations || [],
-    links: [{ label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }], main: p.data.main,
+    links: [{ label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }, ...extraLinks(p.data.urls)], main: p.data.main,
     relationGroups: p.data.relationGroups,
   })),
   // "Misc." — a catch-all for conferences attended and any other one-off timeline
@@ -433,13 +557,13 @@ const items: Item[] = [
   ...(conferences as any[]).map(c => mkItem({
     title: c.name, type: 'misc', start: c.date, point: true, entity: c.name,
     subtitle: c.location || null, description: c.description ?? null,
-    links: [{ label: 'View', url: c.url }], main: c.main,
+    links: [{ label: 'View', url: c.url }, ...extraLinks(c.urls)], main: c.main,
     relationGroups: c.relationGroups,
   })),
   ...(misc as any[]).map(m => mkItem({
     title: m.name, type: 'misc', start: m.date, end: m.end, point: !m.end, entity: m.name,
     subtitle: m.location || null, description: m.description ?? null,
-    links: [{ label: 'View', url: m.url }], main: m.main,
+    links: [{ label: 'View', url: m.url }, ...extraLinks(m.urls)], main: m.main,
     relationGroups: m.relationGroups,
   })),
 ].filter((s): s is Item => s !== null);
@@ -657,7 +781,12 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
 
   {/* ===================== EXPERIENCE (list) VIEW ===================== */}
   <section class="view view-list" data-view="list" aria-label="Experience list view" hidden>
-    <p class="view-intro">Current and past affiliations.</p>
+    {/* Mirrors the timeline's layout: the list sits in .tl-content with its own
+        sliding info tab (.tl-detail) to the right. Every row carries a `data-li`
+        id into the #tl-list-data dataset; clicking it opens the panel. */}
+    <div class="tl-layout">
+      <div class="tl-content">
+    <p class="view-intro">Current and past affiliations. Click any entry for details.</p>
 
     <h2>Current</h2>
     <div class="groups">
@@ -677,11 +806,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
               const glyph = isLast ? '└' : '├';
               const dates = dateRange(r.start, r.end);
               return (
-                <div class="role-row">
+                <div class="role-row" data-li={r.id} role="button" tabindex="0">
                   <span class="bracket">{glyph}</span>
-                  <span class="role-name">{r.url
-                    ? <a href={r.url} target="_blank" rel="noopener noreferrer">{r.role}</a>
-                    : r.role}</span>
+                  <span class="role-name">{r.role}</span>
                   {dates && <span class="role-dates">{dates}</span>}
                 </div>
               );
@@ -709,11 +836,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
               const glyph = isLast ? '└' : '├';
               const dates = dateRange(r.start, r.end);
               return (
-                <div class="role-row">
+                <div class="role-row" data-li={r.id} role="button" tabindex="0">
                   <span class="bracket">{glyph}</span>
-                  <span class="role-name">{r.url
-                    ? <a href={r.url} target="_blank" rel="noopener noreferrer">{r.role}</a>
-                    : r.role}</span>
+                  <span class="role-name">{r.role}</span>
                   {dates && <span class="role-dates">{dates}</span>}
                 </div>
               );
@@ -741,13 +866,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
                 const isLast = i === group.roles.length - 1;
                 const glyph = isLast ? '└' : '├';
                 const dates = dateRange(item.start, item.end);
-                const roleUrl = item.url ?? null;
                 return (
-                  <div class="role-row">
+                  <div class="role-row" data-li={item.id} role="button" tabindex="0">
                     <span class="bracket">{glyph}</span>
-                    <span class="role-name">{roleUrl
-                      ? <a href={roleUrl} target="_blank" rel="noopener noreferrer">{item.role}</a>
-                      : item.role}</span>
+                    <span class="role-name">{item.role}</span>
                     {dates && <span class="role-dates">{dates}</span>}
                   </div>
                 );
@@ -758,15 +880,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       </>
     )}
 
-    {awards.length > 0 && (
+    {awardRows.length > 0 && (
       <>
         <h2>Awards & Honors</h2>
         <ul class="involvement-list">
-          {awards.map(award => (
-            <li class="award-row">
-              <span class="inv-name">{award.url
-                ? <a href={award.url} target="_blank" rel="noopener noreferrer">{award.name}</a>
-                : award.name}</span>
+          {awardRows.map(award => (
+            <li class="award-row" data-li={award.liId} role="button" tabindex="0">
+              <span class="inv-name">{award.name}</span>
               <span class="role-dates">{formatDate(award.date)}</span>
             </li>
           ))}
@@ -774,15 +894,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       </>
     )}
 
-    {conferences.length > 0 && (
+    {conferenceRows.length > 0 && (
       <>
         <h2>Conferences</h2>
         <ul class="involvement-list">
-          {conferences.map(conf => (
-            <li class="award-row">
-              <span class="inv-name">{conf.url
-                ? <a href={conf.url} target="_blank" rel="noopener noreferrer">{conf.name}</a>
-                : conf.name}</span>
+          {conferenceRows.map(conf => (
+            <li class="award-row" data-li={conf.liId} role="button" tabindex="0">
+              <span class="inv-name">{conf.name}</span>
               <span class="role-dates">{formatDate(conf.date)}</span>
             </li>
           ))}
@@ -795,20 +913,33 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         <h2>Involvements</h2>
         <ul class="involvement-list">
           {involvementListItems.map(inv => (
-            <li>
-              <span class="inv-name">{inv.url
-                ? <a href={inv.url} target="_blank" rel="noopener noreferrer">{inv.name}</a>
-                : inv.name}</span>
+            <li data-li={inv.liId} role="button" tabindex="0">
+              <span class="inv-name">{inv.name}</span>
               {inv.role && <span class="inv-role"> &mdash; {inv.role}</span>}
             </li>
           ))}
         </ul>
       </>
     )}
+      </div>
+
+      {/* ===== INFO TAB for the list view — the same sliding panel as the
+          timeline's, opened by clicking a list row. ===== */}
+      <aside class="tl-detail tl-detail-list" aria-hidden="true">
+        <div class="tl-detail-panel">
+          <button class="tl-detail-close" aria-label="Close details (Esc)">
+            <svg class="tl-detail-close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span class="tl-detail-close-label">esc</span>
+          </button>
+          <div class="tl-detail-body"></div>
+        </div>
+      </aside>
+    </div>
   </section>
 
   <script type="application/json" id="tl-data" set:html={JSON.stringify(items)}></script>
   <script type="application/json" id="tl-cfg" set:html={JSON.stringify(cfg)}></script>
+  <script type="application/json" id="tl-list-data" set:html={JSON.stringify(listItems)}></script>
 </BaseLayout>
 
 <!-- Page-only: width + globally-styled JS-created bars. Width rules are gated on
@@ -825,8 +956,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      Because this width and the drawer's flex-basis share the same transition,
      the timeline's own width stays constant while the drawer slides in. */
   main:has(.view-timeline.active .tl-detail.open) { max-width: 1440px; }
+  /* The list view keeps the default page width (--max-width); opening its info
+     tab widens `main` by the drawer width (360px) so the list content underneath
+     holds its width as the panel slides in — the same trick as the timeline. */
+  main:has(.view-list:not([hidden]) .tl-detail.open) { max-width: calc(var(--max-width) + 360px); }
   /* Always reserve the page scrollbar gutter so widths don't jump on scroll. */
   html:has(.view-timeline.active) { scrollbar-gutter: stable; }
+  html:has(.view-list:not([hidden])) { scrollbar-gutter: stable; }
 
   /* Pre-hydration: the inline script at the top of the page sets these on <html>
      from the URL hash BEFORE the view markup is parsed, so a reload on the list
@@ -1000,7 +1136,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     display: flex;
     align-items: baseline;
     gap: 0;
-    padding: 0.15rem 0;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.12s, opacity 0.12s;
   }
 
   .bracket {
@@ -1035,14 +1174,31 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   }
 
   .involvement-list li {
-    padding: 0.4rem 0;
+    padding: 0.4rem;
     border-bottom: 1px solid var(--border);
     font-size: 0.92rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.12s, opacity 0.12s;
   }
 
   .involvement-list li:last-child {
     border-bottom: none;
   }
+
+  /* List rows are clickable and open the info tab, mirroring the timeline bars:
+     hover hints interactivity; selecting a row emphasises it (sel-primary) and
+     any related rows (same org / shared relation-group), and dims the rest. */
+  .role-row:hover,
+  .involvement-list li:hover { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+  .li-sel-related { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .li-sel-primary {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  .li-sel-primary .role-name,
+  .li-sel-primary .inv-name { font-weight: 700; }
+  .li-dim { opacity: 0.4; }
 
   .inv-name {
     font-weight: 500;
@@ -1230,8 +1386,8 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
 
     // `drawer` is the INFO TAB (the sliding detail panel); `drawerBody` is its
     // scrollable contents. See the .tl-detail CSS for the sticky/scroll setup.
-    const drawer = document.querySelector<HTMLElement>('.tl-detail')!;
-    const drawerBody = document.querySelector<HTMLElement>('.tl-detail-body')!;
+    const drawer = document.querySelector<HTMLElement>('.view-timeline .tl-detail')!;
+    const drawerBody = document.querySelector<HTMLElement>('.view-timeline .tl-detail-body')!;
     const rows = Array.from(document.querySelectorAll<HTMLElement>('.tl-row'));
 
     // --- selection state ---
@@ -1484,6 +1640,115 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const bottomParaEls = Array.from(document.querySelectorAll<HTMLElement>('.undated-items'));
     const bottomGroupEls = Array.from(document.querySelectorAll<HTMLElement>('.undated'));
 
+    // --- list-view info tab -------------------------------------------------
+    // The list view gets the SAME sliding panel as the timeline, opened by
+    // clicking a list row. Each row carries a `data-li` id into the
+    // #tl-list-data dataset; selecting one builds the panel (reusing the .d-*
+    // styles + colorOf/labelOf) and lights every related row — same entity or a
+    // shared relation-group — dimming the rest, mirroring the timeline's
+    // selection emphasis. `ldDeselect` is exposed (no-op until wired) so the
+    // view switcher and Esc can close this tab too.
+    let ldDeselect = () => {};
+    const listDataEl = document.getElementById('tl-list-data');
+    const listDrawer = document.querySelector<HTMLElement>('.view-list .tl-detail');
+    const listDrawerBody = listDrawer?.querySelector<HTMLElement>('.tl-detail-body') ?? null;
+    if (listDataEl && listDrawer && listDrawerBody) {
+      interface LDetail {
+        id: number; title: string; type: string; dateLabel: string | null;
+        subtitle: string | null; description: string | null;
+        links: { label: string; url: string }[]; entity: string;
+        relationGroups: string[]; main: boolean;
+      }
+      const ldItems: LDetail[] = JSON.parse(listDataEl.textContent || '[]');
+      const ldById: Record<number, LDetail> = {};
+      for (const d of ldItems) ldById[d.id] = d;
+      const ldRows = Array.from(document.querySelectorAll<HTMLElement>('.view-list [data-li]'));
+      const ldRowById: Record<number, HTMLElement> = {};
+      for (const row of ldRows) ldRowById[parseInt(row.dataset.li!)] = row;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      let ldSelected: number | null = null;
+
+      // Foreground = same organisation/entity, or a shared relation-group tag.
+      const ldForeground = (d: LDetail, sel: LDetail): boolean =>
+        d.entity === sel.entity ||
+        (sel.relationGroups.length > 0 && d.relationGroups.some(g => sel.relationGroups.includes(g)));
+
+      function ldApply() {
+        const sel = ldSelected !== null ? ldById[ldSelected] : null;
+        for (const row of ldRows) {
+          const d = ldById[parseInt(row.dataset.li!)];
+          if (!d) continue;
+          const primary = !!sel && d.id === sel.id;
+          const fg = !!sel && ldForeground(d, sel);
+          row.classList.toggle('li-sel-primary', primary);
+          row.classList.toggle('li-sel-related', !!sel && fg && !primary);
+          row.classList.toggle('li-dim', !!sel && !fg);
+        }
+      }
+
+      function ldBuild(d: LDetail) {
+        listDrawerBody!.innerHTML = '';
+        const h = document.createElement('h2'); h.className = 'd-title'; h.textContent = d.title;
+        const meta = document.createElement('div'); meta.className = 'd-meta';
+        const dot = document.createElement('span'); dot.className = 'd-dot'; dot.style.background = colorOf[d.type] || 'var(--border)';
+        const mt = document.createElement('span');
+        const lab = labelOf[d.type] || d.type;
+        mt.textContent = d.dateLabel ? `${lab} · ${d.dateLabel}` : lab;
+        meta.appendChild(dot); meta.appendChild(mt);
+        listDrawerBody!.appendChild(h); listDrawerBody!.appendChild(meta);
+        if (d.subtitle) { const s = document.createElement('div'); s.className = 'd-subtitle'; s.textContent = d.subtitle; listDrawerBody!.appendChild(s); }
+        if (d.description) { const p = document.createElement('p'); p.className = 'd-desc'; p.textContent = d.description; listDrawerBody!.appendChild(p); }
+        if (d.links.length) {
+          const wrap = document.createElement('div'); wrap.className = 'd-links';
+          for (const l of d.links) { const a = document.createElement('a'); a.href = l.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = l.label; wrap.appendChild(a); }
+          listDrawerBody!.appendChild(wrap);
+        }
+        // Related rows (same entity / shared relation-group), shown as the same
+        // compact vertical timeline the bar drawer uses; kept in list order.
+        const related = ldItems.filter(x => x.id !== d.id && ldForeground(x, d));
+        if (related.length) {
+          const rlab = document.createElement('div'); rlab.className = 'd-related-label'; rlab.textContent = 'Related';
+          const ul = document.createElement('ul'); ul.className = 'd-timeline';
+          for (const r of related) {
+            const li = document.createElement('li'); li.className = 'd-tl-item';
+            const rdot = document.createElement('span'); rdot.className = 'd-tl-dot'; rdot.style.background = colorOf[r.type] || 'var(--border)';
+            const btn = document.createElement('button'); btn.className = 'd-tl-link';
+            btn.addEventListener('click', () => ldSelect(r.id, { scroll: true }));
+            const t = document.createElement('span'); t.className = 'd-tl-title';
+            t.textContent = r.entity && r.entity !== r.title ? `${r.title} · ${r.entity}` : r.title;
+            btn.appendChild(t);
+            if (r.dateLabel) { const dt = document.createElement('span'); dt.className = 'd-tl-date'; dt.textContent = r.dateLabel; btn.appendChild(dt); }
+            if (r.description) { const ds = document.createElement('span'); ds.className = 'd-tl-desc'; ds.textContent = r.description; btn.appendChild(ds); }
+            li.appendChild(rdot); li.appendChild(btn); ul.appendChild(li);
+          }
+          listDrawerBody!.appendChild(rlab); listDrawerBody!.appendChild(ul);
+        }
+      }
+
+      function ldOpen() { listDrawer!.classList.add('open'); listDrawer!.setAttribute('aria-hidden', 'false'); }
+      function ldClose() { listDrawer!.classList.remove('open'); listDrawer!.setAttribute('aria-hidden', 'true'); }
+
+      function ldSelect(id: number, opts?: { scroll?: boolean }) {
+        if (ldSelected === id) { ldDeselect(); return; }   // clicking the open row closes it
+        const d = ldById[id]; if (!d) return;
+        ldSelected = id;
+        ldBuild(d); ldApply(); ldOpen();
+        if (opts?.scroll) ldRowById[id]?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+      }
+
+      ldDeselect = () => { if (ldSelected === null) return; ldSelected = null; ldApply(); ldClose(); };
+
+      for (const row of ldRows) {
+        const id = parseInt(row.dataset.li!);
+        row.addEventListener('click', () => ldSelect(id));
+        row.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ldSelect(id); }
+        });
+      }
+      listDrawer.querySelector('.tl-detail-close')?.addEventListener('click', () => ldDeselect());
+    }
+
     // --- view switching (Timeline ⇄ Experience list) ---
     const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-btn'));
     const timelineView = document.querySelector<HTMLElement>('.view-timeline');
@@ -1510,8 +1775,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       });
       if (timelineView) { timelineView.hidden = !tlActive; timelineView.classList.toggle('active', tlActive); }
       if (listView) listView.hidden = tlActive;
-      if (!tlActive) deselect(); // close the drawer / clear selection when leaving the timeline
+      deselect();      // clear any timeline selection + close its info tab
+      ldDeselect();    // clear any list selection + close its info tab
       syncHash();
+      syncDetailTop(); // re-measure the now-visible layout for the sticky info tab
     }
 
     function setFilter(f: string) {
@@ -1547,18 +1814,23 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       setFilter(f === currentFilter && f !== 'all' ? 'all' : f);
     }));
     viewButtons.forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view!)));
-    document.querySelector('.tl-detail-close')?.addEventListener('click', () => deselect());
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') deselect(); });
+    document.querySelector('.view-timeline .tl-detail-close')?.addEventListener('click', () => deselect());
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { deselect(); ldDeselect(); } });
 
     // Measure the gap above the info tab at rest — i.e. the page header (title +
     // view switch) that sits above .tl-layout — and expose it as --tl-detail-top.
     // The CSS shows that FULL gap when scrolled to the top and pins the tab at
     // HALF of it once it sticks (see the .tl-detail rule). Re-measure on resize
     // and once fonts load, since both can change the header's height.
-    const tlLayout = document.querySelector<HTMLElement>('.tl-layout')!;
+    // Both views host a .tl-layout (timeline + list); measure whichever is on
+    // screen and set the offset on <html> so BOTH info tabs inherit it (custom
+    // properties cascade) — each drawer then pins correctly under the header.
+    const tlLayouts = Array.from(document.querySelectorAll<HTMLElement>('.tl-layout'));
     function syncDetailTop() {
-      const top = tlLayout.getBoundingClientRect().top + window.scrollY;
-      drawer.style.setProperty('--tl-detail-top', `${Math.round(top)}px`);
+      const vis = tlLayouts.find(l => l.offsetParent !== null) ?? tlLayouts[0];
+      if (!vis) return;
+      const top = vis.getBoundingClientRect().top + window.scrollY;
+      document.documentElement.style.setProperty('--tl-detail-top', `${Math.round(top)}px`);
     }
     syncDetailTop();
     window.addEventListener('resize', syncDetailTop);

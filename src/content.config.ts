@@ -1,6 +1,16 @@
 import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';
 
+// The "urls" listed format: extra links surfaced as info-tab buttons (and blog
+// post header buttons), appended after an entry's main `url`/`repo`. A button
+// shows its `title`; with none, it falls back to the URL's host label
+// (e.g. "https://www.github.com/foo/bar" → "github"). See hostLabel/extraLinks
+// in experience.astro. Shared by every entity that can carry extra links.
+const urlEntry = z.object({
+  title: z.string().optional(),
+  url: z.string(),
+});
+
 const blog = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/blog' }),
   schema: z.object({
@@ -8,6 +18,8 @@ const blog = defineCollection({
     date: z.coerce.date(),
     description: z.string(),
     draft: z.boolean().optional().default(false),
+    // Extra links rendered as buttons in the post header.
+    urls: z.array(urlEntry).optional().default([]),
   }),
 });
 
@@ -20,6 +32,8 @@ const projects = defineCollection({
     endDate: z.coerce.date().optional(),
     url: z.string().optional(),
     repo: z.string().optional(),
+    // Extra info-tab links beyond `url`/`repo` (see urlEntry above).
+    urls: z.array(urlEntry).optional().default([]),
     tags: z.array(z.string()).optional().default([]),
     // Tags linking project to an experience/role (e.g. lab name, employer)
     affiliations: z.array(z.string()).optional().default([]),

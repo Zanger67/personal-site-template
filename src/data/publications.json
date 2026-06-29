@@ -5,6 +5,10 @@
     "venue": "Journal of Mascot Sciences",
     "date": "2025",
     "url": null,
+    "urls": [
+      { "title": "PDF", "url": "https://example.com/wing-aerodynamics.pdf" },
+      { "url": "https://arxiv.org/abs/2501.00000" }
+    ],
     "main": true,
     "relationGroups": ["aerodynamics"]
   },

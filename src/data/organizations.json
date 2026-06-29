@@ -18,6 +18,9 @@
     "organization": "Yellow Jacket Spirit Squad",
     "organizationShort": "YJ Spirit Squad",
     "url": "https://example.com/yj-spirit-squad",
+    "urls": [
+      { "title": "Instagram", "url": "https://instagram.com/yjspiritsquad" }
+    ],
     "location": "Atlanta, GA",
     "membership": {
       "start": "2017-08",
@@ -30,7 +33,11 @@
         "start": "2019-08",
         "end": "2023-05",
         "main": true,
-        "description": "Captained the mascot squad through football and basketball seasons, mentored new mascots, and choreographed game-day routines."
+        "description": "Captained the mascot squad through football and basketball seasons, mentored new mascots, and choreographed game-day routines.",
+        "urls": [
+          { "title": "Squad highlights", "url": "https://youtube.com/@yjspiritsquad" },
+          { "url": "https://example.com/yj-spirit-squad/captains" }
+        ]
       }
     ]
   },
