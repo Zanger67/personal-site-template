@@ -6,7 +6,7 @@
     "location": null,
     "membership": { "start": "1979-11", "end": null },
     "roles": [
-      { "role": "Official Mascot", "start": "1979-11", "end": null, "main": true, "homepage": true },
+      { "role": "Official Mascot", "start": "1979-11", "end": null, "main": true, "homepage": true, "homepage_org_name": "Georgia Tech" },
       { "role": "Spirit Coordinator", "start": "1985-08", "end": null, "categories": ["research", "work"], "homepage": true }
     ]
   },

@@ -16,8 +16,10 @@ const profileShape: 'circle' | 'rectangle' = 'circle';
 // curation, independent of the timeline's current/past: a role (or the blanket
 // `membership`) opts in with `homepage: true`. Each org that contributes at
 // least one homepage row is listed, with its opted-in role names (+ a "Member"
-// row when the membership is featured).
-interface AffilRole { role: string; roleDetail?: string; homepage?: boolean; }
+// row when the membership is featured). A homepage role may also carry
+// `homepage_org_name` to override the group's title here (e.g. a short form)
+// without affecting the org's full name used elsewhere.
+interface AffilRole { role: string; roleDetail?: string; homepage?: boolean; homepage_org_name?: string; }
 interface AffilOrg {
   organization: string;
   url?: string | null;
@@ -26,14 +28,18 @@ interface AffilOrg {
 }
 const affilOrgs = affiliations as AffilOrg[];
 const currentGroups = affilOrgs
-  .map(o => ({
-    entity: o.organization,
-    url: o.url ?? null,
-    roles: [
-      ...(o.roles ?? []).filter(r => r.homepage).map(r => r.roleDetail ?? r.role),
-      ...(o.membership?.homepage ? ['Member'] : []),
-    ],
-  }))
+  .map(o => {
+    const homepageRoles = (o.roles ?? []).filter(r => r.homepage);
+    const homepageOrgName = homepageRoles.find(r => r.homepage_org_name)?.homepage_org_name;
+    return {
+      entity: homepageOrgName ?? o.organization,
+      url: o.url ?? null,
+      roles: [
+        ...homepageRoles.map(r => r.roleDetail ?? r.role),
+        ...(o.membership?.homepage ? ['Member'] : []),
+      ],
+    };
+  })
   .filter(g => g.roles.length > 0);
 
 const posts = (await getCollection('blog'))
