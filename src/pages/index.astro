@@ -2,14 +2,15 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NorthAmericaMap from '../components/NorthAmericaMap.astro';
 import { showHomeSection, isRouteEnabled } from '@config/site';
-import { getCollection } from 'astro:content';
+import { getCollection, getEntry, render } from 'astro:content';
+import profile from '../data/profile.json';
 import affiliations from '../data/affiliations.json';
 import publications from '../data/publications.json';
 import education from '../data/education.json';
 import languages from '../data/languages.json';
 
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
-const profileShape: 'circle' | 'rectangle' = 'circle';
+const profileShape = profile.profileShape as 'circle' | 'rectangle';
 
 // Affiliations use the same org-array shape as organizations.json (see
 // experience.astro). What appears in this homepage sidebar is an EXPLICIT
@@ -60,18 +61,17 @@ const projects = [
   ...allProjects.filter(p => p.data.pinned),
   ...allProjects.filter(p => !p.data.pinned),
 ].slice(0, 3);
+
+const introEntry = await getEntry('sections', 'intro');
+const { Content: Intro } = await render(introEntry);
 ---
 
-<BaseLayout title="Buzz — Georgia Tech Mascot">
+<BaseLayout title={profile.homeTitle} rawTitle>
   <div class="home-layout">
     <div class="main-col">
-      <h1>Hi, I'm Buzz.</h1>
-      <p class="subtitle">Official Mascot, Georgia Institute of Technology</p>
-      <p class="intro">
-        Official mascot of the Georgia Institute of Technology since 1979.
-        I do push-ups after touchdowns, ride the Ramblin' Wreck, and occasionally
-        <a href={`${base}/projects`}>take on side projects</a>.
-      </p>
+      <h1>{profile.greeting}</h1>
+      <p class="subtitle">{profile.subtitle}</p>
+      <div class="intro"><Intro /></div>
 
       {showHomeSection('places') && (
         <section>
@@ -145,21 +145,24 @@ const projects = [
             <h2>Misc.</h2>
           </div>
           <div class="misc-row">
-            <span class="misc-label">Friends:</span>
+            <span class="misc-label">{profile.friendsLabel}:</span>
             <ul class="inline-list">
-              <li><a href="https://example.com/ramblin-wreck" target="_blank" rel="noopener noreferrer">Ramblin' Wreck</a></li>
-              <li><a href="https://example.com/uga-hairy-dawg" target="_blank" rel="noopener noreferrer">Hairy Dawg</a></li>
-              <li><a href="https://example.com/auburn-aubie" target="_blank" rel="noopener noreferrer">Aubie</a></li>
-              <li><a href="https://example.com/clemson-tiger" target="_blank" rel="noopener noreferrer">The Tiger</a></li>
+              {profile.friends.map(friend => (
+                <li><a href={friend.url} target="_blank" rel="noopener noreferrer">{friend.label}</a></li>
+              ))}
             </ul>
           </div>
         </section>
+      )}
+
+      {profile.llmNote && (
+        <p class="llm-note"><em>{profile.llmNote}</em></p>
       )}
     </div>
 
     <aside class="sidebar">
       <img
-        src={`${base}/images/profile.svg`}
+        src={`${base}${profile.profileImage}`}
         alt="Profile photo"
         class:list={['profile-img', { 'profile-rect': profileShape === 'rectangle' }]}
         width="150"
@@ -258,6 +261,13 @@ const projects = [
 
   .intro {
     margin-bottom: 2rem;
+  }
+
+  .llm-note {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    opacity: 0.5;
+    margin-top: 2rem;
   }
 
   /* Sidebar */

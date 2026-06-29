@@ -1,0 +1,28 @@
+{
+  "name": "Buzz",
+  "fullName": "Buzz the Yellow Jacket",
+  "description": "Buzz — Georgia Tech mascot, campus legend, and Yellow Jacket extraordinaire.",
+  "homeTitle": "Buzz — Georgia Tech Mascot",
+  "greeting": "Hi, I'm Buzz.",
+  "subtitle": "Official Mascot, Georgia Institute of Technology",
+  "profileShape": "circle",
+  "profileImage": "/images/profile.svg",
+  "friendsLabel": "Friends",
+  "friends": [
+    { "label": "Ramblin' Wreck", "url": "https://example.com/ramblin-wreck" },
+    { "label": "Hairy Dawg", "url": "https://example.com/uga-hairy-dawg" },
+    { "label": "Aubie", "url": "https://example.com/auburn-aubie" },
+    { "label": "The Tiger", "url": "https://example.com/clemson-tiger" }
+  ],
+  "llmNote": "",
+  "contactIntro": "Want to book me for an event or just say hello? Reach out below.",
+  "pageMeta": {
+    "projects": "Selected projects and campus initiatives.",
+    "publications": "Selected publications and research.",
+    "contact": "Get in touch with Buzz.",
+    "experience": "Current and past affiliations, shown as an interactive timeline or an organisation-grouped list.",
+    "blog": "Dispatches from the hive.",
+    "favourites": "A small, growing list of corners of the web worth bookmarking.",
+    "funFacts": "A small, growing collection of fun facts."
+  }
+}

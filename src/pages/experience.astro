@@ -9,6 +9,7 @@ import organizations from '../data/organizations.json';
 import awards from '../data/awards.json';
 import conferences from '../data/conferences.json';
 import misc from '../data/misc.json';
+import profile from '../data/profile.json';
 
 if (!isRouteEnabled('experience')) return Astro.rewrite('/404');
 
@@ -675,7 +676,7 @@ const showMain = counts.main > 0;
 const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_COLS };
 ---
 
-<BaseLayout title="Experience — Buzz" description="Current and past affiliations, shown as an interactive timeline or an organisation-grouped list.">
+<BaseLayout title="Experience" description={profile.pageMeta.experience}>
   <script is:inline>
     // Runs before the view markup is parsed: honour the URL's view up-front so a
     // reload on the list view renders the list straight away — no flash of the

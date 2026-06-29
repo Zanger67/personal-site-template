@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { isRouteEnabled } from '@config/site';
 import favourites from '../data/favourites.json';
+import profile from '../data/profile.json';
 
 if (!isRouteEnabled('favourites')) return Astro.rewrite('/404');
 
@@ -17,8 +18,8 @@ const allItems = categories.flatMap(c => c.items);
 ---
 
 <BaseLayout
-  title="Favourite Corners of the Internet — Buzz"
-  description="A small, growing list of corners of the web worth bookmarking."
+  title="Favourite Corners of the Internet"
+  description={profile.pageMeta.favourites}
 >
   <h1>Favourite Corners of the Internet</h1>
   <p class="subtitle">

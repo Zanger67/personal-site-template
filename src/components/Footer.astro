@@ -1,5 +1,6 @@
 ---
 import { enabledFooterLinks } from '@config/site';
+import profile from '../data/profile.json';
 
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 
@@ -33,7 +34,7 @@ const links = enabledFooterLinks.map(l => ({
           <option value="iosevka-charon">Iosevka Charon Mono</option>
         </select>
       </label>
-      <p>&copy; {new Date().getFullYear()} Buzz the Yellow Jacket</p>
+      <p>&copy; {new Date().getFullYear()} {profile.fullName}</p>
     </div>
   </div>
 </footer>

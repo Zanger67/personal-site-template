@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { isRouteEnabled } from '@config/site';
 import funFacts from '../data/fun-facts.json';
+import profile from '../data/profile.json';
 
 if (!isRouteEnabled('funFacts')) return Astro.rewrite('/404');
 
@@ -9,8 +10,8 @@ const { facts } = funFacts as { facts: string[] };
 ---
 
 <BaseLayout
-  title="Fun Facts — Buzz"
-  description="A small, growing collection of fun facts."
+  title="Fun Facts"
+  description={profile.pageMeta.funFacts}
 >
   <h1>Fun Facts</h1>
   <p class="subtitle">

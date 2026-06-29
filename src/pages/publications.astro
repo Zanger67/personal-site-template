@@ -2,11 +2,12 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { isRouteEnabled } from '@config/site';
 import publications from '../data/publications.json';
+import profile from '../data/profile.json';
 
 if (!isRouteEnabled('publications')) return Astro.rewrite('/404');
 ---
 
-<BaseLayout title="Publications — Buzz" description="Selected publications and research.">
+<BaseLayout title="Publications" description={profile.pageMeta.publications}>
   <h1>Publications</h1>
   <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
     Selected publications and research.

@@ -50,4 +50,13 @@ const projects = defineCollection({
   }),
 });
 
-export const collections = { blog, projects };
+// Free-form prose blocks rendered into pages (e.g. the homepage intro).
+// Body is markdown; inline links render normally. One file per section.
+const sections = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/content/sections' }),
+  schema: z.object({
+    title: z.string().optional(),
+  }),
+});
+
+export const collections = { blog, projects, sections };

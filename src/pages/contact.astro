@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { isRouteEnabled } from '@config/site';
 import contactsData from '../data/contacts.json';
+import profile from '../data/profile.json';
 
 if (!isRouteEnabled('contact')) return Astro.rewrite('/404');
 
@@ -22,10 +23,10 @@ interface ContactItem {
 const contacts = contactsData as ContactItem[];
 ---
 
-<BaseLayout title="Contact — Buzz" description="Get in touch with Buzz.">
+<BaseLayout title="Contact" description={profile.pageMeta.contact}>
   <h1>Contact</h1>
   <p>
-    Want to book me for an event or just say hello? Reach out below.
+    {profile.contactIntro}
   </p>
 
   <ul class="contact-list">

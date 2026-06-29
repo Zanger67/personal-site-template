@@ -3,17 +3,21 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import MapleLeaf from '../components/MapleLeaf.astro';
 import '../styles/global.css';
+import profile from '../data/profile.json';
 
 interface Props {
   title: string;
   description?: string;
   image?: string;
+  /** When true, render `title` verbatim instead of composing `{title} — {name}`. */
+  rawTitle?: boolean;
 }
 
-const { title, description = 'Buzz — Georgia Tech mascot, campus legend, and Yellow Jacket extraordinaire.', image = '/images/og-default.png' } = Astro.props;
+const { title, description = profile.description, image = '/images/og-default.png', rawTitle = false } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const ogImage = new URL(image, Astro.site).href;
+const fullTitle = rawTitle ? title : `${title} — ${profile.name}`;
 ---
 
 <!DOCTYPE html>
@@ -22,22 +26,22 @@ const ogImage = new URL(image, Astro.site).href;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
-    <title>{title}</title>
+    <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalURL} />
     <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
-    <link rel="alternate" type="application/rss+xml" title="Buzz — Blog" href={`${base}/rss.xml`} />
+    <link rel="alternate" type="application/rss+xml" title={`${profile.name} — Blog`} href={`${base}/rss.xml`} />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content={title} />
+    <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:image" content={ogImage} />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={title} />
+    <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
 

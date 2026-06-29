@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import ProjectCard from '../components/ProjectCard.astro';
 import { isRouteEnabled } from '@config/site';
 import { getCollection } from 'astro:content';
+import profile from '../data/profile.json';
 
 if (!isRouteEnabled('projects')) return Astro.rewrite('/404');
 
@@ -23,10 +24,10 @@ const pinned = allProjects.filter(p => p.data.pinned);
 const rest = allProjects.filter(p => !p.data.pinned);
 ---
 
-<BaseLayout title="Projects — Buzz" description="Selected projects and campus initiatives.">
+<BaseLayout title="Projects" description={profile.pageMeta.projects}>
   <h1>Projects</h1>
   <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-    Selected projects and campus initiatives.
+    {profile.pageMeta.projects}
   </p>
 
   {pinned.length > 0 && (

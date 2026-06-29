@@ -6,7 +6,7 @@ import { isRouteEnabled } from '@config/site';
 if (!isRouteEnabled('map')) return Astro.rewrite('/404');
 ---
 
-<BaseLayout title="Map — Buzz">
+<BaseLayout title="Map">
   <h1>Places</h1>
   <p class="subtitle">States, provinces, and cities I've been to.</p>
   <NorthAmericaMap />

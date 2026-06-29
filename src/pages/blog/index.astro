@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { isRouteEnabled } from '@config/site';
 import { getCollection } from 'astro:content';
 import { getReadingTime } from '../../utils/reading-time';
+import profile from '../../data/profile.json';
 
 if (!isRouteEnabled('blog')) return Astro.rewrite('/404');
 
@@ -12,10 +13,10 @@ const posts = (await getCollection('blog'))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 ---
 
-<BaseLayout title="Blog — Buzz" description="Dispatches from the hive.">
+<BaseLayout title="Blog" description={profile.pageMeta.blog}>
   <h1>Blog</h1>
   <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-    Dispatches from the hive.
+    {profile.pageMeta.blog}
   </p>
 
   {posts.length === 0 && <p>Nothing here yet. Check back soon.</p>}
