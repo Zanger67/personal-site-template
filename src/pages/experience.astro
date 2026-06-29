@@ -989,13 +989,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   html:has(.view-timeline.active) { scrollbar-gutter: stable; }
   html:has(.view-list:not([hidden])) { scrollbar-gutter: stable; }
 
-  /* ===== PHONE: info-tab OVERLAY =========================================
-     A side panel can't share a narrow phone screen with the content, so below
-     this breakpoint the info tab floats OVER everything as a full-screen overlay
-     (see the scoped styles) instead of pushing. We must not widen `main` for it,
-     and we lock the page behind it. (The page also defaults to the list view at
-     this width — see the inline + module scripts.) */
-  @media (max-width: 640px) {
+  /* ===== NARROW SCREENS: info-tab OVERLAY ================================
+     Below this width the chart and side panel can't share the row comfortably,
+     so the info tab floats OVER everything as a full-screen overlay (see the
+     scoped styles) instead of pushing. We must not widen `main` for it, and we
+     lock the page behind it. (Phones — ≤640px — additionally default to the list
+     view; see the inline + module scripts.) */
+  @media (max-width: 830px) {
     main:has(.view-list:not([hidden]) .tl-detail.open) { max-width: var(--max-width); }
     /* Lock scroll behind the panel, and drop the reserved gutter (no scrollbar
        while locked) so the fixed panel's `right: 0` reaches the true edge. */
@@ -1371,10 +1371,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   }
   .undated-detail { color: var(--text-muted); }
 
-  /* ---- PHONE: info-tab OVERLAY ------------------------------------------- */
+  /* ---- NARROW SCREENS: info-tab OVERLAY --------------------------------- */
   /* The dimming layer behind the overlay. Always present but inert (transparent,
-     click-through); the phone breakpoint below switches it on while a panel is
-     open. On wider screens the panel pushes instead, so this never shows. */
+     click-through); the breakpoint below switches it on while a panel is open.
+     On wider screens the panel pushes instead, so this never shows. */
   .tl-scrim {
     position: fixed; inset: 0; z-index: 55;
     background: rgba(0, 0, 0, 0.45);
@@ -1382,16 +1382,16 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     transition: opacity 0.3s ease;
   }
 
-  /* On phones the info tab can't sit beside the content, so it leaves the flex
-     flow and floats over everything as a full-screen sheet that slides in from
-     the right. `position: fixed` pulls it out of the layout (so .tl-content keeps
-     full width) and the slide is a transform so nothing reflows. Height is set
-     explicitly (100dvh) rather than via top/bottom: the panel is an abspos child
-     of the flex `.tl-layout`, whose inherited `align-self` would otherwise
+  /* Below this width the info tab can't sit beside the content, so it leaves the
+     flex flow and floats over everything as a full-screen sheet that slides in
+     from the right. `position: fixed` pulls it out of the layout (so .tl-content
+     keeps full width) and the slide is a transform so nothing reflows. Height is
+     set explicitly (100dvh) rather than via top/bottom: the panel is an abspos
+     child of the flex `.tl-layout`, whose inherited `align-self` would otherwise
      collapse it to content height. The gutter is reclaimed while open (see
      is:global) so `right: 0` meets the true viewport edge. Applies to BOTH views'
      tabs, so the rules target `.tl-detail` directly. */
-  @media (max-width: 640px) {
+  @media (max-width: 830px) {
     .tl-detail {
       position: fixed; top: 0; right: 0;
       height: 100vh; height: 100dvh;
