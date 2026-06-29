@@ -958,28 +958,38 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      the timeline view being the active one, so the list view keeps the default
      (narrower) page width. -->
 <style is:global>
-  /* The timeline view is a wide, FLUID two-pane layout: the chart fills `main`,
-     and opening the info tab makes the chart reflow narrower to share the row
-     with the tab — both always fit, no overflow, no overlap. Widths are screen-
-     proportional so the split scales with the viewport (the original fixed-width
-     "grow the page so the chart never moves" trick was what squeezed the chart on
-     mid-size screens). The max-width transition animates the LIST view's grow and
-     the view→view width change.
-       --tl-detail-gap is the breathing room between content and the info tab's
-     border; --tl-detail-w is the tab's (screen-proportional) width, shared by the
-     tab's flex-basis, its panel width, and the list view's open width. Both are
-     declared here on a common ancestor so `main`'s calc() and the descendant
-     .tl-detail can read them. */
+  /* The timeline view is a wide two-pane layout: a STATIC-width chart, with the
+     info tab seated beside it on the right. The chart's width depends ONLY on the
+     viewport (never on whether the tab is open), so opening the tab never resizes
+     ("squishes") the chart. Opening the tab instead GROWS `main` by the tab's
+     width + gap: the page widens, the chart keeps its width and slides left as the
+     centred page expands, and the tab fills the new space on the right. (Below the
+     overlay breakpoint the tab floats ABOVE instead — see the media query — so it
+     never widens the page or moves the chart at all.)
+       --tl-chart-w is that static chart width: ~2/3 of the viewport, a larger
+     fraction on smaller screens, capped on huge ones, and never so wide that the
+     chart + gap + tab can't fit the viewport when the tab pushes in (so `main`
+     never gets clamped and the chart is never squeezed on mid-size screens — the
+     bug the old fixed-1080px/1440px grow trick hit). --tl-detail-w is the tab's
+     (screen-proportional) width; --tl-detail-gap the breathing room before its
+     border. All three live on a common ancestor so `main`'s calc() and the
+     descendant .tl-content / .tl-detail can read them. */
   main:has(.view-switch) {
     --tl-detail-gap: 1.25rem;
     --tl-detail-w: clamp(280px, 26vw, 360px);
+    --tl-chart-w: min(66vw, 1080px, calc(94vw - var(--tl-detail-w) - var(--tl-detail-gap)));
     transition: max-width 0.55s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  /* Timeline: ONE fluid width for both states. Closed, the chart fills it; open,
-     the chart gives part of it back to the tab (see .tl-content / .tl-detail), so
-     the chart reflows narrower instead of the page growing or the chart being
-     squeezed past its content. */
-  main:has(.view-timeline.active) { max-width: min(1360px, 94vw); }
+  /* Timeline CLOSED: the page is exactly the chart's static width, so the chart
+     sits centred at that size. OPEN: the page grows by the tab + gap to seat the
+     tab on the right; the chart's width is unchanged. `main`'s width and the tab's
+     flex-basis share one transition, so (page − tab) — the chart — holds constant
+     as the tab slides out. --tl-chart-w caps the open page below the viewport, so
+     `main` is never clamped and the chart is never squeezed. */
+  main:has(.view-timeline.active) { max-width: var(--tl-chart-w); }
+  main:has(.view-timeline.active .tl-detail.open) {
+    max-width: calc(var(--tl-chart-w) + var(--tl-detail-w) + var(--tl-detail-gap));
+  }
   /* List: the list column is narrow, so rather than squeeze it we WIDEN `main`
      to seat the tab beside it — capped at the viewport so it never overflows
      (when it can't grow, the flex content reflows to fit). */
@@ -997,6 +1007,12 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      lock the page behind it. (The page also defaults to the list view at this
      same width — see the inline + module scripts.) */
   @media (max-width: 830px) {
+    /* Overlay mode: the tab floats above (position:fixed), so the chart no longer
+       reserves room beside it — let it use the full page width, and do NOT grow
+       the page when the tab opens (it must stay put behind the overlay). Both the
+       closed and open timeline rules collapse to one wide value here. */
+    main:has(.view-timeline.active),
+    main:has(.view-timeline.active .tl-detail.open) { max-width: min(1360px, 94vw); }
     main:has(.view-list:not([hidden]) .tl-detail.open) { max-width: var(--max-width); }
     /* Lock scroll behind the panel, and drop the reserved gutter (no scrollbar
        while locked) so the fixed panel's `right: 0` reaches the true edge. */
