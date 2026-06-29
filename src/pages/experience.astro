@@ -42,9 +42,10 @@ function dateRange(start: string | null, end: string | null): string | null {
 // carved around the specific roles on the timeline) and `alumnus` (a former-
 // member span, shown only in the bottom "Alumni" strip, never as a bar).
 //   `displayTimeline` is the org-level master toggle (omitted ⇒ on): when on,
-// every role charts without per-role flags; when off, only roles that set their
-// own `displayTimeline: true` chart. The list view ignores it — it's the full
-// record. See organizations.json.
+// every role charts without per-role flags; when off, the org charts no bar and
+// instead surfaces in the "Other involvements" strip below the chart — only a
+// role that sets its own `displayTimeline: true` still charts. The list view
+// ignores the flag — it's the full record. See organizations.json.
 interface Span { start: string | null; end: string | null; description?: string | null; url?: string | null; homepage?: boolean; }
 interface OrgRole {
   role: string;
@@ -441,11 +442,14 @@ const items: Item[] = [
 ].filter((s): s is Item => s !== null);
 
 // ---------------------------------------------------------------------------
-// Bottom strips. Org affiliations that aren't (or can't be) bars, shown as chips
-// beneath the chart, split into three labelled groups:
-//   • Ongoing — has dates and is currently active, but charts no bar because
-//               displayTimeline is off (so it isn't lost from the timeline view)
-//   • Undated — no dates recorded anywhere (can never be a bar)
+// Bottom strips. Orgs/affiliations that aren't (or can't be) bars, shown as chips
+// beneath the chart, split into labelled groups:
+//   • Other involvements — explicitly hidden from the chart via
+//               `displayTimeline: false` (and charting no opted-in role), so it
+//               produces no bar; surfaced here instead of vanishing. Dated or
+//               undated, active or past — the flag alone routes it here.
+//   • Undated — on the timeline in principle (not hidden), but no dates recorded
+//               anywhere, so there's nothing to chart (can never be a bar)
 //   • Alumni  — a former-member relationship: an `alumnus` window on a club or a
 //               work affiliation (its category colours the chip)
 // Every entry shares the chip shape { title, category, detail, url, main }.
@@ -454,8 +458,19 @@ const orgChip = (o: Org): BottomEntry => ({
   title: o.organization, category: 'clubs', detail: involvementRoleLabel(o), url: o.url ?? null, main: !!o.main,
 });
 
-const ongoing = orgs.filter(o => !o.alumnus && orgHasDates(o) && orgActive(o) && !orgHasBars(o)).map(orgChip);
-const undatedInv = orgs.filter(o => !o.alumnus && !orgHasDates(o)).map(orgChip);
+// Off-timeline: explicitly hidden via `displayTimeline: false` and charting no
+// opted-in role, so it makes no bar. Routed to "Other involvements" (clubs and
+// work affiliations alike) instead of disappearing. alumnus orgs are owned by
+// the Alumni group below, so they're excluded here.
+const isOffTimeline = (o: Org): boolean => !o.alumnus && !orgShown(o) && !orgHasBars(o);
+const otherInv: BottomEntry[] = [
+  ...affilOrgs.filter(isOffTimeline).map(o => ({
+    title: o.organization, category: affilCats(o).type, detail: involvementRoleLabel(o), url: o.url ?? null, main: !!o.main,
+  })),
+  ...orgs.filter(isOffTimeline).map(orgChip),
+];
+// Undated: on the timeline in principle (not hidden), but no dates to chart.
+const undatedInv = orgs.filter(o => !o.alumnus && orgShown(o) && !orgHasDates(o)).map(orgChip);
 const alumni: BottomEntry[] = [
   ...affilOrgs.filter(o => o.alumnus).map(o => ({
     title: o.organization, category: affilCats(o).type, detail: alumnusLabel(o.alumnus!), url: o.url ?? null, main: !!o.main,
@@ -466,7 +481,7 @@ const alumni: BottomEntry[] = [
 ];
 
 const bottomGroups = [
-  { key: 'ongoing', label: 'Ongoing', items: ongoing },
+  { key: 'other',   label: 'Other involvements', items: otherInv },
   { key: 'undated', label: 'Undated', items: undatedInv },
   { key: 'alumni',  label: 'Alumni',  items: alumni },
 ].filter(g => g.items.length > 0);
