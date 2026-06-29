@@ -442,35 +442,71 @@ const items: Item[] = [
 ].filter((s): s is Item => s !== null);
 
 // ---------------------------------------------------------------------------
-// Bottom strips. Orgs/affiliations that aren't (or can't be) bars, shown as chips
-// beneath the chart, split into labelled groups:
-//   • Other involvements — explicitly hidden from the chart via
-//               `displayTimeline: false` (and charting no opted-in role), so it
-//               produces no bar; surfaced here instead of vanishing. Dated or
-//               undated, active or past — the flag alone routes it here.
-//   • Undated — on the timeline in principle (not hidden), but no dates recorded
-//               anywhere, so there's nothing to chart (can never be a bar)
+// Bottom strips. Things that aren't (or can't be) bars, shown as chips beneath
+// the chart, split into labelled groups:
+//   • Other involvements — any org/affiliation that charts no bar: explicitly
+//               hidden via `displayTimeline: false`, OR simply undated. Dated
+//               entries lead (each with its involvement span); undated entries
+//               trail in a separate paragraph. alumnus orgs are excluded (their
+//               own strip below).
+//   • Undated — point events (awards, publications, conferences, misc) with no
+//               date recorded, so they can never be charted; surfaced here
+//               instead of vanishing.
 //   • Alumni  — a former-member relationship: an `alumnus` window on a club or a
 //               work affiliation (its category colours the chip)
-// Every entry shares the chip shape { title, category, detail, url, main }.
+// Every entry shares the chip shape { title, category, detail, url, main }; a
+// group renders as one or more paragraphs (chip rows).
 interface BottomEntry { title: string; category: CatKey; detail: string | null; url: string | null; main: boolean; }
-const orgChip = (o: Org): BottomEntry => ({
-  title: o.organization, category: 'clubs', detail: involvementRoleLabel(o), url: o.url ?? null, main: !!o.main,
+
+// Overall involvement span (specific roles + the blanket membership window;
+// alumnus is its own strip) for an org that charts no bar. null when nothing on
+// the org carries a date — those entries fall to the undated paragraph.
+function orgInvolvementRange(org: Org): string | null {
+  const segs = [
+    ...(org.roles ?? []).map(r => ({ start: r.start, end: r.end ?? null })),
+    ...(org.membership?.start ? [{ start: org.membership.start, end: org.membership.end ?? null }] : []),
+  ].filter(s => !!s.start);
+  if (!segs.length) return null;
+  const minStart = segs.map(s => s.start!).sort()[0];
+  const open = segs.some(s => !s.end);                            // an ongoing span ⇒ "Present"
+  const maxEnd = open ? null : segs.map(s => s.end!).sort().slice(-1)[0];
+  return dateRange(minStart, maxEnd);
+}
+// Newest activity of an involvement, for ordering the dated paragraph (an open
+// span ranks as Present via toMs(null) = +∞).
+const invRecency = (org: Org): number =>
+  Math.max(...[...(org.roles ?? []), ...(org.membership?.start ? [org.membership] : [])]
+    .filter(s => !!s.start).map(s => toMs(s.end ?? null)));
+// A chip for an "Other involvements" org: its role label(s) and, when dated, its
+// involvement span — "Role · Sep 2021 – May 2023".
+const involvementChip = (o: Org, category: CatKey): BottomEntry => ({
+  title: o.organization, category,
+  detail: [involvementRoleLabel(o), orgInvolvementRange(o)].filter(Boolean).join(' · ') || null,
+  url: o.url ?? null, main: !!o.main,
 });
 
-// Off-timeline: explicitly hidden via `displayTimeline: false` and charting no
-// opted-in role, so it makes no bar. Routed to "Other involvements" (clubs and
-// work affiliations alike) instead of disappearing. alumnus orgs are owned by
-// the Alumni group below, so they're excluded here.
-const isOffTimeline = (o: Org): boolean => !o.alumnus && !orgShown(o) && !orgHasBars(o);
-const otherInv: BottomEntry[] = [
-  ...affilOrgs.filter(isOffTimeline).map(o => ({
-    title: o.organization, category: affilCats(o).type, detail: involvementRoleLabel(o), url: o.url ?? null, main: !!o.main,
-  })),
-  ...orgs.filter(isOffTimeline).map(orgChip),
+// Other involvements: every non-alumnus org that makes no bar (hidden via
+// `displayTimeline: false`, or undated), clubs and work affiliations alike.
+const involvementOrgs: { o: Org; category: CatKey }[] = [
+  ...affilOrgs.filter(o => !o.alumnus && !orgHasBars(o)).map(o => ({ o, category: affilCats(o).type })),
+  ...orgs.filter(o => !o.alumnus && !orgHasBars(o)).map(o => ({ o, category: 'clubs' as CatKey })),
 ];
-// Undated: on the timeline in principle (not hidden), but no dates to chart.
-const undatedInv = orgs.filter(o => !o.alumnus && orgShown(o) && !orgHasDates(o)).map(orgChip);
+// Dated lead (newest first, with their span); undated trail in a separate row.
+const datedInv = involvementOrgs.filter(x => orgInvolvementRange(x.o) !== null)
+  .sort((a, b) => invRecency(b.o) - invRecency(a.o))
+  .map(x => involvementChip(x.o, x.category));
+const undatedInv = involvementOrgs.filter(x => orgInvolvementRange(x.o) === null)
+  .map(x => involvementChip(x.o, x.category));
+
+// Undated point events — awards/pubs/conferences/misc with no `date`, which can't
+// be charted (mkItem drops them); surfaced here so they don't silently vanish.
+const undatedPoints: BottomEntry[] = [
+  ...(publications as any[]).filter(p => !p.date).map(p => ({ title: p.title, category: 'awards' as CatKey, detail: p.venue ?? null, url: p.url ?? null, main: !!p.main })),
+  ...(awards as any[]).filter(a => !a.date).map(a => ({ title: a.name, category: 'awards' as CatKey, detail: null, url: a.url ?? null, main: !!a.main })),
+  ...(conferences as any[]).filter(c => !c.date).map(c => ({ title: c.name, category: 'misc' as CatKey, detail: c.location ?? null, url: c.url ?? null, main: !!c.main })),
+  ...(misc as any[]).filter(m => !m.date).map(m => ({ title: m.name, category: 'misc' as CatKey, detail: m.location ?? null, url: m.url ?? null, main: !!m.main })),
+];
+
 const alumni: BottomEntry[] = [
   ...affilOrgs.filter(o => o.alumnus).map(o => ({
     title: o.organization, category: affilCats(o).type, detail: alumnusLabel(o.alumnus!), url: o.url ?? null, main: !!o.main,
@@ -480,12 +516,16 @@ const alumni: BottomEntry[] = [
   })),
 ];
 
+// Each group is one or more paragraphs (chip rows). "Other involvements" splits
+// into a dated and an undated paragraph; the rest are a single paragraph. Empty
+// paragraphs/groups drop out.
 const bottomGroups = [
-  { key: 'other',   label: 'Other involvements', items: otherInv },
-  { key: 'undated', label: 'Undated', items: undatedInv },
-  { key: 'alumni',  label: 'Alumni',  items: alumni },
-].filter(g => g.items.length > 0);
-const bottomItems: BottomEntry[] = bottomGroups.flatMap(g => g.items);
+  { key: 'other',   label: 'Other involvements', paragraphs: [datedInv, undatedInv] },
+  { key: 'undated', label: 'Undated',            paragraphs: [undatedPoints] },
+  { key: 'alumni',  label: 'Alumni',             paragraphs: [alumni] },
+].map(g => ({ ...g, paragraphs: g.paragraphs.filter(p => p.length > 0) }))
+ .filter(g => g.paragraphs.length > 0);
+const bottomItems: BottomEntry[] = bottomGroups.flatMap(g => g.paragraphs.flat());
 
 const nowYear = new Date().getFullYear();
 const yearsOf = items.flatMap(it => [new Date(it.start).getFullYear(), new Date(it.end ?? Date.now()).getFullYear()]);
@@ -583,14 +623,16 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         {bottomGroups.map(g => (
           <div class="undated" data-group={g.key}>
             <span class="undated-label">{g.label}</span>
-            <div class="undated-items">
-              {g.items.map(u => (
-                <span class="undated-item" data-category={u.category} data-main={String(u.main)} style={`--cat: ${CATEGORIES.find(c => c.key === u.category)!.color}`}>
-                  {u.url ? <a href={u.url} target="_blank" rel="noopener noreferrer">{u.title}</a> : u.title}
-                  {u.detail && <span class="undated-detail"> — {u.detail}</span>}
-                </span>
-              ))}
-            </div>
+            {g.paragraphs.map(p => (
+              <div class="undated-items">
+                {p.map(u => (
+                  <span class="undated-item" data-category={u.category} data-main={String(u.main)} style={`--cat: ${CATEGORIES.find(c => c.key === u.category)!.color}`}>
+                    {u.url ? <a href={u.url} target="_blank" rel="noopener noreferrer">{u.title}</a> : u.title}
+                    {u.detail && <span class="undated-detail"> — {u.detail}</span>}
+                  </span>
+                ))}
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -1126,6 +1168,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     color: var(--text-muted); margin-bottom: 0.5rem;
   }
   .undated-items { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  /* Separate "paragraph" between dated and undated chips of a group. */
+  .undated-items:not([hidden]) + .undated-items:not([hidden]) { margin-top: 0.6rem; }
+  .undated-items[hidden] { display: none; } /* beats `.undated-items { display:flex }` */
   .undated-item {
     font-size: 0.82rem; padding: 0.2rem 0.6rem; border-radius: 999px;
     border: 1px solid var(--border); border-left: 3px solid var(--cat);
@@ -1266,7 +1311,8 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
           const dot = document.createElement('span'); dot.className = 'd-tl-dot'; dot.style.background = colorOf[r.type];
           const btn = document.createElement('button'); btn.className = 'd-tl-link';
           btn.addEventListener('click', () => selectItem(r, { scroll: true }));
-          const t = document.createElement('span'); t.className = 'd-tl-title'; t.textContent = r.title;
+          const t = document.createElement('span'); t.className = 'd-tl-title';
+          t.textContent = r.entityShort && r.entityShort !== r.title ? `${r.title} · ${r.entityShort}` : r.title;
           const d = document.createElement('span'); d.className = 'd-tl-date'; d.textContent = r.dateLabel;
           btn.appendChild(t); btn.appendChild(d);
           if (r.description) {
@@ -1432,6 +1478,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
 
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.tl-filter'));
     const chips = Array.from(document.querySelectorAll<HTMLElement>('.undated-item'));
+    const bottomParaEls = Array.from(document.querySelectorAll<HTMLElement>('.undated-items'));
     const bottomGroupEls = Array.from(document.querySelectorAll<HTMLElement>('.undated'));
 
     // --- view switching (Timeline ⇄ Experience list) ---
@@ -1479,7 +1526,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       chips.forEach(c => {
         c.hidden = !(f === 'all' || (f === 'main' ? c.dataset.main === 'true' : c.dataset.category === f));
       });
-      // Hide a whole bottom group (incl. its header) once all its chips are filtered out.
+      // Collapse a paragraph row, then a whole bottom group (incl. its header),
+      // once all of its chips are filtered out.
+      bottomParaEls.forEach(p => {
+        p.hidden = !Array.from(p.querySelectorAll<HTMLElement>('.undated-item')).some(c => !c.hidden);
+      });
       bottomGroupEls.forEach(g => {
         g.hidden = !Array.from(g.querySelectorAll<HTMLElement>('.undated-item')).some(c => !c.hidden);
       });
@@ -1487,7 +1538,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       syncHash();
     }
 
-    buttons.forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter!)));
+    buttons.forEach(btn => btn.addEventListener('click', () => {
+      const f = btn.dataset.filter!;
+      // Clicking the already-active category toggles back to "all".
+      setFilter(f === currentFilter && f !== 'all' ? 'all' : f);
+    }));
     viewButtons.forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view!)));
     document.querySelector('.tl-detail-close')?.addEventListener('click', () => deselect());
     document.addEventListener('keydown', e => { if (e.key === 'Escape') deselect(); });
