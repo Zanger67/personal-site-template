@@ -4,8 +4,7 @@ import { getCollection } from 'astro:content';
 import affiliations from '../data/affiliations.json';
 import education from '../data/education.json';
 import publications from '../data/publications.json';
-import leadership from '../data/leadership.json';
-import involvements from '../data/involvements.json';
+import organizations from '../data/organizations.json';
 import awards from '../data/awards.json';
 import conferences from '../data/conferences.json';
 import misc from '../data/misc.json';
@@ -22,23 +21,6 @@ import misc from '../data/misc.json';
 // EXPERIENCE (list) view — org-grouped tree of current/past/leadership roles
 // plus awards, conferences and involvements.
 // ---------------------------------------------------------------------------
-interface Affiliation {
-  entity: string;
-  role: string;
-  roleDetail?: string;
-  startDate: string;
-  endDate: string | null;
-  url: string | null;
-  location?: string | null;
-}
-
-interface OrgGroup {
-  entity: string;
-  url: string | null;
-  location: string | null;
-  roles: { role: string; startDate: string; endDate: string | null }[];
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'Present';
   const [year, month] = dateStr.split('-');
@@ -53,53 +35,115 @@ function dateRange(start: string | null, end: string | null): string | null {
   return `${formatDate(start)} – ${formatDate(end)}`;
 }
 
-function sortKey(item: { endDate: string | null; startDate: string }): number {
-  return new Date(item.endDate ?? item.startDate).valueOf();
-}
-
-function groupByEntity(items: Affiliation[]): OrgGroup[] {
-  const groups: OrgGroup[] = [];
-  const seen = new Map<string, OrgGroup>();
-  for (const item of items) {
-    if (seen.has(item.entity)) {
-      const g = seen.get(item.entity)!;
-      g.roles.push({ role: item.roleDetail || item.role, startDate: item.startDate, endDate: item.endDate });
-      if (!g.location && item.location) g.location = item.location;
-    } else {
-      const group: OrgGroup = {
-        entity: item.entity,
-        url: item.url,
-        location: item.location ?? null,
-        roles: [{ role: item.roleDetail || item.role, startDate: item.startDate, endDate: item.endDate }],
-      };
-      groups.push(group);
-      seen.set(item.entity, group);
-    }
-  }
-  for (const group of groups) {
-    group.roles.sort((a, b) => sortKey(b) - sortKey(a));
-  }
-  return groups;
-}
-
-const currentGroups = groupByEntity(affiliations.current);
-const pastGroups = groupByEntity(affiliations.past);
-
-interface LeaderRole {
+// ---------------------------------------------------------------------------
+// ORGANISATIONS — the single source for clubs/societies (was leadership.json +
+// involvements.json). Each org carries its specific `roles`, plus two optional
+// org-level fallback windows: `membership` (the blanket "general member" span,
+// carved around the specific roles on the timeline) and `alumnus` (a former-
+// member span, shown only in the bottom "Alumni" strip, never as a bar).
+//   `displayTimeline` is the org-level master toggle (omitted ⇒ on): when on,
+// every role charts without per-role flags; when off, only roles that set their
+// own `displayTimeline: true` chart. The list view ignores it — it's the full
+// record. See organizations.json.
+interface Span { start: string | null; end: string | null; description?: string | null; url?: string | null; homepage?: boolean; }
+interface OrgRole {
   role: string;
-  url?: string | null;
+  // Optional longer label used by the list view only (the bar keeps `role`).
+  roleDetail?: string;
   start: string | null;
   end: string | null;
-}
-
-interface LeaderOrg {
-  organization: string;
-  url: string | null;
+  displayTimeline?: boolean;
+  main?: boolean;
+  description?: string | null;
+  url?: string | null;
   location?: string | null;
-  roles: LeaderRole[];
+  relationGroups?: string[];
+  // Affiliations only: timeline categories (first = primary colour/lane, rest are
+  // extra filters). Clubs ignore this — they are always the "clubs" category.
+  categories?: string[];
+  // Affiliations only: opt this role into the homepage "Affiliations" sidebar
+  // (index.astro). Independent of the timeline's current/past split.
+  homepage?: boolean;
+}
+interface Org {
+  organization: string;
+  organizationShort?: string;
+  url?: string | null;
+  location?: string | null;
+  displayTimeline?: boolean;
+  main?: boolean;
+  relationGroups?: string[];
+  membership?: Span;
+  alumnus?: Span;
+  roles?: OrgRole[];
+  // Affiliations only: default categories for this org's roles (see OrgRole).
+  categories?: string[];
+}
+const orgs = organizations as Org[];
+// Work affiliations share organizations.json's shape (array of orgs, each with
+// `roles`, optional `membership`/`alumnus` windows), differing only by carrying
+// `categories` (clubs are always "clubs"). They reuse every org helper below.
+const affilOrgs = affiliations as Org[];
+
+// displayTimeline resolution: org default is on; a role inherits the org's flag
+// unless it sets its own.
+const orgShown = (org: Org): boolean => org.displayTimeline ?? true;
+const roleShown = (org: Org, role: OrgRole): boolean => role.displayTimeline ?? orgShown(org);
+
+// "Alumnus (2020)" label from a span's year (start preferred, else end).
+function alumnusLabel(a: Span): string {
+  const yr = (a.start ?? a.end ?? '').slice(0, 4);
+  return yr ? `Alumnus (${yr})` : 'Alumnus';
+}
+// The flat detail line for an involvement: its role label(s), else the alum tag.
+function involvementRoleLabel(org: Org): string | null {
+  const names = (org.roles ?? []).map(r => r.role).filter(Boolean);
+  if (names.length) return names.join(', ');
+  if (org.alumnus) return alumnusLabel(org.alumnus);
+  return null;
 }
 
-const leaderGroups = leadership as LeaderOrg[];
+// List view split (auto-derived, displayTimeline-independent): an org with at
+// least one DATED role reads as "Leadership"; everything else is a plain
+// "Involvement". Membership/alumnus windows alone don't promote an org.
+const hasDatedRole = (org: Org): boolean => (org.roles ?? []).some(r => !!r.start);
+
+// Rows for a Leadership org's tree: its specific roles, then the blanket
+// `membership` shown at FULL (uncarved) span, then any `alumnus` tag.
+interface ListRole { role: string; start: string | null; end: string | null; url: string | null; }
+function listRolesFor(org: Org): ListRole[] {
+  const rows: ListRole[] = (org.roles ?? []).map(r => ({ role: r.roleDetail ?? r.role, start: r.start, end: r.end, url: r.url ?? null }));
+  if (org.membership) rows.push({ role: 'Member', start: org.membership.start, end: org.membership.end, url: org.membership.url ?? null });
+  if (org.alumnus) rows.push({ role: alumnusLabel(org.alumnus), start: org.alumnus.start, end: org.alumnus.end, url: null });
+  return rows;
+}
+
+const leaderListGroups = orgs.filter(hasDatedRole).map(o => ({
+  organization: o.organization,
+  url: o.url ?? null,
+  location: o.location ?? null,
+  roles: listRolesFor(o),
+}));
+const involvementListItems = orgs.filter(o => !hasDatedRole(o)).map(o => ({
+  name: o.organization,
+  url: o.url ?? null,
+  role: involvementRoleLabel(o),
+}));
+
+// AFFILIATIONS (work) list view — same {organization, url, location, roles}
+// shape as leaderListGroups, so they render through the identical markup. Split
+// into Current / Past by whether the org is still active (an open-ended role or
+// membership), mirroring how organisations derive "active" from dates rather
+// than a hand-maintained current/past split. Roles are newest-first.
+const roleRecency = (r: ListRole): number => new Date(r.end ?? r.start ?? '1970-01').valueOf();
+const affilGroup = (o: Org) => ({
+  organization: o.organization,
+  url: o.url ?? null,
+  location: o.location ?? null,
+  roles: listRolesFor(o).sort((a, b) => roleRecency(b) - roleRecency(a)),
+});
+const currentAffilGroups = affilOrgs.filter(o => orgActive(o)).map(affilGroup);
+const pastAffilGroups = affilOrgs.filter(o => !orgActive(o)).map(affilGroup);
 
 // ---------------------------------------------------------------------------
 // TIMELINE view — ported from jackswitzer.com/projects "Timeline" view,
@@ -128,6 +172,8 @@ interface Item {
   type: CatKey;
   start: number;
   end: number | null;
+  startMonthNum: number;        // absolute month index of the bar's start column
+  endMonthNum: number | null;   // absolute month index one past the last filled column (null = Present)
   dateLabel: string;
   description: string | null;
   subtitle: string | null;   // org · location context line (clubs/work-style items)
@@ -161,6 +207,17 @@ function parseDate(v: string | Date | null | undefined): Date | null {
   return new Date(parseInt(y), m ? parseInt(m) - 1 : 0, d ? parseInt(d) : 1);
 }
 const fmtMonth = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+// A month-granular end date is INCLUSIVE of its named month: a role running
+// "Nov 2023 – Oct 2024" is active *through* October, so its bar must fill the
+// whole October column. parseDate lands on the 1st, so the exclusive bar end is
+// the first instant of the following month. (The display label keeps the named
+// month — see mkItem.)
+const exclusiveEnd = (d: Date): Date => new Date(d.getFullYear(), d.getMonth() + 1, 1);
+// Absolute month index (year * 12 + month) — a timezone-proof column coordinate.
+// The timeline renders bars by whole months (see pct), so a bar starting any day
+// of a month fills that whole column; storing the index here (rather than deriving
+// it from the ms timestamp client-side) avoids a month-boundary slip across zones.
+const monthNum = (d: Date): number => d.getFullYear() * 12 + d.getMonth();
 
 let _id = 0;
 interface ItemOpts {
@@ -172,14 +229,18 @@ interface ItemOpts {
 function mkItem(o: ItemOpts): Item | null {
   const s = parseDate(o.start);
   if (!s) return null;
-  let start: number, end: number | null, dateLabel: string;
+  let start: number, end: number | null, dateLabel: string, endMonthNum: number | null;
   if (o.point) {
     const yearOnly = typeof o.start === 'string' && o.start.length === 4;
     const e = new Date(s.getFullYear(), s.getMonth() + 1, 1); // one month
-    start = s.getTime(); end = e.getTime(); dateLabel = yearOnly ? o.start : fmtMonth(s);
+    start = s.getTime(); end = e.getTime(); endMonthNum = monthNum(e); dateLabel = yearOnly ? o.start : fmtMonth(s);
   } else {
     const e = parseDate(o.end);
-    start = s.getTime(); end = e ? e.getTime() : null;
+    const ex = e ? exclusiveEnd(e) : null;
+    start = s.getTime();
+    // Inclusive end: the bar covers through the named end month (see exclusiveEnd).
+    end = ex ? ex.getTime() : null;
+    endMonthNum = ex ? monthNum(ex) : null;
     dateLabel = e ? `${fmtMonth(s)} – ${fmtMonth(e)}` : `${fmtMonth(s)} – Present`;
   }
   const links = (o.links || []).filter((l): l is { label: string; url: string } => !!l && !!l.url);
@@ -188,7 +249,7 @@ function mkItem(o: ItemOpts): Item | null {
   const entityShort = o.entityShort || entity; // falls back to the long-form org
   const cats = Array.from(new Set<CatKey>([o.type, ...(o.also || [])]));
   return {
-    id: _id++, title: o.title, type: o.type, start, end, dateLabel,
+    id: _id++, title: o.title, type: o.type, start, end, startMonthNum: monthNum(s), endMonthNum, dateLabel,
     description, subtitle: o.subtitle || null, links, entity, entityShort, group: `${o.type}::${entity}`,
     affiliations: o.affiliations || [],
     relationGroups: o.relationGroups || [],
@@ -197,20 +258,26 @@ function mkItem(o: ItemOpts): Item | null {
 }
 
 // ---------------------------------------------------------------------------
-// "Member" as a blanket role. A role literally named "Member" represents
-// general involvement with an org during any stretch NOT covered by a more
-// specific role at that same org. On the timeline we carve the Member bar so it
-// yields to each specific role and resumes in the gaps between them: when a
-// specific role starts the Member ends; when that role ends, if the Member span
-// still has time left, it picks back up. A Member span fully covered by specific
-// roles produces no bar at all. Detection is by the role name being exactly
-// "member" (case-insensitive); everything else at the org counts as "more
-// specific". This shapes the timeline only — the list view still shows the
-// Member's full, uncarved span.
+// Blanket "Member" windows. Both affiliations.json and organizations.json give
+// an org an optional `membership` span — the general "member" stretch that
+// brackets its specific roles. On the timeline we carve that span so it yields
+// to each specific role and resumes in the gaps between them: when a role starts
+// the Member ends; when the role ends, if the membership still has time left, it
+// picks back up. A membership fully covered by specific roles produces no bar at
+// all. This shapes the timeline only — the list view shows the full, uncarved
+// span. A former-member relationship is instead recorded as an `alumnus` window,
+// which never charts (it would otherwise run to "Present" forever) and surfaces
+// in the bottom "Alumni" strip. See carveMemberRanges / membershipSegments below.
 const PRESENT = Number.POSITIVE_INFINITY;
 const toMs = (d: string | null): number => { const p = parseDate(d); return p ? p.getTime() : PRESENT; };
+// Exclusive end in ms — the first instant of the month AFTER the named end month,
+// so an inclusive end ("active through Oct") carves as covering all of October.
+const toEndMs = (d: string | null): number => { const p = parseDate(d); return p ? exclusiveEnd(p).getTime() : PRESENT; };
 const monthStr = (ms: number): string => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
-const isMemberRole = (role: string | null | undefined): boolean => (role ?? '').trim().toLowerCase() === 'member';
+// The inclusive last-active month for an EXCLUSIVE end instant (a first-of-month):
+// step back one month. Carved segments emit this so mkItem's inclusive-end
+// handling reconstructs the same exclusive boundary instead of double-counting it.
+const monthStrEnd = (ms: number): string => { const d = new Date(ms); return monthStr(new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime()); };
 
 // Return the member's [start, end) window minus the union of the specific roles'
 // windows, as a list of gap segments. `end` is null on a segment that runs to an
@@ -222,17 +289,21 @@ function carveMemberRanges(
 ): { start: string; end: string | null }[] {
   const mStart = toMs(memberStart);
   const open = memberEnd == null;                 // member runs to "Present"
-  const mEnd = open ? PRESENT : toMs(memberEnd);
+  const mEnd = open ? PRESENT : toEndMs(memberEnd);   // inclusive: through the member's end month
   if (!(mEnd > mStart)) return [];
 
-  // Specific role windows, clipped to the member window, earliest first.
+  // Specific role windows, clipped to the member window, earliest first. Role
+  // ends are exclusive instants too, so the Member resumes the month AFTER a role
+  // (not overlapping the role's final month).
   const blocks = specifics
-    .map(s => ({ start: Math.max(toMs(s.start), mStart), end: Math.min(s.end == null ? PRESENT : toMs(s.end), mEnd) }))
+    .map(s => ({ start: Math.max(toMs(s.start), mStart), end: Math.min(s.end == null ? PRESENT : toEndMs(s.end), mEnd) }))
     .filter(b => b.end > b.start)
     .sort((a, b) => a.start - b.start);
 
   const out: { start: string; end: string | null }[] = [];
-  const emit = (a: number, b: number) => { if (b > a) out.push({ start: monthStr(a), end: b === mEnd && open ? null : monthStr(b) }); };
+  // `b` is an exclusive boundary; emit the inclusive last-active month so mkItem
+  // re-expands it to the same boundary (an open trailing segment stays null).
+  const emit = (a: number, b: number) => { if (b > a) out.push({ start: monthStr(a), end: b === mEnd && open ? null : monthStrEnd(b) }); };
   let cursor = mStart;
   for (const b of blocks) {
     if (b.start > cursor) emit(cursor, b.start); // gap before this specific role
@@ -242,39 +313,42 @@ function carveMemberRanges(
   return out;
 }
 
-// Replace each "Member" affiliation with its carved segments (timeline only).
-// Specific roles are the org's other (non-Member) affiliations, regardless of
-// which one's in current vs past. A Member with no concrete start is left as-is.
-function expandAffiliationMembers(list: any[]): any[] {
-  const out: any[] = [];
-  for (const a of list) {
-    if (!isMemberRole(a.role) || !a.startDate) { out.push(a); continue; }
-    const specifics = list
-      .filter(o => o !== a && o.entity === a.entity && !isMemberRole(o.role))
-      .map(o => ({ start: o.startDate, end: o.endDate ?? null }));
-    for (const seg of carveMemberRanges(a.startDate, a.endDate ?? null, specifics))
-      out.push({ ...a, startDate: seg.start, endDate: seg.end });
-  }
-  return out;
+// Charted roles for an org: those that pass displayTimeline AND carry a start
+// date (an undated role can't be a bar). alumnus never charts.
+function orgTimelineRoles(org: Org): OrgRole[] {
+  return (org.roles ?? []).filter(r => roleShown(org, r) && !!r.start);
 }
-
-// Same carve for leadership, scoped within each org's own `roles` list.
-function expandLeadershipMembers(orgs: any[]): any[] {
-  return orgs.map(org => {
-    const roles: any[] = [];
-    for (const r of org.roles) {
-      if (!isMemberRole(r.role) || !r.start) { roles.push(r); continue; }
-      const specifics = org.roles
-        .filter((o: any) => o !== r && !isMemberRole(o.role))
-        .map((o: any) => ({ start: o.start ?? null, end: o.end ?? null }));
-      for (const seg of carveMemberRanges(r.start, r.end ?? null, specifics))
-        roles.push({ ...r, start: seg.start, end: seg.end });
-    }
-    return { ...org, roles };
-  });
+// Carve an org's blanket `membership` window around its charted dated roles,
+// yielding "Member" segments (timeline only). Empty unless the org charts and
+// the membership has a concrete start.
+function membershipSegments(org: Org): { start: string; end: string | null }[] {
+  if (!org.membership?.start || !orgShown(org)) return [];
+  const specifics = orgTimelineRoles(org).map(r => ({ start: r.start, end: r.end ?? null }));
+  return carveMemberRanges(org.membership.start, org.membership.end ?? null, specifics);
+}
+// Does the org produce any timeline bar at all? (a charted dated role, or a
+// charted membership segment)
+function orgHasBars(org: Org): boolean {
+  return orgTimelineRoles(org).length > 0 || membershipSegments(org).length > 0;
+}
+// Any concrete date anywhere on the org (role start, membership start, alum span)?
+function orgHasDates(org: Org): boolean {
+  return (org.roles ?? []).some(r => !!r.start) || !!org.membership?.start || !!org.alumnus?.start || !!org.alumnus?.end;
+}
+// Currently active — some open-ended (no-end) role or membership span.
+function orgActive(org: Org): boolean {
+  return (org.roles ?? []).some(r => r.start && !r.end) || (!!org.membership?.start && !org.membership?.end);
 }
 
 const projects = await getCollection('projects');
+
+// Timeline category for an affiliation role: its own `categories`, else the
+// org's, else plain "work". First entry is the primary (colour/lane); the rest
+// become extra filters the item also shows under.
+function affilCats(org: Org, r?: OrgRole): { type: CatKey; also: CatKey[] } {
+  const c = (r?.categories ?? org.categories ?? ['work']) as CatKey[];
+  return { type: c[0] ?? 'work', also: c.slice(1) };
+}
 
 const items: Item[] = [
   ...(education as any[]).map(e => mkItem({
@@ -283,15 +357,29 @@ const items: Item[] = [
     links: [{ label: 'Website', url: e.url }], main: e.main,
     relationGroups: e.relationGroups,
   })),
-  ...(expandAffiliationMembers([...affiliations.current, ...affiliations.past]) as any[]).map(a => mkItem({
-    // `categories` (optional): first entry is the primary (colour/lane); the rest are
-    // extra filters this role also shows under. Defaults to a plain "work" role.
-    title: a.role, type: (a.categories?.[0] ?? 'work') as CatKey, also: (a.categories?.slice(1) ?? []) as CatKey[],
-    start: a.startDate, end: a.endDate, entity: a.entity, entityShort: a.entityShort,
-    description: [a.entity, a.location].filter(Boolean).join(' · '),
-    links: [{ label: 'Website', url: a.url }], main: a.main,
-    relationGroups: a.relationGroups,
-  })),
+  // Work affiliations share the org shape, so they build exactly like clubs
+  // (below) — only the category differs (their `categories`, default "work").
+  ...affilOrgs.flatMap(org => [
+    ...orgTimelineRoles(org).map(r => mkItem({
+      title: r.role, ...affilCats(org, r),
+      start: r.start, end: r.end, entity: org.organization, entityShort: org.organizationShort,
+      subtitle: [org.organization, r.location ?? org.location].filter(Boolean).join(' · ') || null,
+      description: r.description ?? null,
+      links: [{ label: 'Website', url: r.url ?? org.url }],
+      main: r.main ?? org.main,
+      relationGroups: r.relationGroups ?? org.relationGroups,
+    })),
+    // Blanket `membership` carved into "Member" segments around those roles.
+    ...membershipSegments(org).map(seg => mkItem({
+      title: 'Member', ...affilCats(org),
+      start: seg.start, end: seg.end, entity: org.organization, entityShort: org.organizationShort,
+      subtitle: [org.organization, org.location].filter(Boolean).join(' · ') || null,
+      description: org.membership?.description ?? null,
+      links: [{ label: 'Website', url: org.membership?.url ?? org.url }],
+      main: org.main,
+      relationGroups: org.relationGroups,
+    })),
+  ]),
   ...(publications as any[]).map(p => mkItem({
     // Publications share the "awards/pubs" category with awards/scholarships.
     title: p.title, type: 'awards', start: p.date, point: true, entity: p.title,
@@ -305,18 +393,29 @@ const items: Item[] = [
     links: [{ label: 'View', url: a.url }], main: a.main,
     relationGroups: a.relationGroups,
   })),
-  ...expandLeadershipMembers(leadership as any[]).flatMap(org =>
-    org.roles.map((r: any) => mkItem({
-      // Clubs mirror work roles: the role is the title, while the organisation,
-      // location and an optional freeform detail line live in the drawer body.
+  ...orgs.flatMap(org => [
+    // Clubs mirror work roles: the role is the title, while the organisation,
+    // location and an optional freeform detail line live in the drawer body.
+    // Only charted, dated roles become bars (see orgTimelineRoles).
+    ...orgTimelineRoles(org).map(r => mkItem({
       title: r.role, type: 'clubs', start: r.start, end: r.end, entity: org.organization, entityShort: org.organizationShort,
       subtitle: [org.organization, r.location ?? org.location].filter(Boolean).join(' · ') || null,
       description: r.description ?? null,
       links: [{ label: 'Website', url: r.url ?? org.url }],
       main: r.main ?? org.main,
-      relationGroups: r.relationGroups,
-    }))
-  ),
+      relationGroups: r.relationGroups ?? org.relationGroups,
+    })),
+    // Blanket `membership` carved into "Member" segments around those roles. The
+    // literal title "Member" keeps the client's lane-chain detection working.
+    ...membershipSegments(org).map(seg => mkItem({
+      title: 'Member', type: 'clubs', start: seg.start, end: seg.end, entity: org.organization, entityShort: org.organizationShort,
+      subtitle: [org.organization, org.location].filter(Boolean).join(' · ') || null,
+      description: org.membership?.description ?? null,
+      links: [{ label: 'Website', url: org.membership?.url ?? org.url }],
+      main: org.main,
+      relationGroups: org.relationGroups,
+    })),
+  ]),
   ...projects.map(p => mkItem({
     title: p.data.title, type: 'projects', start: p.data.startDate, end: p.data.endDate, entity: p.data.title,
     description: p.data.description, affiliations: p.data.affiliations || [],
@@ -341,9 +440,37 @@ const items: Item[] = [
   })),
 ].filter((s): s is Item => s !== null);
 
-const undated = (involvements as any[]).map(i => ({
-  title: i.name, category: 'clubs' as CatKey, detail: i.role ?? null, url: i.url ?? null, main: !!i.main,
-}));
+// ---------------------------------------------------------------------------
+// Bottom strips. Org affiliations that aren't (or can't be) bars, shown as chips
+// beneath the chart, split into three labelled groups:
+//   • Ongoing — has dates and is currently active, but charts no bar because
+//               displayTimeline is off (so it isn't lost from the timeline view)
+//   • Undated — no dates recorded anywhere (can never be a bar)
+//   • Alumni  — a former-member relationship: an `alumnus` window on a club or a
+//               work affiliation (its category colours the chip)
+// Every entry shares the chip shape { title, category, detail, url, main }.
+interface BottomEntry { title: string; category: CatKey; detail: string | null; url: string | null; main: boolean; }
+const orgChip = (o: Org): BottomEntry => ({
+  title: o.organization, category: 'clubs', detail: involvementRoleLabel(o), url: o.url ?? null, main: !!o.main,
+});
+
+const ongoing = orgs.filter(o => !o.alumnus && orgHasDates(o) && orgActive(o) && !orgHasBars(o)).map(orgChip);
+const undatedInv = orgs.filter(o => !o.alumnus && !orgHasDates(o)).map(orgChip);
+const alumni: BottomEntry[] = [
+  ...affilOrgs.filter(o => o.alumnus).map(o => ({
+    title: o.organization, category: affilCats(o).type, detail: alumnusLabel(o.alumnus!), url: o.url ?? null, main: !!o.main,
+  })),
+  ...orgs.filter(o => o.alumnus).map(o => ({
+    title: o.organization, category: 'clubs' as CatKey, detail: alumnusLabel(o.alumnus!), url: o.url ?? null, main: !!o.main,
+  })),
+];
+
+const bottomGroups = [
+  { key: 'ongoing', label: 'Ongoing', items: ongoing },
+  { key: 'undated', label: 'Undated', items: undatedInv },
+  { key: 'alumni',  label: 'Alumni',  items: alumni },
+].filter(g => g.items.length > 0);
+const bottomItems: BottomEntry[] = bottomGroups.flatMap(g => g.items);
 
 const nowYear = new Date().getFullYear();
 const yearsOf = items.flatMap(it => [new Date(it.start).getFullYear(), new Date(it.end ?? Date.now()).getFullYear()]);
@@ -352,11 +479,11 @@ const maxYear = Math.max(...yearsOf, nowYear);
 const years: number[] = [];
 for (let y = maxYear; y >= minYear; y--) years.push(y);
 
-const counts: Record<string, number> = { all: items.length + undated.length };
+const counts: Record<string, number> = { all: items.length + bottomItems.length };
 for (const c of CATEGORIES) {
-  counts[c.key] = items.filter(s => s.cats.includes(c.key)).length + undated.filter(u => u.category === c.key).length;
+  counts[c.key] = items.filter(s => s.cats.includes(c.key)).length + bottomItems.filter(u => u.category === c.key).length;
 }
-counts.main = items.filter(s => s.main).length + undated.filter(u => u.main).length;
+counts.main = items.filter(s => s.main).length + bottomItems.filter(u => u.main).length;
 
 // Only surface a filter (and legend entry) for categories that actually have
 // at least one item; likewise hide the Main filter when nothing is flagged.
@@ -438,11 +565,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
           <span class="leg leg-summer"><span class="sw sw-summer"></span>Summer</span>
         </div>
 
-        {undated.length > 0 && (
-          <div class="undated">
-            <span class="undated-label">Ongoing / undated</span>
+        {bottomGroups.map(g => (
+          <div class="undated" data-group={g.key}>
+            <span class="undated-label">{g.label}</span>
             <div class="undated-items">
-              {undated.map(u => (
+              {g.items.map(u => (
                 <span class="undated-item" data-category={u.category} data-main={String(u.main)} style={`--cat: ${CATEGORIES.find(c => c.key === u.category)!.color}`}>
                   {u.url ? <a href={u.url} target="_blank" rel="noopener noreferrer">{u.title}</a> : u.title}
                   {u.detail && <span class="undated-detail"> — {u.detail}</span>}
@@ -450,7 +577,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
               ))}
             </div>
           </div>
-        )}
+        ))}
       </div>
 
       {/* ===== INFO TAB — the sticky detail panel that slides in on the right
@@ -474,13 +601,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
 
     <h2>Current</h2>
     <div class="groups">
-      {currentGroups.map(group => (
+      {currentAffilGroups.map(group => (
         <div class="org-group">
           <div class="entity-row">
             <span class="org-name">
               {group.url
-                ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
-                : group.entity}
+                ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.organization}</a>
+                : group.organization}
             </span>
             {group.location && <span class="org-location">{group.location}</span>}
           </div>
@@ -488,11 +615,14 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
             {group.roles.map((r, i) => {
               const isLast = i === group.roles.length - 1;
               const glyph = isLast ? '└' : '├';
+              const dates = dateRange(r.start, r.end);
               return (
                 <div class="role-row">
                   <span class="bracket">{glyph}</span>
-                  <span class="role-name">{r.role}</span>
-                  <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
+                  <span class="role-name">{r.url
+                    ? <a href={r.url} target="_blank" rel="noopener noreferrer">{r.role}</a>
+                    : r.role}</span>
+                  {dates && <span class="role-dates">{dates}</span>}
                 </div>
               );
             })}
@@ -503,13 +633,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
 
     <h2>Past</h2>
     <div class="groups">
-      {pastGroups.map(group => (
+      {pastAffilGroups.map(group => (
         <div class="org-group">
           <div class="entity-row">
             <span class="org-name">
               {group.url
-                ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
-                : group.entity}
+                ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.organization}</a>
+                : group.organization}
             </span>
             {group.location && <span class="org-location">{group.location}</span>}
           </div>
@@ -517,11 +647,14 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
             {group.roles.map((r, i) => {
               const isLast = i === group.roles.length - 1;
               const glyph = isLast ? '└' : '├';
+              const dates = dateRange(r.start, r.end);
               return (
                 <div class="role-row">
                   <span class="bracket">{glyph}</span>
-                  <span class="role-name">{r.role}</span>
-                  <span class="role-dates">{dateRange(r.startDate, r.endDate)}</span>
+                  <span class="role-name">{r.url
+                    ? <a href={r.url} target="_blank" rel="noopener noreferrer">{r.role}</a>
+                    : r.role}</span>
+                  {dates && <span class="role-dates">{dates}</span>}
                 </div>
               );
             })}
@@ -530,11 +663,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       ))}
     </div>
 
-    {leaderGroups.length > 0 && (
+    {leaderListGroups.length > 0 && (
       <>
         <h2>Leadership</h2>
         <div class="groups">
-          {leaderGroups.map(group => (
+          {leaderListGroups.map(group => (
             <div class="org-group">
               <div class="entity-row">
                 <span class="org-name">
@@ -597,11 +730,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       </>
     )}
 
-    {involvements.length > 0 && (
+    {involvementListItems.length > 0 && (
       <>
         <h2>Involvements</h2>
         <ul class="involvement-list">
-          {involvements.map(inv => (
+          {involvementListItems.map(inv => (
             <li>
               <span class="inv-name">{inv.url
                 ? <a href={inv.url} target="_blank" rel="noopener noreferrer">{inv.name}</a>
@@ -990,7 +1123,8 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   const cfgEl = document.getElementById('tl-cfg');
   if (dataEl && cfgEl) {
     interface Item {
-      id: number; title: string; type: string; start: number; end: number | null; dateLabel: string;
+      id: number; title: string; type: string; start: number; end: number | null;
+      startMonthNum: number; endMonthNum: number | null; dateLabel: string;
       description: string | null; subtitle: string | null; links: { label: string; url: string }[];
       entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[];
       main: boolean; cats: string[]; laneKey?: string | null;
@@ -999,26 +1133,36 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const cfg = JSON.parse(cfgEl.textContent || '{}');
     const byId: Record<number, Item> = {};
     for (const it of items) byId[it.id] = it;
-    // Lane chains: an org with a blanket "Member" role keeps ALL its roles on a
-    // single timeline lane (see layout()), so the carved member segments and the
-    // specific roles they yield to read as one continuous involvement instead of
-    // stair-stepping across lanes. Tag those items with their org as `laneKey`.
-    const memberEntities = new Set(
-      items.filter(it => it.title.trim().toLowerCase() === 'member').map(it => it.entity)
-    );
-    for (const it of items) it.laneKey = memberEntities.has(it.entity) ? it.entity : null;
+    // Lane chains: every bar of a multi-bar entity is kept on ONE timeline lane
+    // (see layout()), so an org's roles read as a single continuous progression —
+    // e.g. the Discrete-Math TA ladder (Undergraduate → Senior → Head) all at
+    // "College of Computing" sits on one lane instead of stair-stepping onto
+    // separate lanes when consecutive roles abut. This also subsumes the carved
+    // "Member" chains (member segments + the specific roles they yield to), which
+    // are always multi-bar by construction. A single-bar entity stays unkeyed so
+    // it can still share a lane with unrelated bars (compact packing). Tag chained
+    // items with their org as `laneKey`.
+    const entityBarCount: Record<string, number> = {};
+    for (const it of items) entityBarCount[it.entity] = (entityBarCount[it.entity] ?? 0) + 1;
+    for (const it of items) it.laneKey = entityBarCount[it.entity] > 1 ? it.entity : null;
     const colorOf: Record<string, string> = {};
     const labelOf: Record<string, string> = {};
     for (const c of cfg.categories) { colorOf[c.key] = c.color; labelOf[c.key] = c.label; }
     const order: Record<string, number> = cfg.typeOrder;
     const now = Date.now();
+    // Present items fill THROUGH the current month, so their exclusive end column
+    // is the first of next month (absolute month index, matching item.*MonthNum).
+    const nd = new Date();
+    const nowMonthNum = nd.getFullYear() * 12 + nd.getMonth() + 1;
 
     const activeIn = (it: Item, t: number, r: number) => it.start < r && (it.end ?? now) > t;
-    function pct(it: Item, t: number, r: number) {
-      const a = it.end ?? now;
-      const s = it.start < t ? t : it.start;
-      const L = r - t;
-      return { sp: Math.max(0, (s - t) / L * 100), ep: Math.min(100, ((a > r ? r : a) - t) / L * 100) };
+    // Bars snap to whole-month columns: a role present any day of a month fills that
+    // whole column. Positions come from absolute month indices (not day-fractions),
+    // so every edge lands exactly on a column boundary. `y` is the row's year.
+    function pct(it: Item, y: number) {
+      const base = y * 12;                                   // month index of this row's January
+      const col = (m: number) => Math.max(0, Math.min(12, m - base)) / 12 * 100;
+      return { sp: col(it.startMonthNum), ep: col(it.endMonthNum ?? nowMonthNum) };
     }
 
     // `drawer` is the INFO TAB (the sliding detail panel); `drawerBody` is its
@@ -1207,7 +1351,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         const laneKey: (string | null)[] = [];  // chain a lane is reserved for (or null)
         const laneOf: Record<number, number> = {};
         for (const it of act) {
-          const { sp, ep } = pct(it, t, r);
+          const { sp, ep } = pct(it, y);
           const key = it.laneKey ?? null;
           let c = -1;
           // 1) same-chain bars prefer the lane their chain already holds (zero gap)
@@ -1226,7 +1370,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         const b = Math.max(...act.map(it => laneOf[it.id])) + 1;
         body.style.height = Math.max(36 * b + 12, 60) + 'px';
         for (const it of act) {
-          const { sp, ep } = pct(it, t, r);
+          const { sp, ep } = pct(it, y);
           const lane = laneOf[it.id];
           const el = document.createElement('div');
           el.classList.add('tl-bar');
@@ -1273,6 +1417,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
 
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.tl-filter'));
     const chips = Array.from(document.querySelectorAll<HTMLElement>('.undated-item'));
+    const bottomGroupEls = Array.from(document.querySelectorAll<HTMLElement>('.undated'));
 
     // --- view switching (Timeline ⇄ Experience list) ---
     const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-btn'));
@@ -1318,6 +1463,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       buttons.forEach(b => b.classList.toggle('active', b.dataset.filter === f));
       chips.forEach(c => {
         c.hidden = !(f === 'all' || (f === 'main' ? c.dataset.main === 'true' : c.dataset.category === f));
+      });
+      // Hide a whole bottom group (incl. its header) once all its chips are filtered out.
+      bottomGroupEls.forEach(g => {
+        g.hidden = !Array.from(g.querySelectorAll<HTMLElement>('.undated-item')).some(c => !c.hidden);
       });
       layout(f);
       syncHash();

@@ -1,79 +1,63 @@
-{
-  "current": [
-    {
-      "entity": "Georgia Institute of Technology",
-      "entityShort": "Georgia Tech",
-      "role": "Official Mascot",
-      "startDate": "1979-11",
-      "endDate": null,
-      "url": "https://gatech.edu",
-      "location": null,
-      "main": true
-    },
-    {
-      "entity": "Georgia Institute of Technology",
-      "entityShort": "Georgia Tech",
-      "role": "Spirit Coordinator",
-      "categories": ["research", "work"],
-      "startDate": "1985-08",
-      "endDate": null,
-      "url": "https://gatech.edu",
-      "location": null
-    },
-    {
-      "entity": "Georgia Tech Athletic Association",
-      "entityShort": "GT Athletics",
-      "role": "Game Day Director",
-      "startDate": "2005-01",
-      "endDate": null,
-      "url": "https://ramblinwreck.com",
-      "location": null
-    }
-  ],
-  "past": [
-    {
-      "entity": "ACC Mascot Council",
-      "entityShort": "ACC",
-      "role": "Chair",
-      "startDate": "2021-01",
-      "endDate": "2023-05",
-      "url": null,
-      "location": null
-    },
-    {
-      "entity": "ACC Mascot Council",
-      "entityShort": "ACC",
-      "role": "Representative",
-      "startDate": "2018-01",
-      "endDate": "2020-12",
-      "url": null,
-      "location": null
-    },
-    {
-      "entity": "Capital One Mascot Challenge",
-      "entityShort": "Capital One",
-      "role": "Finalist",
-      "startDate": "2014-09",
-      "endDate": "2014-12",
-      "url": null,
-      "location": null
-    },
-    {
-      "entity": "Atlanta Olympics Committee",
-      "role": "Mascot Liaison",
-      "startDate": "1995-06",
-      "endDate": "1996-08",
-      "url": null,
-      "location": null
-    },
-    {
-      "entity": "Coca-Cola Campus Ambassadors",
-      "entityShort": "Coca-Cola",
-      "role": "Brand Mascot Partner",
-      "startDate": "2010-03",
-      "endDate": "2015-12",
-      "url": "https://coca-cola.com",
-      "location": null
-    }
-  ]
-}
+[
+  {
+    "organization": "Georgia Institute of Technology",
+    "organizationShort": "Georgia Tech",
+    "url": "https://gatech.edu",
+    "location": null,
+    "membership": { "start": "1979-11", "end": null },
+    "roles": [
+      { "role": "Official Mascot", "start": "1979-11", "end": null, "main": true, "homepage": true },
+      { "role": "Spirit Coordinator", "start": "1985-08", "end": null, "categories": ["research", "work"], "homepage": true }
+    ]
+  },
+  {
+    "organization": "Georgia Tech Athletic Association",
+    "organizationShort": "GT Athletics",
+    "url": "https://ramblinwreck.com",
+    "location": null,
+    "membership": { "start": "2005-01", "end": null },
+    "roles": [
+      { "role": "Game Day Director", "start": "2005-01", "end": null, "homepage": true }
+    ]
+  },
+  {
+    "organization": "ACC Mascot Council",
+    "organizationShort": "ACC",
+    "url": null,
+    "location": null,
+    "membership": { "start": "2018-01", "end": null },
+    "roles": [
+      { "role": "Chair", "start": "2021-01", "end": "2023-05" },
+      { "role": "Representative", "start": "2018-01", "end": "2020-12" }
+    ]
+  },
+  {
+    "organization": "Capital One Mascot Challenge",
+    "organizationShort": "Capital One",
+    "url": null,
+    "location": null,
+    "membership": { "start": "2014-09", "end": null },
+    "roles": [
+      { "role": "Finalist", "start": "2014-09", "end": "2014-12" }
+    ]
+  },
+  {
+    "organization": "Atlanta Olympics Committee",
+    "url": null,
+    "location": null,
+    "membership": { "start": "1995-06", "end": null },
+    "roles": [
+      { "role": "Mascot Liaison", "start": "1995-06", "end": "1996-08" }
+    ]
+  },
+  {
+    "organization": "Coca-Cola Campus Ambassadors",
+    "organizationShort": "Coca-Cola",
+    "url": "https://coca-cola.com",
+    "location": null,
+    "membership": { "start": "2010-03", "end": null },
+    "roles": [
+      { "role": "Brand Mascot Partner", "start": "2010-03", "end": "2015-12" }
+    ]
+  }
+]

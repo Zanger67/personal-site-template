@@ -1,0 +1,62 @@
+[
+  {
+    "organization": "ACC Mascot Council",
+    "organizationShort": "ACC",
+    "url": "https://example.com/acc-mascot-council",
+    "location": "Atlanta, GA",
+    "membership": { "start": "2021-01", "end": null },
+    "roles": [
+      {
+        "role": "Chair",
+        "start": "2021-01",
+        "end": "2023-05",
+        "description": "Led the council's mascot-standards working group and coordinated cross-school spirit events across the conference."
+      }
+    ]
+  },
+  {
+    "organization": "Yellow Jacket Spirit Squad",
+    "organizationShort": "YJ Spirit Squad",
+    "url": "https://example.com/yj-spirit-squad",
+    "location": "Atlanta, GA",
+    "membership": {
+      "start": "2017-08",
+      "end": "2024-05",
+      "description": "General squad member — the blanket affiliation that brackets the Captain term. On the timeline it runs until Captain begins and resumes after it ends."
+    },
+    "roles": [
+      {
+        "role": "Captain",
+        "start": "2019-08",
+        "end": "2023-05",
+        "main": true,
+        "description": "Captained the mascot squad through football and basketball seasons, mentored new mascots, and choreographed game-day routines."
+      }
+    ]
+  },
+  {
+    "organization": "Tech Traditions Committee",
+    "membership": { "start": null, "end": null },
+    "roles": [
+      { "role": "Chair", "start": null, "end": null }
+    ]
+  },
+  {
+    "organization": "Buzz Robotics Society",
+    "organizationShort": "Buzz Robotics",
+    "url": "https://example.com/buzz-robotics",
+    "membership": { "start": null, "end": null },
+    "alumnus": { "start": "2018-05", "end": null },
+    "roles": []
+  },
+  {
+    "organization": "Ramblin' Wreck Club",
+    "membership": { "start": null, "end": null },
+    "roles": []
+  },
+  {
+    "organization": "Midnight Ramble Squad",
+    "membership": { "start": null, "end": null },
+    "roles": []
+  }
+]

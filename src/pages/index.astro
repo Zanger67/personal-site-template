@@ -10,28 +10,30 @@ import languages from '../data/languages.json';
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 const profileShape: 'circle' | 'rectangle' = 'circle';
 
-interface OrgGroup {
-  entity: string;
-  url: string | null;
-  roles: string[];
+// Affiliations use the same org-array shape as organizations.json (see
+// experience.astro). What appears in this homepage sidebar is an EXPLICIT
+// curation, independent of the timeline's current/past: a role (or the blanket
+// `membership`) opts in with `homepage: true`. Each org that contributes at
+// least one homepage row is listed, with its opted-in role names (+ a "Member"
+// row when the membership is featured).
+interface AffilRole { role: string; roleDetail?: string; homepage?: boolean; }
+interface AffilOrg {
+  organization: string;
+  url?: string | null;
+  membership?: { homepage?: boolean };
+  roles?: AffilRole[];
 }
-
-function groupByEntity(items: typeof affiliations.current): OrgGroup[] {
-  const groups: OrgGroup[] = [];
-  const seen = new Map<string, OrgGroup>();
-  for (const item of items) {
-    if (seen.has(item.entity)) {
-      seen.get(item.entity)!.roles.push(item.role);
-    } else {
-      const group: OrgGroup = { entity: item.entity, url: item.url, roles: [item.role] };
-      groups.push(group);
-      seen.set(item.entity, group);
-    }
-  }
-  return groups;
-}
-
-const currentGroups = groupByEntity(affiliations.current);
+const affilOrgs = affiliations as AffilOrg[];
+const currentGroups = affilOrgs
+  .map(o => ({
+    entity: o.organization,
+    url: o.url ?? null,
+    roles: [
+      ...(o.roles ?? []).filter(r => r.homepage).map(r => r.roleDetail ?? r.role),
+      ...(o.membership?.homepage ? ['Member'] : []),
+    ],
+  }))
+  .filter(g => g.roles.length > 0);
 
 const posts = (await getCollection('blog'))
   .filter(post => !post.data.draft)
