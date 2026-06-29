@@ -686,12 +686,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       var de = document.documentElement;
       de.classList.add('view-init');
       var hash = location.hash.replace('#', '');
-      // The Gantt timeline is unwieldy on a narrow screen, so phones default to
-      // the list view. `#list` always wins; an empty hash falls back to list on
-      // phones / timeline elsewhere; any other hash is a category filter, which
-      // implies the timeline view. (The module script below mirrors this.)
-      var phone = window.matchMedia('(max-width: 640px)').matches;
-      de.dataset.initialView = (hash === 'list' || (hash === '' && phone)) ? 'list' : 'timeline';
+      // The Gantt timeline is unwieldy on a narrow screen, so narrow viewports
+      // default to the list view — the SAME breakpoint at which the info tab
+      // becomes an overlay. `#list` always wins; an empty hash falls back to list
+      // when narrow / timeline otherwise; any other hash is a category filter,
+      // which implies the timeline view. (The module script below mirrors this.)
+      var narrow = window.matchMedia('(max-width: 830px)').matches;
+      de.dataset.initialView = (hash === 'list' || (hash === '' && narrow)) ? 'list' : 'timeline';
     })();
   </script>
   <h1>Experience</h1>
@@ -993,8 +994,8 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      Below this width the chart and side panel can't share the row comfortably,
      so the info tab floats OVER everything as a full-screen overlay (see the
      scoped styles) instead of pushing. We must not widen `main` for it, and we
-     lock the page behind it. (Phones — ≤640px — additionally default to the list
-     view; see the inline + module scripts.) */
+     lock the page behind it. (The page also defaults to the list view at this
+     same width — see the inline + module scripts.) */
   @media (max-width: 830px) {
     main:has(.view-list:not([hidden]) .tl-detail.open) { max-width: var(--max-width); }
     /* Lock scroll behind the panel, and drop the reserved gutter (no scrollbar
@@ -1395,7 +1396,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     .tl-detail {
       position: fixed; top: 0; right: 0;
       height: 100vh; height: 100dvh;
-      width: min(420px, 100vw);
+      /* Never full-bleed: always leave a strip of the content showing on the left
+         (dimmed by the scrim) so it reads as an overlay and gives a tap target to
+         dismiss it. */
+      width: min(420px, 100vw - 2.5rem);
       margin-left: 0; max-height: none; z-index: 60;
       background: var(--bg); border-left: 1px solid var(--border);
       box-shadow: -6px 0 30px rgba(0, 0, 0, 0.22);
@@ -1897,9 +1901,28 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     viewButtons.forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view!)));
     document.querySelector('.view-timeline .tl-detail-close')?.addEventListener('click', () => deselect());
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { deselect(); ldDeselect(); } });
-    // When the info tab floats as an overlay, tapping the dimmed scrim behind it
-    // closes whichever panel is open (harmless no-op when nothing is selected).
+    // When the info tab floats as an overlay, tapping the dimmed strip of content
+    // showing beside it (the scrim) closes whichever panel is open (harmless
+    // no-op when nothing is selected).
     document.querySelector('.tl-scrim')?.addEventListener('click', () => { deselect(); ldDeselect(); });
+    // …and swiping the overlay panel to the right dismisses it the same way. Only
+    // a clearly-horizontal rightward gesture counts, so vertical scrolling inside
+    // the panel is left untouched. (No-op on the wide push layout — there's no
+    // overlay to dismiss there.)
+    document.querySelectorAll<HTMLElement>('.tl-detail').forEach(panel => {
+      let sx = 0, sy = 0, tracking = false;
+      panel.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) { tracking = false; return; }
+        sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+      }, { passive: true });
+      panel.addEventListener('touchend', e => {
+        if (!tracking) return;
+        tracking = false;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - sx, dy = t.clientY - sy;
+        if (dx > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { deselect(); ldDeselect(); }
+      }, { passive: true });
+    });
 
     // Measure the gap above the info tab at rest — i.e. the page header (title +
     // view switch) that sits above .tl-layout — and expose it as --tl-detail-top.
@@ -1925,10 +1948,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const initial = location.hash.replace('#', '');
     const isFilter = buttons.some(b => b.dataset.filter === initial);
     setFilter(isFilter ? initial : 'all');
-    // Mirror the pre-hydration script: phones default to the list view unless the
-    // hash explicitly asks otherwise (#list, or a category filter ⇒ timeline).
-    const phone = window.matchMedia('(max-width: 640px)').matches;
-    const initialView = (initial === 'list' || (initial === '' && phone)) ? 'list' : 'timeline';
+    // Mirror the pre-hydration script: narrow viewports default to the list view
+    // unless the hash asks otherwise (#list, or a category filter ⇒ timeline).
+    const narrow = window.matchMedia('(max-width: 830px)').matches;
+    const initialView = (initial === 'list' || (initial === '' && narrow)) ? 'list' : 'timeline';
     setView(initialView);
 
     // The view above now matches what the pre-hydration CSS already painted, so
