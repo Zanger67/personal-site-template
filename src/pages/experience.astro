@@ -950,16 +950,21 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      present) so the page animates smoothly when SHRINKING to the list view too —
      not just when growing back to the timeline. Slow, ease-in-out for a gentle
      expand/retract. */
-  main:has(.view-switch) { transition: max-width 0.55s cubic-bezier(0.4, 0, 0.2, 1); }
+  /* --tl-detail-gap is the breathing room between the content and the info tab's
+     border line, so a full-width "Present" bar (or a list row's dates) doesn't
+     butt up against it. The open-width rules below add it on top of the drawer
+     width, and the info tab takes it as a left margin (see .tl-detail.open), so
+     the content's own width still holds constant as the tab slides in. */
+  main:has(.view-switch) { --tl-detail-gap: 1.25rem; transition: max-width 0.55s cubic-bezier(0.4, 0, 0.2, 1); }
   main:has(.view-timeline.active) { max-width: 1080px; }
-  /* Drawer-open width = closed content (1040) + drawer (360) + main padding (40).
-     Because this width and the drawer's flex-basis share the same transition,
-     the timeline's own width stays constant while the drawer slides in. */
-  main:has(.view-timeline.active .tl-detail.open) { max-width: 1440px; }
+  /* Drawer-open width = closed content (1040) + gap + drawer (360) + main padding
+     (40). This width, the gap, and the drawer's flex-basis share one transition,
+     so the timeline's own width stays constant while the drawer slides in. */
+  main:has(.view-timeline.active .tl-detail.open) { max-width: calc(1440px + var(--tl-detail-gap)); }
   /* The list view keeps the default page width (--max-width); opening its info
-     tab widens `main` by the drawer width (360px) so the list content underneath
-     holds its width as the panel slides in — the same trick as the timeline. */
-  main:has(.view-list:not([hidden]) .tl-detail.open) { max-width: calc(var(--max-width) + 360px); }
+     tab widens `main` by the drawer width (360px) + the gap so the list content
+     underneath holds its width as the panel slides in — same trick as above. */
+  main:has(.view-list:not([hidden]) .tl-detail.open) { max-width: calc(var(--max-width) + 360px + var(--tl-detail-gap)); }
   /* Always reserve the page scrollbar gutter so widths don't jump on scroll. */
   html:has(.view-timeline.active) { scrollbar-gutter: stable; }
   html:has(.view-list:not([hidden])) { scrollbar-gutter: stable; }
@@ -1000,16 +1005,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
     color: var(--text-muted); font-weight: 400;
   }
-  .tl-bar .o::before { content: ', '; }
-  /* Leading variant: when the org has a short form it prefixes the title as
-     "Short Org · Role". The org is now the stable label, so it keeps its width
-     while the *title* surrenders first; the separator sits after the org.
-     Non-breaking spaces flank the dot so the trailing one isn't trimmed at the
-     end of the org's (nowrap) line — a normal space there disappears. */
-  .tl-bar .o.lead { flex: 0 1 auto; }
-  .tl-bar .o.lead::before { content: none; }
-  .tl-bar .o.lead::after { content: '\00a0·\00a0'; }
-  .tl-bar:has(.o.lead) .t { flex: 0 1000 auto; }
+  /* Middle-dot separator before the org; non-breaking spaces keep it from being
+     trimmed or wrapped against the title's (nowrap) line. */
+  .tl-bar .o::before { content: '\00a0·\00a0'; }
   .tl-bar:hover { border-color: var(--accent); }
   .tl-bar:hover { text-decoration: none; }
   /* Selection emphasis, layered above the dimmed background:
@@ -1240,14 +1238,17 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      half-gap and holds there. Falls back to 1rem before/without JS. */
   .tl-detail {
     --tl-detail-w: 360px;
-    flex: 0 0 0; overflow: hidden;
+    flex: 0 0 0; overflow: hidden; margin-left: 0;
     position: sticky; top: calc(var(--tl-detail-top, 1rem) / 2); align-self: flex-start;
     max-height: calc(100vh - var(--tl-detail-top, 1rem) / 2 - 1rem);
-    transition: flex-basis 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+    /* margin-left transitions in lockstep with flex-basis (and `main`'s width) so
+       the gap opens up alongside the panel without nudging the content's width. */
+    transition: flex-basis 0.55s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.55s cubic-bezier(0.4, 0, 0.2, 1);
   }
   /* Fixed px width (not %) so the main timeline boundary never moves when the
-     info tab's scrollbar appears/disappears or its content scrolls. */
-  .tl-detail.open { flex-basis: var(--tl-detail-w); border-left: 1px solid var(--border); }
+     info tab's scrollbar appears/disappears or its content scrolls. The left
+     margin sets the border line off the content by --tl-detail-gap. */
+  .tl-detail.open { flex-basis: var(--tl-detail-w); margin-left: var(--tl-detail-gap); border-left: 1px solid var(--border); }
   /* The info tab's OWN scroll — independent of the page and the timeline. When
      the details run long, they scroll inside this panel while the sticky column
      above keeps the info tab's top pinned to the viewport.
@@ -1600,29 +1601,21 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
           el.style.top = (36 * lane + 4) + 'px';
           el.style.height = '28px';
           el.style.borderLeftColor = colorOf[it.type] || 'var(--border)';
-          // Organisation label on the bar. When the org has an explicit short
-          // form (entityShort differs from the full entity), it's compact enough
-          // to *lead* the bar as "Short Org · Role"; there the title surrenders
-          // width first (see .o.lead CSS). Otherwise the (long) org trails the
-          // title "space permitting", giving up width long before the title does.
+          // Organisation label trails the title "space permitting" as
+          // "Role · Org": the org's large flex-shrink (see .o CSS) makes it
+          // surrender width — and truncate — long before the title does. Prefer
+          // the compact short form when the org has one, else the full name.
           // Skipped entirely when the org would just echo the title
           // (projects/awards/etc. set entity = title).
-          const shortOrg = it.entityShort && it.entityShort !== it.entity && it.entityShort !== it.title ? it.entityShort : '';
-          const longOrg = !shortOrg && it.entity && it.entity !== it.title ? it.entity : '';
+          const org = it.entityShort && it.entityShort !== it.title ? it.entityShort
+            : (it.entity && it.entity !== it.title ? it.entity : '');
           el.addEventListener('click', () => selectItem(it));
           const span = document.createElement('span'); span.className = 't'; span.textContent = it.title;
-          if (shortOrg) {
-            el.title = `${shortOrg} · ${it.title} · ${it.dateLabel}`;
-            const osp = document.createElement('span'); osp.className = 'o lead'; osp.textContent = shortOrg;
+          el.title = `${it.title}${org ? ', ' + org : ''} · ${it.dateLabel}`;
+          el.appendChild(span);
+          if (org) {
+            const osp = document.createElement('span'); osp.className = 'o'; osp.textContent = org;
             el.appendChild(osp);
-            el.appendChild(span);
-          } else {
-            el.title = `${it.title}${longOrg ? ', ' + longOrg : ''} · ${it.dateLabel}`;
-            el.appendChild(span);
-            if (longOrg) {
-              const osp = document.createElement('span'); osp.className = 'o'; osp.textContent = longOrg;
-              el.appendChild(osp);
-            }
           }
           bars.appendChild(el);
         }
