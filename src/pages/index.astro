@@ -481,7 +481,7 @@ const { Content: Intro } = await render(introEntry);
     .sidebar {
       width: 100%;
       columns: 2;
-      column-gap: 0.75rem;
+      column-gap: 1rem;
     }
 
     .sidebar > * {
@@ -493,14 +493,18 @@ const { Content: Intro } = await render(introEntry);
       margin-bottom: 0;
     }
 
+    /* Fill the column so the image is the same width as the text blocks beside
+       it. aspect-ratio keeps the circle square; the rectangle keeps its natural
+       portrait ratio. */
     .profile-img {
-      width: 100px;
-      height: 100px;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1;
     }
 
     .profile-img.profile-rect {
-      width: 100px;
-      height: auto;
+      width: 100%;
+      aspect-ratio: auto;
     }
   }
 </style>
