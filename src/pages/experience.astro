@@ -685,7 +685,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     (function () {
       var de = document.documentElement;
       de.classList.add('view-init');
-      de.dataset.initialView = location.hash.replace('#', '') === 'list' ? 'list' : 'timeline';
+      var hash = location.hash.replace('#', '');
+      // The Gantt timeline is unwieldy on a narrow screen, so phones default to
+      // the list view. `#list` always wins; an empty hash falls back to list on
+      // phones / timeline elsewhere; any other hash is a category filter, which
+      // implies the timeline view. (The module script below mirrors this.)
+      var phone = window.matchMedia('(max-width: 640px)').matches;
+      de.dataset.initialView = (hash === 'list' || (hash === '' && phone)) ? 'list' : 'timeline';
     })();
   </script>
   <h1>Experience</h1>
@@ -938,6 +944,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     </div>
   </section>
 
+  {/* Dimming layer behind the info tab when it floats as an overlay on narrow
+      screens. Click it (or Esc, or the panel's close button) to dismiss. */}
+  <div class="tl-scrim" aria-hidden="true"></div>
+
   <script type="application/json" id="tl-data" set:html={JSON.stringify(items)}></script>
   <script type="application/json" id="tl-cfg" set:html={JSON.stringify(cfg)}></script>
   <script type="application/json" id="tl-list-data" set:html={JSON.stringify(listItems)}></script>
@@ -947,28 +957,50 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      the timeline view being the active one, so the list view keeps the default
      (narrower) page width. -->
 <style is:global>
-  /* Keep the width transition on `main` at all times (the switcher is always
-     present) so the page animates smoothly when SHRINKING to the list view too —
-     not just when growing back to the timeline. Slow, ease-in-out for a gentle
-     expand/retract. */
-  /* --tl-detail-gap is the breathing room between the content and the info tab's
-     border line, so a full-width "Present" bar (or a list row's dates) doesn't
-     butt up against it. The open-width rules below add it on top of the drawer
-     width, and the info tab takes it as a left margin (see .tl-detail.open), so
-     the content's own width still holds constant as the tab slides in. */
-  main:has(.view-switch) { --tl-detail-gap: 1.25rem; transition: max-width 0.55s cubic-bezier(0.4, 0, 0.2, 1); }
-  main:has(.view-timeline.active) { max-width: 1080px; }
-  /* Drawer-open width = closed content (1040) + gap + drawer (360) + main padding
-     (40). This width, the gap, and the drawer's flex-basis share one transition,
-     so the timeline's own width stays constant while the drawer slides in. */
-  main:has(.view-timeline.active .tl-detail.open) { max-width: calc(1440px + var(--tl-detail-gap)); }
-  /* The list view keeps the default page width (--max-width); opening its info
-     tab widens `main` by the drawer width (360px) + the gap so the list content
-     underneath holds its width as the panel slides in — same trick as above. */
-  main:has(.view-list:not([hidden]) .tl-detail.open) { max-width: calc(var(--max-width) + 360px + var(--tl-detail-gap)); }
+  /* The timeline view is a wide, FLUID two-pane layout: the chart fills `main`,
+     and opening the info tab makes the chart reflow narrower to share the row
+     with the tab — both always fit, no overflow, no overlap. Widths are screen-
+     proportional so the split scales with the viewport (the original fixed-width
+     "grow the page so the chart never moves" trick was what squeezed the chart on
+     mid-size screens). The max-width transition animates the LIST view's grow and
+     the view→view width change.
+       --tl-detail-gap is the breathing room between content and the info tab's
+     border; --tl-detail-w is the tab's (screen-proportional) width, shared by the
+     tab's flex-basis, its panel width, and the list view's open width. Both are
+     declared here on a common ancestor so `main`'s calc() and the descendant
+     .tl-detail can read them. */
+  main:has(.view-switch) {
+    --tl-detail-gap: 1.25rem;
+    --tl-detail-w: clamp(280px, 26vw, 360px);
+    transition: max-width 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  /* Timeline: ONE fluid width for both states. Closed, the chart fills it; open,
+     the chart gives part of it back to the tab (see .tl-content / .tl-detail), so
+     the chart reflows narrower instead of the page growing or the chart being
+     squeezed past its content. */
+  main:has(.view-timeline.active) { max-width: min(1360px, 94vw); }
+  /* List: the list column is narrow, so rather than squeeze it we WIDEN `main`
+     to seat the tab beside it — capped at the viewport so it never overflows
+     (when it can't grow, the flex content reflows to fit). */
+  main:has(.view-list:not([hidden]) .tl-detail.open) {
+    max-width: min(calc(var(--max-width) + var(--tl-detail-w) + var(--tl-detail-gap)), 94vw);
+  }
   /* Always reserve the page scrollbar gutter so widths don't jump on scroll. */
   html:has(.view-timeline.active) { scrollbar-gutter: stable; }
   html:has(.view-list:not([hidden])) { scrollbar-gutter: stable; }
+
+  /* ===== PHONE: info-tab OVERLAY =========================================
+     A side panel can't share a narrow phone screen with the content, so below
+     this breakpoint the info tab floats OVER everything as a full-screen overlay
+     (see the scoped styles) instead of pushing. We must not widen `main` for it,
+     and we lock the page behind it. (The page also defaults to the list view at
+     this width — see the inline + module scripts.) */
+  @media (max-width: 640px) {
+    main:has(.view-list:not([hidden]) .tl-detail.open) { max-width: var(--max-width); }
+    /* Lock scroll behind the panel, and drop the reserved gutter (no scrollbar
+       while locked) so the fixed panel's `right: 0` reaches the true edge. */
+    html:has(.tl-detail.open) { overflow: hidden; scrollbar-gutter: auto; }
+  }
 
   /* Pre-hydration: the inline script at the top of the page sets these on <html>
      from the URL hash BEFORE the view markup is parsed, so a reload on the list
@@ -1238,7 +1270,8 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      you scroll down the gap eases from the full header height to a tighter
      half-gap and holds there. Falls back to 1rem before/without JS. */
   .tl-detail {
-    --tl-detail-w: 360px;
+    /* --tl-detail-w is inherited from `main` (declared there so main's calc()
+       can read it too); it's screen-proportional, so the chart/tab split scales. */
     flex: 0 0 0; overflow: hidden; margin-left: 0;
     position: sticky; top: calc(var(--tl-detail-top, 1rem) / 2); align-self: flex-start;
     max-height: calc(100vh - var(--tl-detail-top, 1rem) / 2 - 1rem);
@@ -1337,6 +1370,52 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     border: 1px solid var(--border); border-left: 3px solid var(--cat);
   }
   .undated-detail { color: var(--text-muted); }
+
+  /* ---- PHONE: info-tab OVERLAY ------------------------------------------- */
+  /* The dimming layer behind the overlay. Always present but inert (transparent,
+     click-through); the phone breakpoint below switches it on while a panel is
+     open. On wider screens the panel pushes instead, so this never shows. */
+  .tl-scrim {
+    position: fixed; inset: 0; z-index: 55;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  /* On phones the info tab can't sit beside the content, so it leaves the flex
+     flow and floats over everything as a full-screen sheet that slides in from
+     the right. `position: fixed` pulls it out of the layout (so .tl-content keeps
+     full width) and the slide is a transform so nothing reflows. Height is set
+     explicitly (100dvh) rather than via top/bottom: the panel is an abspos child
+     of the flex `.tl-layout`, whose inherited `align-self` would otherwise
+     collapse it to content height. The gutter is reclaimed while open (see
+     is:global) so `right: 0` meets the true viewport edge. Applies to BOTH views'
+     tabs, so the rules target `.tl-detail` directly. */
+  @media (max-width: 640px) {
+    .tl-detail {
+      position: fixed; top: 0; right: 0;
+      height: 100vh; height: 100dvh;
+      width: min(420px, 100vw);
+      margin-left: 0; max-height: none; z-index: 60;
+      background: var(--bg); border-left: 1px solid var(--border);
+      box-shadow: -6px 0 30px rgba(0, 0, 0, 0.22);
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .tl-detail.open { transform: translateX(0); margin-left: 0; }
+    .tl-detail-panel {
+      width: 100%; height: 100%; max-height: 100dvh;
+      padding: 1.25rem 1.25rem 1.5rem;
+    }
+    body:has(.tl-detail.open) .tl-scrim { opacity: 1; pointer-events: auto; }
+  }
+
+  /* Honour reduced-motion: drop the slide/fade (placed last so it wins inside
+     the overlay breakpoint too). */
+  @media (prefers-reduced-motion: reduce) {
+    .tl-detail,
+    .tl-scrim { transition: none; }
+  }
 </style>
 
 <script>
@@ -1370,13 +1449,23 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const labelOf: Record<string, string> = {};
     for (const c of cfg.categories) { colorOf[c.key] = c.color; labelOf[c.key] = c.label; }
     const order: Record<string, number> = cfg.typeOrder;
-    const now = Date.now();
     // Present items fill THROUGH the current month, so their exclusive end column
     // is the first of next month (absolute month index, matching item.*MonthNum).
     const nd = new Date();
     const nowMonthNum = nd.getFullYear() * 12 + nd.getMonth() + 1;
 
-    const activeIn = (it: Item, t: number, r: number) => it.start < r && (it.end ?? now) > t;
+    // Row membership uses absolute month indices (timezone-independent integers),
+    // NOT the baked-at-build `start`/`end` ms timestamps. Those instants are computed
+    // in the BUILD machine's timezone, but the year boundary below is recomputed in
+    // the VIEWER's timezone at runtime. When the two differ (e.g. CI builds in UTC,
+    // viewer in EST) a Jan-starting item's start instant lands just before the year
+    // boundary, so an ms compare wrongly put it as a far-right sliver in the prior
+    // year. Month indices match what pct() uses, keeping membership and position in
+    // lockstep. A year spans months [base, base+12); an item spans [start, end).
+    const activeIn = (it: Item, y: number) => {
+      const base = y * 12;
+      return it.startMonthNum < base + 12 && (it.endMonthNum ?? nowMonthNum) > base;
+    };
     // Bars snap to whole-month columns: a role present any day of a month fills that
     // whole column. Positions come from absolute month indices (not day-fractions),
     // so every edge lands exactly on a column boundary. `y` is the row's year.
@@ -1551,9 +1640,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         const body = row.querySelector('.tl-body') as HTMLElement;
         const bars = body.querySelector('.tl-bars') as HTMLElement;
         const y = parseInt(body.dataset.year!);
-        const t = new Date(y, 0, 1).getTime();
-        const r = new Date(y + 1, 0, 1).getTime();
-        let act = items.filter(it => activeIn(it, t, r));
+        let act = items.filter(it => activeIn(it, y));
         if (filter === 'main') act = act.filter(it => it.main);
         else if (filter !== 'all') act = act.filter(it => it.cats.includes(filter));
         bars.innerHTML = '';
@@ -1810,6 +1897,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     viewButtons.forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view!)));
     document.querySelector('.view-timeline .tl-detail-close')?.addEventListener('click', () => deselect());
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { deselect(); ldDeselect(); } });
+    // When the info tab floats as an overlay, tapping the dimmed scrim behind it
+    // closes whichever panel is open (harmless no-op when nothing is selected).
+    document.querySelector('.tl-scrim')?.addEventListener('click', () => { deselect(); ldDeselect(); });
 
     // Measure the gap above the info tab at rest — i.e. the page header (title +
     // view switch) that sits above .tl-layout — and expose it as --tl-detail-top.
@@ -1835,7 +1925,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const initial = location.hash.replace('#', '');
     const isFilter = buttons.some(b => b.dataset.filter === initial);
     setFilter(isFilter ? initial : 'all');
-    setView(initial === 'list' ? 'list' : 'timeline');
+    // Mirror the pre-hydration script: phones default to the list view unless the
+    // hash explicitly asks otherwise (#list, or a category filter ⇒ timeline).
+    const phone = window.matchMedia('(max-width: 640px)').matches;
+    const initialView = (initial === 'list' || (initial === '' && phone)) ? 'list' : 'timeline';
+    setView(initialView);
 
     // The view above now matches what the pre-hydration CSS already painted, so
     // drop `view-init` (after a frame, to be sure the initial state has painted)
