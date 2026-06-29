@@ -493,17 +493,16 @@ const { Content: Intro } = await render(introEntry);
       margin-bottom: 0;
     }
 
-    /* Fill the column so the image is the same width as the text blocks beside
-       it. aspect-ratio keeps the circle square; the rectangle keeps its natural
-       portrait ratio. */
+    /* Image sits at 75% of the column width. aspect-ratio keeps the circle
+       square; the rectangle keeps its natural portrait ratio. */
     .profile-img {
-      width: 100%;
+      width: 75%;
       height: auto;
       aspect-ratio: 1;
     }
 
     .profile-img.profile-rect {
-      width: 100%;
+      width: 75%;
       aspect-ratio: auto;
     }
   }
