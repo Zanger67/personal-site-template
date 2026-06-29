@@ -178,8 +178,8 @@ const { Content: Intro } = await render(introEntry);
                 <div class="edu-degree">{ed.degree}</div>
                 <div class="edu-school">
                   {ed.url
-                    ? <a href={ed.url} target="_blank" rel="noopener noreferrer">{ed.institution}</a>
-                    : ed.institution}
+                    ? <a href={ed.url} target="_blank" rel="noopener noreferrer">{ed.institutionShort ?? ed.institution}</a>
+                    : ed.institutionShort ?? ed.institution}
                 </div>
                 {ed.honors && <div class="edu-honors">{ed.honors}</div>}
               </div>
