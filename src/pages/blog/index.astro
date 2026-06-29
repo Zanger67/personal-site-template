@@ -1,7 +1,10 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { isRouteEnabled } from '@config/site';
 import { getCollection } from 'astro:content';
 import { getReadingTime } from '../../utils/reading-time';
+
+if (!isRouteEnabled('blog')) return Astro.rewrite('/404');
 
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 const posts = (await getCollection('blog'))

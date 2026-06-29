@@ -2,8 +2,11 @@
 import { getCollection, render } from 'astro:content';
 import BlogPost from '../../layouts/BlogPost.astro';
 import { getReadingTime } from '../../utils/reading-time';
+import { isRouteEnabled } from '@config/site';
 
 export async function getStaticPaths() {
+  // When the blog route is disabled, build no post pages at all.
+  if (!isRouteEnabled('blog')) return [];
   const posts = await getCollection('blog');
   return posts.map(post => ({
     params: { slug: post.id },
@@ -16,6 +19,6 @@ const { Content } = await render(post);
 const readingTime = getReadingTime(post.body!);
 ---
 
-<BlogPost title={post.data.title} date={post.data.date} description={post.data.description} readingTime={readingTime}>
+<BlogPost title={post.data.title} date={post.data.date} description={post.data.description} readingTime={readingTime} urls={post.data.urls}>
   <Content />
 </BlogPost>

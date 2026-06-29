@@ -1,6 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { isRouteEnabled } from '@config/site';
 import contactsData from '../data/contacts.json';
+
+if (!isRouteEnabled('contact')) return Astro.rewrite('/404');
 
 interface SubLink {
   label?: string;

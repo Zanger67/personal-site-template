@@ -1,6 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { isRouteEnabled } from '@config/site';
 import funFacts from '../data/fun-facts.json';
+
+if (!isRouteEnabled('funFacts')) return Astro.rewrite('/404');
 
 const { facts } = funFacts as { facts: string[] };
 ---

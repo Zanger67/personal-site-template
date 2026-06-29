@@ -1,19 +1,13 @@
 ---
-const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
-const navLinks = [
-  { href: `${base}/`, label: 'Home' },
-  { href: `${base}/projects`, label: 'Projects' },
-  { href: `${base}/publications`, label: 'Publications' },
-  { href: `${base}/experience`, label: 'Experience' },
-  { href: `${base}/blog`, label: 'Blog' },
-  { href: `${base}/contact`, label: 'Contact' },
-];
+import { navRoutes } from '@config/site';
 
-const miscLinks = [
-  { href: `${base}/map`, label: 'Map' },
-  { href: `${base}/fun-facts`, label: 'Fun Facts' },
-  { href: `${base}/favourites`, label: 'Favourite Internet Corners' },
-];
+const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
+const withBase = (href: string) => `${base}${href}`;
+
+// Nav links are derived from the visibility config (src/config/site.ts);
+// disabled routes are dropped automatically.
+const navLinks = navRoutes('main').map(r => ({ href: withBase(r.href), label: r.label }));
+const miscLinks = navRoutes('misc').map(r => ({ href: withBase(r.href), label: r.label }));
 
 const currentPath = Astro.url.pathname;
 

@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { isRouteEnabled } from '@config/site';
 import { getCollection } from 'astro:content';
 import affiliations from '../data/affiliations.json';
 import education from '../data/education.json';
@@ -8,6 +9,8 @@ import organizations from '../data/organizations.json';
 import awards from '../data/awards.json';
 import conferences from '../data/conferences.json';
 import misc from '../data/misc.json';
+
+if (!isRouteEnabled('experience')) return Astro.rewrite('/404');
 
 // ===========================================================================
 // This page hosts two views of the same career data, swapped via a selector

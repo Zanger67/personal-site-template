@@ -1,6 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { isRouteEnabled } from '@config/site';
 import publications from '../data/publications.json';
+
+if (!isRouteEnabled('publications')) return Astro.rewrite('/404');
 ---
 
 <BaseLayout title="Publications — Buzz" description="Selected publications and research.">

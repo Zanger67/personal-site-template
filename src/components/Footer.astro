@@ -1,18 +1,26 @@
 ---
+import { enabledFooterLinks } from '@config/site';
+
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
-const links = [
-  { href: 'https://github.com', label: 'GitHub' },
-  { href: 'https://linkedin.com', label: 'LinkedIn' },
-  { href: `${base}/contact`, label: 'Email' },
-  { href: `${base}/rss.xml`, label: 'RSS' },
-];
+
+// Footer links come from the visibility config (src/config/site.ts).
+// External links open in a new tab; internal ones get the base prefix.
+const links = enabledFooterLinks.map(l => ({
+  href: l.external ? l.href : `${base}${l.href}`,
+  label: l.label,
+  external: l.external,
+}));
 ---
 
 <footer class="site-footer">
   <div class="footer-inner">
     <ul>
       {links.map(link => (
-        <li><a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a></li>
+        <li>
+          {link.external
+            ? <a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>
+            : <a href={link.href}>{link.label}</a>}
+        </li>
       ))}
     </ul>
     <div class="footer-right">

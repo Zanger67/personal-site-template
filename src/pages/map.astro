@@ -1,6 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NorthAmericaMap from '../components/NorthAmericaMap.astro';
+import { isRouteEnabled } from '@config/site';
+
+if (!isRouteEnabled('map')) return Astro.rewrite('/404');
 ---
 
 <BaseLayout title="Map — Buzz">

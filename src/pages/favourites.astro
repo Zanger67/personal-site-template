@@ -1,6 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { isRouteEnabled } from '@config/site';
 import favourites from '../data/favourites.json';
+
+if (!isRouteEnabled('favourites')) return Astro.rewrite('/404');
 
 const { categories } = favourites as {
   categories: {

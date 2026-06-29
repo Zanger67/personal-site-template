@@ -1,7 +1,10 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ProjectCard from '../components/ProjectCard.astro';
+import { isRouteEnabled } from '@config/site';
 import { getCollection } from 'astro:content';
+
+if (!isRouteEnabled('projects')) return Astro.rewrite('/404');
 
 type ProjectEntry = { data: { endDate?: Date; startDate: Date } };
 function projectSort(a: ProjectEntry, b: ProjectEntry): number {
