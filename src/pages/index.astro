@@ -472,21 +472,34 @@ const { Content: Intro } = await render(introEntry);
       max-width: var(--max-width);
     }
 
+    /* Profile image + the three sidebar sections (education, affiliations,
+       languages) flow into two height-balanced columns instead of one
+       squished row, so the four items settle into roughly 2x2. column-fill
+       defaults to balance, which splits by content height (first half /
+       second half when heights are even); break-inside keeps each item
+       whole within a column. */
     .sidebar {
       width: 100%;
-      display: flex;
-      gap: 1.25rem;
-      align-items: flex-start;
+      columns: 2;
+      column-gap: 1.25rem;
     }
 
-    .profile-img {
-      width: 72px;
-      height: 72px;
+    .sidebar > * {
+      break-inside: avoid;
+      margin: 0 0 1.25rem;
+    }
+
+    .sidebar > *:last-child {
       margin-bottom: 0;
     }
 
+    .profile-img {
+      width: 100px;
+      height: 100px;
+    }
+
     .profile-img.profile-rect {
-      width: 96px;
+      width: 100px;
       height: auto;
     }
   }

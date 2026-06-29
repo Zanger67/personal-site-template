@@ -136,18 +136,25 @@ function alumnusLabel(a: Span): string {
   const yr = (a.start ?? a.end ?? '').slice(0, 4);
   return yr ? `Alumnus (${yr})` : 'Alumnus';
 }
-// The flat detail line for an involvement: its role label(s), else the alum tag.
+// The flat detail line for an involvement: its role label(s), or null. Alumnus
+// status is no longer surfaced here — a former-member window lives solely in the
+// bottom "Alumni" strip (see the `alumni` list and the list view's Alumni section).
 function involvementRoleLabel(org: Org): string | null {
   const names = (org.roles ?? []).map(r => r.role).filter(Boolean);
-  if (names.length) return names.join(', ');
-  if (org.alumnus) return alumnusLabel(org.alumnus);
-  return null;
+  return names.length ? names.join(', ') : null;
 }
 
 // List view split (auto-derived, displayTimeline-independent): an org with at
 // least one DATED role reads as "Leadership"; everything else is a plain
 // "Involvement". Membership/alumnus windows alone don't promote an org.
 const hasDatedRole = (org: Org): boolean => (org.roles ?? []).some(r => !!r.start);
+// An alumnus-only org — a former-member window but no role and no dated
+// membership — is shown SOLELY in the bottom "Alumni" strip, never as an empty
+// tree or a label-less involvement row. Orgs that also carry real roles/membership
+// keep their regular list entry AND appear in the Alumni strip (mirroring the
+// timeline, where their bars chart while an Alumni chip shows alongside).
+const isAlumnusOnly = (org: Org): boolean =>
+  !!org.alumnus && (org.roles ?? []).length === 0 && !org.membership?.start;
 
 // ---------------------------------------------------------------------------
 // LIST-VIEW INFO TAB dataset. The list view mirrors the timeline's click → info
@@ -174,9 +181,11 @@ const detailLinks = (ls: { label: string; url: string | null | undefined }[]): {
     .filter((l, i, arr) => arr.findIndex(x => x.url === l.url) === i);
 
 // Rows for an org's tree: its specific roles, then the blanket `membership` shown
-// at FULL (uncarved) span, then any `alumnus` tag — registering a detail per row.
-// `club` is the only thing that differs between the two callers: it picks the
-// category (clubs vs the affiliation's own `categories`).
+// at FULL (uncarved) span — registering a detail per row. An `alumnus` window is
+// NOT rendered here; former-member status surfaces only in the bottom "Alumni"
+// strip (timeline and list views alike). `club` is the only thing that differs
+// between the two callers: it picks the category (clubs vs the affiliation's own
+// `categories`).
 interface ListRole { id: number; role: string; start: string | null; end: string | null; url: string | null; }
 function buildRoleRows(org: Org, club: boolean): ListRole[] {
   const subtitleOf = (loc: string | null | undefined): string | null =>
@@ -202,16 +211,6 @@ function buildRoleRows(org: Org, club: boolean): ListRole[] {
     });
     rows.push({ id, role: 'Member', start: org.membership.start, end: org.membership.end, url: org.membership.url ?? null });
   }
-  if (org.alumnus) {
-    const id = pushDetail({
-      title: alumnusLabel(org.alumnus), type: catOf(),
-      dateLabel: dateRange(org.alumnus.start, org.alumnus.end) ?? alumnusLabel(org.alumnus),
-      subtitle: subtitleOf(null), description: org.alumnus.description ?? null,
-      links: detailLinks([{ label: 'Website', url: org.url }, ...extraLinks(org.urls)]),
-      entity: org.organization, relationGroups: org.relationGroups ?? [], main: !!org.main,
-    });
-    rows.push({ id, role: alumnusLabel(org.alumnus), start: org.alumnus.start, end: org.alumnus.end, url: null });
-  }
   return rows;
 }
 
@@ -221,7 +220,7 @@ const leaderListGroups = orgs.filter(hasDatedRole).map(o => ({
   location: o.location ?? null,
   roles: buildRoleRows(o, true),
 }));
-const involvementListItems = orgs.filter(o => !hasDatedRole(o)).map(o => ({
+const involvementListItems = orgs.filter(o => !hasDatedRole(o) && !isAlumnusOnly(o)).map(o => ({
   name: o.organization,
   url: o.url ?? null,
   role: involvementRoleLabel(o),
@@ -245,8 +244,11 @@ const affilGroup = (o: Org) => ({
   location: o.location ?? null,
   roles: buildRoleRows(o, false).sort((a, b) => roleRecency(b) - roleRecency(a)),
 });
-const currentAffilGroups = affilOrgs.filter(o => orgActive(o)).map(affilGroup);
-const pastAffilGroups = affilOrgs.filter(o => !orgActive(o)).map(affilGroup);
+// Alumnus-only affiliations drop out of Current/Past — they belong to the Alumni
+// strip alone (an alumnus-only org is never active, so this only trims Past).
+const listableAffilOrgs = affilOrgs.filter(o => !isAlumnusOnly(o));
+const currentAffilGroups = listableAffilOrgs.filter(o => orgActive(o)).map(affilGroup);
+const pastAffilGroups = listableAffilOrgs.filter(o => !orgActive(o)).map(affilGroup);
 
 // Award & conference list rows, each registering an info-tab detail (point events,
 // so the date is a single month; an entry with no date shows none).
@@ -929,6 +931,24 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         </ul>
       </>
     )}
+
+    {/* Alumni — former-member relationships, surfaced here as the same chip strip
+        the timeline shows at its foot (reusing `.undated`/`.undated-item`), rather
+        than as an alumnus row inside each org's tree. Holds every org with an
+        `alumnus` window, clubs and work affiliations alike. */}
+    {alumni.length > 0 && (
+      <div class="undated" data-group="alumni">
+        <span class="undated-label">Alumni</span>
+        <div class="undated-items">
+          {alumni.map(u => (
+            <span class="undated-item" data-category={u.category} data-main={String(u.main)} style={`--cat: ${CATEGORIES.find(c => c.key === u.category)!.color}`}>
+              {u.url ? <a href={u.url} target="_blank" rel="noopener noreferrer">{u.title}</a> : u.title}
+              {u.detail && <span class="undated-detail"> — {u.detail}</span>}
+            </span>
+          ))}
+        </div>
+      </div>
+    )}
       </div>
 
       {/* ===== INFO TAB for the list view — the same sliding panel as the
@@ -1394,33 +1414,39 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      On wider screens the panel pushes instead, so this never shows. */
   .tl-scrim {
     position: fixed; inset: 0; z-index: 55;
-    background: rgba(0, 0, 0, 0.45);
+    /* Light enough that the timeline strip beside the overlay still reads through it. */
+    background: rgba(0, 0, 0, 0.32);
     opacity: 0; pointer-events: none;
     transition: opacity 0.3s ease;
   }
 
   /* Below this width the info tab can't sit beside the content, so it leaves the
-     flex flow and floats over everything as a full-screen sheet that slides in
-     from the right. `position: fixed` pulls it out of the layout (so .tl-content
-     keeps full width) and the slide is a transform so nothing reflows. Height is
-     set explicitly (100dvh) rather than via top/bottom: the panel is an abspos
-     child of the flex `.tl-layout`, whose inherited `align-self` would otherwise
-     collapse it to content height. The gutter is reclaimed while open (see
-     is:global) so `right: 0` meets the true viewport edge. Applies to BOTH views'
-     tabs, so the rules target `.tl-detail` directly. */
+     flex flow and floats over it as a partial sheet that slides in from the right.
+     `position: fixed` pulls it out of the layout (so .tl-content keeps full width)
+     and the slide is a transform so nothing reflows. Height is set explicitly
+     (100dvh) rather than via top/bottom: the panel is an abspos child of the flex
+     `.tl-layout`, whose inherited `align-self` would otherwise collapse it to
+     content height. The gutter is reclaimed while open (see is:global) so `right:
+     0` meets the true viewport edge. Applies to BOTH views' tabs, so the rules
+     target `.tl-detail` directly. */
   @media (max-width: 830px) {
     .tl-detail {
       position: fixed; top: 0; right: 0;
       height: 100vh; height: 100dvh;
-      /* Never full-bleed: always leave a strip of the content showing on the left
-         (dimmed by the scrim) so it reads as an overlay and gives a tap target to
-         dismiss it. */
-      width: min(420px, 100vw - 2.5rem);
+      /* Cover ~3/4 and leave a clear strip of the timeline showing on the left, so
+         it reads as a slide-in overlay rather than a full-screen takeover. The
+         exposed strip doubles as a tap target — and the panel as a swipe target —
+         to dismiss it (see the scrim click + the drag handler in the script). */
+      width: min(420px, 75vw);
       margin-left: 0; max-height: none; z-index: 60;
       background: var(--bg); border-left: 1px solid var(--border);
       box-shadow: -6px 0 30px rgba(0, 0, 0, 0.22);
       transform: translateX(100%);
       transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      /* We own horizontal gestures here (swipe-to-close); the browser keeps
+         vertical panning so the panel body still scrolls. Without this, a rightward
+         swipe can be claimed for back-navigation and never reach our handler. */
+      touch-action: pan-y;
     }
     .tl-detail.open { transform: translateX(0); margin-left: 0; }
     .tl-detail-panel {
@@ -1737,9 +1763,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     }
 
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.tl-filter'));
-    const chips = Array.from(document.querySelectorAll<HTMLElement>('.undated-item'));
-    const bottomParaEls = Array.from(document.querySelectorAll<HTMLElement>('.undated-items'));
-    const bottomGroupEls = Array.from(document.querySelectorAll<HTMLElement>('.undated'));
+    // Category filtering is a timeline-only affair, so these scope to the timeline
+    // view. The list view reuses the same `.undated` chip strip for its Alumni
+    // section, but it has no filters — leaving those chips out keeps a timeline
+    // filter from hiding them (they'd stay hidden after a view switch otherwise).
+    const chips = Array.from(document.querySelectorAll<HTMLElement>('.view-timeline .undated-item'));
+    const bottomParaEls = Array.from(document.querySelectorAll<HTMLElement>('.view-timeline .undated-items'));
+    const bottomGroupEls = Array.from(document.querySelectorAll<HTMLElement>('.view-timeline .undated'));
 
     // --- list-view info tab -------------------------------------------------
     // The list view gets the SAME sliding panel as the timeline, opened by
@@ -1921,23 +1951,43 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     // showing beside it (the scrim) closes whichever panel is open (harmless
     // no-op when nothing is selected).
     document.querySelector('.tl-scrim')?.addEventListener('click', () => { deselect(); ldDeselect(); });
-    // …and swiping the overlay panel to the right dismisses it the same way. Only
-    // a clearly-horizontal rightward gesture counts, so vertical scrolling inside
-    // the panel is left untouched. (No-op on the wide push layout — there's no
-    // overlay to dismiss there.)
+    // …and the overlay panel can be dragged to the right to dismiss it: it tracks
+    // the finger during a clearly-horizontal drag (vertical moves stay scrolls),
+    // then on release either snaps shut (past a third of its width, or a small
+    // flick) or springs back open. Only runs in the overlay layout — on the wide
+    // push layout the tab is sticky, not a fixed sheet, so there's nothing to slide
+    // away. `touch-action: pan-y` on the panel (see CSS) stops the browser from
+    // claiming the horizontal gesture for back-navigation before we see it.
+    const overlayMQ = window.matchMedia('(max-width: 830px)');
     document.querySelectorAll<HTMLElement>('.tl-detail').forEach(panel => {
-      let sx = 0, sy = 0, tracking = false;
+      let sx = 0, sy = 0, w = 1, dragging = false, decided = false, horizontal = false;
       panel.addEventListener('touchstart', e => {
-        if (e.touches.length !== 1) { tracking = false; return; }
-        sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+        if (e.touches.length !== 1 || !overlayMQ.matches || !panel.classList.contains('open')) { dragging = false; return; }
+        sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+        w = panel.getBoundingClientRect().width || 1;
+        dragging = true; decided = false; horizontal = false;
+        panel.style.transition = 'none';          // move 1:1 with the finger while dragging
       }, { passive: true });
-      panel.addEventListener('touchend', e => {
-        if (!tracking) return;
-        tracking = false;
+      panel.addEventListener('touchmove', e => {
+        if (!dragging) return;
+        const dx = e.touches[0].clientX - sx, dy = e.touches[0].clientY - sy;
+        // Lock the axis once past a small deadzone: a mostly-vertical move is a
+        // scroll (leave the panel be); a mostly-horizontal one is a dismiss drag.
+        if (!decided) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; decided = true; horizontal = Math.abs(dx) > Math.abs(dy); }
+        if (horizontal) panel.style.transform = `translateX(${Math.max(0, dx)}px)`;   // rightward only
+      }, { passive: true });
+      const release = (e: TouchEvent) => {
+        if (!dragging) return;
+        dragging = false;
+        panel.style.transition = '';              // hand the snap animation back to CSS
+        panel.style.transform = '';
+        if (!horizontal) return;
         const t = e.changedTouches[0];
-        const dx = t.clientX - sx, dy = t.clientY - sy;
-        if (dx > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { deselect(); ldDeselect(); }
-      }, { passive: true });
+        const dx = t ? t.clientX - sx : 0;
+        if (dx > Math.min(80, w * 0.35)) { deselect(); ldDeselect(); }   // past threshold ⇒ close; else springs back
+      };
+      panel.addEventListener('touchend', release, { passive: true });
+      panel.addEventListener('touchcancel', release, { passive: true });
     });
 
     // Measure the gap above the info tab at rest — i.e. the page header (title +
