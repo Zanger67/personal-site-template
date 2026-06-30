@@ -18,6 +18,9 @@ const blog = defineCollection({
     date: z.coerce.date(),
     description: z.string(),
     draft: z.boolean().optional().default(false),
+    // Cross-cutting "main"/highlights flag — bubbles the post to the top of the
+    // Works tabs (same flag projects & publications use).
+    main: z.boolean().optional().default(false),
     // Extra links rendered as buttons in the post header.
     urls: z.array(urlEntry).optional().default([]),
   }),

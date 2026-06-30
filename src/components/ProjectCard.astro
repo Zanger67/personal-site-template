@@ -4,28 +4,49 @@ interface Props {
   description: string;
   startDate: Date;
   endDate?: Date;
+  /** Internal detail-page URL (already base-prefixed) — the title links here. */
+  href: string;
+  /** External live-site URL — rendered as a "Live ↗" chip when present. */
   url?: string;
+  /** External repo URL — rendered as a "Repo ↗" chip when present. */
+  repo?: string;
   tags?: string[];
+  /** `main`-flagged highlight — shows a "★ Featured" tag by the title. */
+  featured?: boolean;
 }
 
-const { title, description, startDate, endDate, url, tags = [] } = Astro.props;
+const { title, description, startDate, endDate, href, url, repo, tags = [], featured = false } = Astro.props;
 const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 const dateRange = endDate ? `${fmt(startDate)} – ${fmt(endDate)}` : `${fmt(startDate)} – Present`;
+const extLinks = [
+  url ? { label: 'Live', url } : null,
+  repo ? { label: 'Repo', url: repo } : null,
+].filter((l): l is { label: string; url: string } => !!l);
 ---
 
 <div class="project-card">
   <div class="project-header">
-    <h3>
-      {url ? <a href={url} target="_blank" rel="noopener noreferrer">{title}</a> : title}
-    </h3>
+    <div class="project-title">
+      <h3><a href={href}>{title}</a></h3>
+      {featured && <span class="featured-tag">★ Featured</span>}
+    </div>
     <span class="project-date">{dateRange}</span>
   </div>
   <p>{description}</p>
-  {tags.length > 0 && (
-    <div class="tags">
-      {tags.map(tag => <span class="tag">{tag}</span>)}
-    </div>
-  )}
+  <div class="meta-row">
+    {tags.length > 0 && (
+      <div class="tags">
+        {tags.map(tag => <span class="tag">{tag}</span>)}
+      </div>
+    )}
+    {extLinks.length > 0 && (
+      <div class="ext-links">
+        {extLinks.map(l => (
+          <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
+        ))}
+      </div>
+    )}
+  </div>
 </div>
 
 <style>
@@ -45,9 +66,36 @@ const dateRange = endDate ? `${fmt(startDate)} – ${fmt(endDate)}` : `${fmt(sta
     gap: 1rem;
   }
 
+  .project-title {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+    min-width: 0;
+  }
+
+  /* Mirrors the "★ Featured" tag in the Works recent-activity feed. */
+  .featured-tag {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #d4a017;
+    white-space: nowrap;
+  }
+
   h3 {
     font-size: 1.05rem;
     margin-bottom: 0.3rem;
+  }
+
+  h3 a {
+    text-decoration: none;
+    color: var(--text);
+  }
+
+  h3 a:hover {
+    color: var(--accent);
   }
 
   .project-date {
@@ -62,6 +110,13 @@ const dateRange = endDate ? `${fmt(startDate)} – ${fmt(endDate)}` : `${fmt(sta
     margin-bottom: 0.5rem;
   }
 
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+  }
+
   .tags {
     display: flex;
     flex-wrap: wrap;
@@ -74,5 +129,22 @@ const dateRange = endDate ? `${fmt(startDate)} – ${fmt(endDate)}` : `${fmt(sta
     background: var(--accent-light);
     padding: 0.15rem 0.5rem;
     border-radius: 3px;
+  }
+
+  .ext-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+
+  .ext-links a {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+
+  .ext-links a:hover {
+    color: var(--accent);
   }
 </style>

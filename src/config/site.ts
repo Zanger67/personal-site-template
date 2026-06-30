@@ -30,11 +30,15 @@ export interface RouteConfig {
 
 export const routes = [
   { id: 'home',         label: 'Home',         href: '/',             nav: 'main', enabled: true },
-  { id: 'projects',     label: 'Projects',     href: '/projects',     nav: 'main', enabled: true },
-  { id: 'publications', label: 'Publications', href: '/publications', nav: 'main', enabled: true },
+  { id: 'works',        label: 'Works',        href: '/works',        nav: 'main', enabled: true },
   { id: 'experience',   label: 'Experience',   href: '/experience',   nav: 'main', enabled: true },
-  { id: 'blog',         label: 'Blog',         href: '/blog',         nav: 'main', enabled: true },
   { id: 'contact',      label: 'Contact',      href: '/contact',      nav: 'main', enabled: true },
+  // The three /works categories. Kept as routes so each can be independently
+  // enabled/disabled (also gates the homepage sections, RSS feed, and blog
+  // post pages) — but nav:'none' since they live as tabs under Works now.
+  { id: 'projects',     label: 'Projects',     href: '/projects',     nav: 'none', enabled: true },
+  { id: 'publications', label: 'Publications', href: '/publications', nav: 'none', enabled: true },
+  { id: 'blog',         label: 'Blog',         href: '/blog',         nav: 'none', enabled: true },
   { id: 'map',          label: 'Map',          href: '/map',          nav: 'misc', enabled: true },
   { id: 'funFacts',     label: 'Fun Facts',    href: '/fun-facts',    nav: 'misc', enabled: true },
   { id: 'favourites',   label: 'Favourite Internet Corners', href: '/favourites', nav: 'misc', enabled: true },

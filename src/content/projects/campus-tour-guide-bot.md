@@ -1,0 +1,19 @@
+---
+title: "Campus Tour Guide Bot"
+description: "Built an automated tour guide that walks prospective students through Tech's highlights, from the Campanile to Klaus."
+startDate: 2024-05-01
+endDate: 2024-09-01
+tags: ["Outreach", "Automation"]
+order: 5
+---
+
+## Overview
+
+Prospective students don't always have a guide handy, so we built one that
+never gets tired of walking from the Campanile to Klaus.
+
+### Features
+
+- Turn-by-turn campus routing with fun-fact stops.
+- Voice prompts for hands-free touring.
+- A "best photo spots" mode for the parents.

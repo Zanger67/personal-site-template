@@ -13,6 +13,11 @@ import profile from '../data/profile.json';
 
 if (!isRouteEnabled('experience')) return Astro.rewrite('/404');
 
+const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
+// Project detail pages only exist when the projects route is enabled; gate the
+// drawer's "Details" link on it so it never points at a 404.
+const projectsEnabled = isRouteEnabled('projects');
+
 // ===========================================================================
 // This page hosts two views of the same career data, swapped via a selector
 // at the top. The "Timeline" view (default) is a Gantt-style chart; the
@@ -550,7 +555,10 @@ const items: Item[] = [
   ...projects.map(p => mkItem({
     title: p.data.title, type: 'projects', start: p.data.startDate, end: p.data.endDate, entity: p.data.title,
     description: p.data.description, affiliations: p.data.affiliations || [],
-    links: [{ label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }, ...extraLinks(p.data.urls)], main: p.data.main,
+    links: [
+      ...(projectsEnabled ? [{ label: 'Details', url: `${base}/projects/${p.id}` }] : []),
+      { label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }, ...extraLinks(p.data.urls),
+    ], main: p.data.main,
     relationGroups: p.data.relationGroups,
   })),
   // "Misc." — a catch-all for conferences attended and any other one-off timeline

@@ -87,15 +87,12 @@ const { Content: Intro } = await render(introEntry);
         <section>
           <div class="section-header">
             <h2>Projects</h2>
-            <a href={`${base}/projects`}>View all &rarr;</a>
+            <a href={`${base}/works#projects`}>View all &rarr;</a>
           </div>
           <ul class="link-list">
             {projects.map(project => (
               <li>
-                <a href={project.data.url || project.data.repo || '#'}
-                   target="_blank" rel="noopener noreferrer">
-                  {project.data.title}
-                </a>
+                <a href={`${base}/projects/${project.id}`}>{project.data.title}</a>
                 <span class="muted"> &mdash; {project.data.description}</span>
               </li>
             ))}
@@ -107,7 +104,7 @@ const { Content: Intro } = await render(introEntry);
         <section>
           <div class="section-header">
             <h2>Publications</h2>
-            <a href={`${base}/publications`}>View all &rarr;</a>
+            <a href={`${base}/works#publications`}>View all &rarr;</a>
           </div>
           <ul class="link-list">
             {publications.slice(0, 3).map(pub => (
@@ -126,7 +123,7 @@ const { Content: Intro } = await render(introEntry);
         <section>
           <div class="section-header">
             <h2>Recent Posts</h2>
-            <a href={`${base}/blog`}>View all &rarr;</a>
+            <a href={`${base}/works#blog`}>View all &rarr;</a>
           </div>
           <ul class="link-list">
             {posts.map(post => (

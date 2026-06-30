@@ -1,0 +1,503 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ProjectCard from '../components/ProjectCard.astro';
+import { isRouteEnabled } from '@config/site';
+import { getCollection } from 'astro:content';
+import { getReadingTime } from '../utils/reading-time';
+import profile from '../data/profile.json';
+import publications from '../data/publications.json';
+
+if (!isRouteEnabled('works')) return Astro.rewrite('/404');
+
+const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
+
+// Unified ordering for EVERY tab (including the merged "Recent activity" feed):
+//   1. `main`-flagged items first  2. then by start date, newest first.
+// For ranges / multi-date items the START date is the sort key.
+const byMainThenDate = (
+  a: { main: boolean; sortDate: number },
+  b: { main: boolean; sortDate: number },
+) => (Number(b.main) - Number(a.main)) || (b.sortDate - a.sortDate);
+
+const fmtMonthYear = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+const fmtFullDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+// Kind → experience-timeline category colour, so the feed is colour-keyed to the
+// timeline (see CATEGORIES in experience.astro). Blog has no timeline category,
+// so it borrows Misc by design.
+const KIND_CAT: Record<'Project' | 'Publication' | 'Blog', string> = {
+  Project: '#e0883c',     // timeline 'projects'
+  Publication: '#a06fd6', // timeline 'research'
+  Blog: '#3aa6ad',        // timeline 'misc'
+};
+
+interface Publication {
+  title: string;
+  authors: string[];
+  venue: string;
+  date: string;
+  url?: string | null;
+  main?: boolean;
+}
+const pubData = publications as Publication[];
+
+// Each category is gathered only when its route is enabled, then sorted with
+// the shared comparator. An empty list (disabled OR no items) hides its tab.
+const projects = (isRouteEnabled('projects') ? await getCollection('projects') : [])
+  .map(entry => ({ main: entry.data.main, sortDate: entry.data.startDate.valueOf(), entry }))
+  .sort(byMainThenDate);
+
+const pubs = (isRouteEnabled('publications') ? pubData : [])
+  .map(pub => ({ main: pub.main === true, sortDate: new Date(pub.date).valueOf(), pub }))
+  .sort(byMainThenDate);
+
+const posts = (isRouteEnabled('blog') ? (await getCollection('blog')).filter(p => !p.data.draft) : [])
+  .map(entry => ({ main: entry.data.main, sortDate: entry.data.date.valueOf(), entry, readingTime: getReadingTime(entry.body!) }))
+  .sort(byMainThenDate);
+
+// "Recent activity" — every enabled category merged into one feed, same sort.
+const activity = [
+  ...projects.map(p => ({
+    kind: 'Project' as const,
+    main: p.main,
+    sortDate: p.sortDate,
+    title: p.entry.data.title,
+    href: `${base}/projects/${p.entry.id}`,
+    external: false,
+    dateLabel: p.entry.data.endDate
+      ? `${fmtMonthYear(p.entry.data.startDate)} – ${fmtMonthYear(p.entry.data.endDate)}`
+      : `${fmtMonthYear(p.entry.data.startDate)} – Present`,
+    blurb: p.entry.data.description,
+  })),
+  ...pubs.map(p => ({
+    kind: 'Publication' as const,
+    main: p.main,
+    sortDate: p.sortDate,
+    title: p.pub.title,
+    href: p.pub.url || null,
+    external: true,
+    dateLabel: String(p.pub.date),
+    blurb: `${p.pub.authors.join(', ')} · ${p.pub.venue}`,
+  })),
+  ...posts.map(p => ({
+    kind: 'Blog' as const,
+    main: p.main,
+    sortDate: p.sortDate,
+    title: p.entry.data.title,
+    href: `${base}/blog/${p.entry.id}`,
+    external: false,
+    dateLabel: `${fmtFullDate(p.entry.data.date)} · ${p.readingTime}`,
+    blurb: p.entry.data.description,
+  })),
+].sort(byMainThenDate);
+
+// Tab order: Recent activity, Publications, Projects, Blog posts. A tab is
+// listed only when it has something to show.
+const tabs = [
+  activity.length > 0 && { id: 'recent', label: 'Recent activity' },
+  pubs.length > 0 && { id: 'publications', label: 'Publications' },
+  projects.length > 0 && { id: 'projects', label: 'Projects' },
+  posts.length > 0 && { id: 'blog', label: 'Blog posts' },
+].filter(Boolean) as { id: string; label: string }[];
+
+const activeId = tabs[0]?.id ?? null;
+---
+
+<BaseLayout title="Works" description={profile.pageMeta.works}>
+  <h1>Works</h1>
+  <p class="works-intro">{profile.pageMeta.works}</p>
+
+  {tabs.length === 0 && <p class="empty">Nothing here yet. Check back soon.</p>}
+
+  {tabs.length > 0 && (
+    <div class="works">
+      <div class="works-tablist" role="tablist" aria-label="Works categories">
+        {tabs.map(t => (
+          <button
+            class="works-tab"
+            role="tab"
+            id={`tab-${t.id}`}
+            data-tab={t.id}
+            aria-controls={`panel-${t.id}`}
+            aria-selected={t.id === activeId ? 'true' : 'false'}
+            tabindex={t.id === activeId ? 0 : -1}
+          >{t.label}</button>
+        ))}
+      </div>
+
+      {activity.length > 0 && (
+        <section class="works-panel" id="panel-recent" role="tabpanel" aria-labelledby="tab-recent" hidden={activeId !== 'recent'}>
+          <h2 class="panel-heading">Recent activity</h2>
+          <ul class="activity-list">
+            {activity.map(item => (
+              <li class="activity-item">
+                <div class="activity-meta">
+                  <span class="activity-kind" style={`--cat: ${KIND_CAT[item.kind]}`}>{item.kind}</span>
+                  {item.main && <span class="activity-featured" title="Featured — flagged as a highlight">★ Featured</span>}
+                </div>
+                <div class="activity-row">
+                  {item.href
+                    ? <a class="activity-title" href={item.href} {...(item.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{item.title}</a>
+                    : <span class="activity-title">{item.title}</span>}
+                  <span class="activity-date">{item.dateLabel}</span>
+                </div>
+                {item.blurb && <p class="activity-blurb">{item.blurb}</p>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {pubs.length > 0 && (
+        <section class="works-panel" id="panel-publications" role="tabpanel" aria-labelledby="tab-publications" hidden={activeId !== 'publications'}>
+          <h2 class="panel-heading">Publications</h2>
+          <ol class="pub-list">
+            {pubs.map(({ pub, main }) => (
+              <li>
+                <span class="pub-title">
+                  {pub.url
+                    ? <a href={pub.url} target="_blank" rel="noopener noreferrer">{pub.title}</a>
+                    : pub.title}
+                  {main && <span class="featured-tag">★ Featured</span>}
+                </span>
+                <span class="pub-authors">{pub.authors.join(', ')}</span>
+                <span class="pub-venue">{pub.venue}, {pub.date}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {projects.length > 0 && (
+        <section class="works-panel" id="panel-projects" role="tabpanel" aria-labelledby="tab-projects" hidden={activeId !== 'projects'}>
+          <h2 class="panel-heading">Projects</h2>
+          {projects.map(({ entry, main }) => (
+            <ProjectCard
+              title={entry.data.title}
+              description={entry.data.description}
+              startDate={entry.data.startDate}
+              endDate={entry.data.endDate}
+              href={`${base}/projects/${entry.id}`}
+              url={entry.data.url}
+              repo={entry.data.repo}
+              tags={entry.data.tags}
+              featured={main}
+            />
+          ))}
+        </section>
+      )}
+
+      {posts.length > 0 && (
+        <section class="works-panel" id="panel-blog" role="tabpanel" aria-labelledby="tab-blog" hidden={activeId !== 'blog'}>
+          <h2 class="panel-heading">Blog posts</h2>
+          <ul class="post-list">
+            {posts.map(({ entry, readingTime, main }) => (
+              <li>
+                <a href={`${base}/blog/${entry.id}`}>
+                  <span class="post-title">{entry.data.title}{main && <span class="featured-tag">★ Featured</span>}</span>
+                  <span class="post-date">
+                    {entry.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {' – '}
+                    {readingTime}
+                  </span>
+                </a>
+                <p class="post-desc">{entry.data.description}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  )}
+
+  {/* No-JS fallback: show every panel stacked with its heading, hide the
+      (non-functional) tab bar. Kept inside <noscript> via is:inline so Astro
+      doesn't hoist it into <head> where it would always apply. */}
+  <noscript>
+    <style is:inline>
+      .works-tablist { display: none !important; }
+      .works-panel[hidden] { display: block !important; }
+      .panel-heading { display: block !important; }
+    </style>
+  </noscript>
+</BaseLayout>
+
+<script>
+  const works = document.querySelector<HTMLElement>('.works');
+  if (works) {
+    const tabs = Array.from(works.querySelectorAll<HTMLElement>('[role="tab"]'));
+    const panels = Array.from(works.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+    const ids = tabs.map(t => t.dataset.tab!);
+
+    const activate = (rawId: string, setFocus = false) => {
+      const id = ids.includes(rawId) ? rawId : ids[0];
+      tabs.forEach(t => {
+        const selected = t.dataset.tab === id;
+        t.setAttribute('aria-selected', selected ? 'true' : 'false');
+        t.tabIndex = selected ? 0 : -1;
+        if (selected && setFocus) t.focus();
+      });
+      panels.forEach(p => { p.hidden = p.id !== `panel-${id}`; });
+    };
+
+    tabs.forEach(t => {
+      t.addEventListener('click', () => {
+        const id = t.dataset.tab!;
+        activate(id);
+        history.replaceState(null, '', `#${id}`);
+      });
+    });
+
+    works.querySelector('.works-tablist')!.addEventListener('keydown', (event) => {
+      const e = event as KeyboardEvent;
+      const current = (document.activeElement as HTMLElement | null)?.dataset?.tab;
+      const i = current ? ids.indexOf(current) : -1;
+      if (i === -1) return;
+      let n = i;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') n = (i + 1) % ids.length;
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') n = (i - 1 + ids.length) % ids.length;
+      else if (e.key === 'Home') n = 0;
+      else if (e.key === 'End') n = ids.length - 1;
+      else return;
+      e.preventDefault();
+      activate(ids[n], true);
+      history.replaceState(null, '', `#${ids[n]}`);
+    });
+
+    // Honor deep links (e.g. /works#projects, redirected from /projects) and
+    // back/forward navigation between tabs.
+    window.addEventListener('hashchange', () => {
+      const id = location.hash.replace(/^#/, '');
+      if (ids.includes(id)) activate(id);
+    });
+    const initial = location.hash.replace(/^#/, '');
+    if (ids.includes(initial)) activate(initial);
+  }
+</script>
+
+<style>
+  .works-intro {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .empty {
+    color: var(--text-muted);
+  }
+
+  /* ── Tab bar ───────────────────────────────────────────────────────────── */
+  .works-tablist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+
+  .works-tab {
+    background: none;
+    border: none;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0 0 0.5rem;
+    margin-bottom: -1px;
+    border-bottom: 2px solid transparent;
+  }
+
+  .works-tab:hover {
+    color: var(--accent);
+  }
+
+  .works-tab[aria-selected="true"] {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+
+  /* In JS mode the tab IS the heading, so the in-panel heading is hidden.
+     The <noscript> block above re-shows it when scripting is off. */
+  .panel-heading {
+    display: none;
+  }
+
+  .works-panel[hidden] {
+    display: none;
+  }
+
+  /* ── Recent activity feed ──────────────────────────────────────────────── */
+  .activity-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .activity-item {
+    padding: 0.9rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .activity-item:last-child {
+    border-bottom: none;
+  }
+
+  /* Kind label + featured tag on their own line above the title, so every
+     title left-aligns to the item edge. */
+  .activity-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.3rem;
+  }
+
+  /* Colour-keyed to the experience timeline via the inline --cat variable
+     (see KIND_CAT); the swatch mirrors the timeline legend. */
+  .activity-kind {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cat);
+  }
+
+  .activity-kind::before {
+    content: '';
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 2px;
+    background: var(--cat);
+  }
+
+  /* Indicator for items that floated to the top because they're flagged `main`. */
+  .activity-featured {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #d4a017;
+    white-space: nowrap;
+  }
+
+  /* Same "★ Featured" tag, inline after a title in the Publications/Blog tabs. */
+  .featured-tag {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #d4a017;
+    white-space: nowrap;
+    margin-left: 0.5rem;
+  }
+
+  .activity-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+
+  .activity-title {
+    font-weight: 500;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  a.activity-title:hover {
+    color: var(--accent);
+  }
+
+  .activity-date {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .activity-blurb {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin: 0.3rem 0 0;
+  }
+
+  /* ── Publications list (mirrors the old /publications page) ─────────────── */
+  .pub-list {
+    list-style: none;
+    padding: 0;
+    counter-reset: pub;
+  }
+
+  .pub-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pub-list li:last-child {
+    border-bottom: none;
+  }
+
+  .pub-title {
+    font-weight: 500;
+  }
+
+  .pub-authors {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+
+  .pub-venue {
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--text-muted);
+  }
+
+  /* ── Blog list (mirrors the old /blog index) ───────────────────────────── */
+  .post-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .post-list li {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .post-list li:last-child {
+    border-bottom: none;
+  }
+
+  .post-list a {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    text-decoration: none;
+  }
+
+  .post-title {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .post-list a:hover .post-title {
+    color: var(--accent);
+  }
+
+  .post-date {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .post-desc {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 0.3rem;
+    margin-bottom: 0;
+  }
+</style>

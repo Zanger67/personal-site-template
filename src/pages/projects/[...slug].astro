@@ -1,0 +1,31 @@
+---
+import { getCollection, render } from 'astro:content';
+import ProjectPost from '../../layouts/ProjectPost.astro';
+import { isRouteEnabled } from '@config/site';
+
+export async function getStaticPaths() {
+  // When the projects route is disabled, build no detail pages at all.
+  if (!isRouteEnabled('projects')) return [];
+  const projects = await getCollection('projects');
+  return projects.map(project => ({
+    params: { slug: project.id },
+    props: { project },
+  }));
+}
+
+const { project } = Astro.props;
+const { Content } = await render(project);
+---
+
+<ProjectPost
+  title={project.data.title}
+  description={project.data.description}
+  startDate={project.data.startDate}
+  endDate={project.data.endDate}
+  tags={project.data.tags}
+  url={project.data.url}
+  repo={project.data.repo}
+  urls={project.data.urls}
+>
+  <Content />
+</ProjectPost>

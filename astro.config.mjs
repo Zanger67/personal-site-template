@@ -14,7 +14,13 @@ export default defineConfig({
   },
   // The Timeline now lives as a view inside /experience; keep the old URL alive.
   // (redirect destinations are not base-prefixed automatically, so do it here.)
+  // Projects/Publications/Blog listings merged into the tabbed /works page —
+  // forward the old standalone URLs to the matching tab. (Detail pages like
+  // /projects/<slug> and /blog/<slug> are unaffected.)
   redirects: {
     '/timeline': `${base}/experience`,
+    '/projects': `${base}/works#projects`,
+    '/publications': `${base}/works#publications`,
+    '/blog': `${base}/works#blog`,
   },
 });

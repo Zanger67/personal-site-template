@@ -14,3 +14,16 @@ urls:
 pinned: true
 order: 2
 ---
+
+## Overview
+
+How loud is *too* loud? We instrumented the student section to find out,
+logging crowd energy across all 24 home games.
+
+### Approach
+
+- Sampled ambient sound and motion at fixed intervals.
+- Correlated spikes with on-field events and push-up counts.
+- Surfaced the results on a live dashboard for the spirit squad.
+
+The full writeup and dashboard are linked above.
