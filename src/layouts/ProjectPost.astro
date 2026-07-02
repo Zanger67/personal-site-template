@@ -1,11 +1,13 @@
 ---
 import BaseLayout from './BaseLayout.astro';
+import BackToWorks from '../components/BackToWorks.astro';
+import { hostLabel, type UrlEntry } from '../utils/links';
 
-// The "urls" listed format (same as the timeline's info-tab buttons): each entry
-// renders as a labelled link in the project header. A button shows its `title`;
-// with none it falls back to the URL's host label (e.g. "github.com" → "github").
-// The primary `url` (label "Live") and `repo` (label "Repo") lead the row.
-interface UrlEntry { title?: string | null; url?: string | null; }
+// The "urls"/"features" listed formats (same as the timeline's info-tab buttons):
+// each entry renders as a labelled link in the project header. A button shows its
+// `title`; with none it falls back to the URL's host label (see ../utils/links).
+// The primary `url` (label "Live") and `repo` (label "Repo") lead the row, then
+// the `urls` list, then the `features` ("featured in") list.
 interface Props {
   title: string;
   description: string;
@@ -15,20 +17,10 @@ interface Props {
   url?: string;
   repo?: string;
   urls?: UrlEntry[];
+  features?: UrlEntry[];
 }
 
-function hostLabel(raw: string): string {
-  try {
-    const host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`)
-      .hostname.replace(/^www\./, '');
-    const parts = host.split('.').filter(Boolean);
-    return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || raw);
-  } catch {
-    return raw;
-  }
-}
-
-const { title, description, startDate, endDate, tags = [], url, repo, urls = [] } = Astro.props;
+const { title, description, startDate, endDate, tags = [], url, repo, urls = [], features = [] } = Astro.props;
 
 const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 const dateRange = endDate ? `${fmt(startDate)} – ${fmt(endDate)}` : `${fmt(startDate)} – Present`;
@@ -37,12 +29,14 @@ const links = [
   url ? { label: 'Live', url } : null,
   repo ? { label: 'Repo', url: repo } : null,
   ...(urls ?? []),
+  ...(features ?? []),
 ]
   .filter((u): u is { label?: string; title?: string | null; url: string } => !!u && !!u.url)
   .map(u => ({ label: ('label' in u && u.label) || (u.title && u.title.trim()) || hostLabel(u.url), url: u.url }));
 ---
 
 <BaseLayout title={title} description={description}>
+  <BackToWorks />
   <article class="prose">
     <header>
       <h1>{title}</h1>
@@ -71,7 +65,7 @@ const links = [
     font-size: 0.9rem;
   }
 
-  /* Mirrors ProjectCard's tag chips. */
+  /* Mirrors WorkCard's tag chips. */
   .tags {
     display: flex;
     flex-wrap: wrap;

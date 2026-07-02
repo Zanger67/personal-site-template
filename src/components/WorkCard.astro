@@ -1,0 +1,238 @@
+---
+// The single, standardized card used by every tab of the Works page
+// (Recent activity, Publications, Projects, Blog). One layout so the header
+// font/size/style, the date, the tags row, and the Live/Repo/link chips are
+// identical everywhere — a tab only differs in the data it feeds in.
+//
+// Featured placement:
+//   • Recent activity passes `kind` ("Project"/"Publication"/"Blog"), so the
+//     "★ Featured" tag rides the top type-row alongside the kind label.
+//   • Every other tab omits `kind`, so "★ Featured" sits in the header row
+//     next to the title (the tab itself already says what the item is).
+interface WorkLink {
+  label: string;
+  url: string;
+}
+
+interface Props {
+  title: string;
+  /** Title link. Internal URLs are already base-prefixed; external ones open in a new tab. */
+  href?: string | null;
+  /** Open `href` in a new tab (external links). */
+  external?: boolean;
+  /** Date range / date / date + reading-time — rendered at the end of the header row. */
+  dateLabel?: string | null;
+  /** Muted blurb under the header (description / authors). */
+  description?: string | null;
+  /** Optional italic line between header and description (e.g. a publication venue). */
+  subtitle?: string | null;
+  tags?: string[];
+  /** Live / Repo / extra links — rendered as chips; simply omitted when empty. */
+  links?: WorkLink[];
+  /** `main`-flagged highlight — shows a "★ Featured" tag. */
+  featured?: boolean;
+  /** Recent-activity type label ("Project"/"Publication"/"Blog"). Omit on single-type tabs. */
+  kind?: string | null;
+  /** Colour for the kind swatch (experience-timeline category colour). */
+  kindColor?: string | null;
+}
+
+const {
+  title,
+  href = null,
+  external = false,
+  dateLabel = null,
+  description = null,
+  subtitle = null,
+  tags = [],
+  links = [],
+  featured = false,
+  kind = null,
+  kindColor = null,
+} = Astro.props;
+
+const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+---
+
+<article class="work-card">
+  {kind && (
+    <div class="work-typerow">
+      <span class="work-kind" style={kindColor ? `--cat: ${kindColor}` : undefined}>{kind}</span>
+      {featured && <span class="featured-tag" title="Featured — flagged as a highlight">★ Featured</span>}
+    </div>
+  )}
+
+  <div class="work-header">
+    <div class="work-title-wrap">
+      <h3 class="work-title">
+        {href
+          ? <a href={href} {...extAttrs}>{title}</a>
+          : title}
+      </h3>
+      {!kind && featured && <span class="featured-tag" title="Featured — flagged as a highlight">★ Featured</span>}
+    </div>
+    {dateLabel && <span class="work-date">{dateLabel}</span>}
+  </div>
+
+  {subtitle && <p class="work-subtitle">{subtitle}</p>}
+  {description && <p class="work-desc">{description}</p>}
+
+  {(tags.length > 0 || links.length > 0) && (
+    <div class="work-metarow">
+      {tags.length > 0 && (
+        <div class="tags">
+          {tags.map(tag => <span class="tag">{tag}</span>)}
+        </div>
+      )}
+      {links.length > 0 && (
+        <div class="ext-links">
+          {links.map(l => (
+            <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
+          ))}
+        </div>
+      )}
+    </div>
+  )}
+</article>
+
+<style>
+  .work-card {
+    padding: 1.1rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .work-card:last-child {
+    border-bottom: none;
+  }
+
+  /* ── Type row (Recent activity only) ───────────────────────────────────── */
+  .work-typerow {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.35rem;
+  }
+
+  /* Colour-keyed to the experience timeline via the inline --cat variable. */
+  .work-kind {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cat, var(--text-muted));
+  }
+
+  .work-kind::before {
+    content: '';
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 2px;
+    background: var(--cat, var(--text-muted));
+  }
+
+  /* ── Header row: title (+ featured on single-type tabs) and date ───────── */
+  .work-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+
+  .work-title-wrap {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+    min-width: 0;
+  }
+
+  /* The one canonical header style, shared by every Works view. */
+  .work-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .work-title a {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .work-title a:hover {
+    color: var(--accent);
+  }
+
+  .work-date {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* "★ Featured" — on the type row in Recent activity, in the header elsewhere. */
+  .featured-tag {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #d4a017;
+    white-space: nowrap;
+  }
+
+  /* ── Body ──────────────────────────────────────────────────────────────── */
+  .work-subtitle {
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--text-muted);
+    margin: 0.25rem 0 0;
+  }
+
+  .work-desc {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    margin: 0.3rem 0 0;
+  }
+
+  /* ── Tags + links row ──────────────────────────────────────────────────── */
+  .work-metarow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+    margin-top: 0.6rem;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .tag {
+    font-size: 0.75rem;
+    color: var(--accent);
+    background: var(--accent-light);
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+  }
+
+  .ext-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+
+  .ext-links a {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+
+  .ext-links a:hover {
+    color: var(--accent);
+  }
+</style>

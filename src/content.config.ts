@@ -21,8 +21,13 @@ const blog = defineCollection({
     // Cross-cutting "main"/highlights flag — bubbles the post to the top of the
     // Works tabs (same flag projects & publications use).
     main: z.boolean().optional().default(false),
+    // Topic tags — rendered as chips on the Works cards, same as projects.
+    tags: z.array(z.string()).optional().default([]),
     // Extra links rendered as buttons in the post header.
     urls: z.array(urlEntry).optional().default([]),
+    // "Featured in" / press coverage — a list parallel to `urls`, same shape,
+    // rendered as its own set of buttons after them.
+    features: z.array(urlEntry).optional().default([]),
   }),
 });
 
@@ -37,6 +42,9 @@ const projects = defineCollection({
     repo: z.string().optional(),
     // Extra info-tab links beyond `url`/`repo` (see urlEntry above).
     urls: z.array(urlEntry).optional().default([]),
+    // "Featured in" / press coverage — a list parallel to `urls`, same shape,
+    // rendered as its own set of buttons after them.
+    features: z.array(urlEntry).optional().default([]),
     tags: z.array(z.string()).optional().default([]),
     // Tags linking project to an experience/role (e.g. lab name, employer)
     affiliations: z.array(z.string()).optional().default([]),

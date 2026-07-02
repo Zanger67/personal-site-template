@@ -1,33 +1,23 @@
 ---
 import BaseLayout from './BaseLayout.astro';
+import BackToWorks from '../components/BackToWorks.astro';
+import { extraLinks, type UrlEntry } from '../utils/links';
 
-// The "urls" listed format (same as the timeline's info-tab buttons): each entry
-// renders as a labelled link in the post header. A button shows its `title`;
-// with none it falls back to the URL's host label (e.g. "github.com" → "github").
-interface UrlEntry { title?: string | null; url?: string | null; }
+// The "urls"/"features" listed formats (same as the timeline's info-tab buttons):
+// each entry renders as a labelled link in the post header. A button shows its
+// `title`; with none it falls back to the URL's host label (see ../utils/links).
+// `features` ("featured in") entries follow the `urls` ones.
 interface Props {
   title: string;
   date: Date;
   description: string;
   readingTime: string;
   urls?: UrlEntry[];
+  features?: UrlEntry[];
 }
 
-function hostLabel(raw: string): string {
-  try {
-    const host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`)
-      .hostname.replace(/^www\./, '');
-    const parts = host.split('.').filter(Boolean);
-    return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || raw);
-  } catch {
-    return raw;
-  }
-}
-
-const { title, date, description, readingTime, urls = [] } = Astro.props;
-const links = (urls ?? [])
-  .filter((u): u is { title?: string | null; url: string } => !!u && !!u.url)
-  .map(u => ({ label: (u.title && u.title.trim()) || hostLabel(u.url!), url: u.url! }));
+const { title, date, description, readingTime, urls = [], features = [] } = Astro.props;
+const links = [...extraLinks(urls), ...extraLinks(features)];
 const formattedDate = date.toLocaleDateString('en-US', {
   year: 'numeric',
   month: 'long',
@@ -36,6 +26,7 @@ const formattedDate = date.toLocaleDateString('en-US', {
 ---
 
 <BaseLayout title={title} description={description}>
+  <BackToWorks />
   <article class="prose">
     <header>
       <h1>{title}</h1>

@@ -1,9 +1,10 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import ProjectCard from '../components/ProjectCard.astro';
+import WorkCard from '../components/WorkCard.astro';
 import { isRouteEnabled } from '@config/site';
 import { getCollection } from 'astro:content';
 import { getReadingTime } from '../utils/reading-time';
+import { extraLinks, type UrlEntry, type Link as WorkLink } from '../utils/links';
 import profile from '../data/profile.json';
 import publications from '../data/publications.json';
 
@@ -31,73 +32,113 @@ const KIND_CAT: Record<'Project' | 'Publication' | 'Blog', string> = {
   Blog: '#3aa6ad',        // timeline 'misc'
 };
 
+// The "urls"/"features" listed-links formats and their label logic are shared
+// by every entity — see ../utils/links (hostLabel, extraLinks, UrlEntry).
+
+// De-dupe chips by URL (keep the first) so an explicit Live/Repo link isn't
+// repeated by a `urls` entry pointing at the same place.
+function dedupeLinks(links: WorkLink[]): WorkLink[] {
+  const seen = new Set<string>();
+  return links.filter(l => (seen.has(l.url) ? false : (seen.add(l.url), true)));
+}
+
+// Every Works item — from any category — is normalized to this one shape, so
+// each tab feeds identical data into <WorkCard>. Only `kind` (Recent activity)
+// toggles the featured-tag placement.
+interface WorkItem {
+  kind: 'Project' | 'Publication' | 'Blog';
+  main: boolean;
+  sortDate: number;
+  title: string;
+  href: string | null;
+  external: boolean;
+  dateLabel: string;
+  description?: string;
+  subtitle?: string;
+  tags: string[];
+  links: WorkLink[];
+}
+
 interface Publication {
   title: string;
   authors: string[];
   venue: string;
   date: string;
   url?: string | null;
+  urls?: UrlEntry[];
+  features?: UrlEntry[];
+  tags?: string[];
   main?: boolean;
 }
 const pubData = publications as Publication[];
 
-// Each category is gathered only when its route is enabled, then sorted with
-// the shared comparator. An empty list (disabled OR no items) hides its tab.
-const projects = (isRouteEnabled('projects') ? await getCollection('projects') : [])
-  .map(entry => ({ main: entry.data.main, sortDate: entry.data.startDate.valueOf(), entry }))
+// Each category is gathered only when its route is enabled, normalized to a
+// WorkItem, then sorted with the shared comparator. An empty list (disabled OR
+// no items) hides its tab.
+const projectItems: WorkItem[] = (isRouteEnabled('projects') ? await getCollection('projects') : [])
+  .map(entry => ({
+    kind: 'Project' as const,
+    main: entry.data.main,
+    sortDate: entry.data.startDate.valueOf(),
+    title: entry.data.title,
+    href: `${base}/projects/${entry.id}`,
+    external: false,
+    dateLabel: entry.data.endDate
+      ? `${fmtMonthYear(entry.data.startDate)} – ${fmtMonthYear(entry.data.endDate)}`
+      : `${fmtMonthYear(entry.data.startDate)} – Present`,
+    description: entry.data.description,
+    tags: entry.data.tags,
+    links: dedupeLinks([
+      ...(entry.data.url ? [{ label: 'Live', url: entry.data.url }] : []),
+      ...(entry.data.repo ? [{ label: 'Repo', url: entry.data.repo }] : []),
+      ...extraLinks(entry.data.urls),
+      ...extraLinks(entry.data.features),
+    ]),
+  }))
   .sort(byMainThenDate);
 
-const pubs = (isRouteEnabled('publications') ? pubData : [])
-  .map(pub => ({ main: pub.main === true, sortDate: new Date(pub.date).valueOf(), pub }))
+const pubItems: WorkItem[] = (isRouteEnabled('publications') ? pubData : [])
+  .map(pub => ({
+    kind: 'Publication' as const,
+    main: pub.main === true,
+    sortDate: new Date(pub.date).valueOf(),
+    title: pub.title,
+    // The paper link is the title's href; the extra `urls`/`features` become chips.
+    href: pub.url || null,
+    external: true,
+    dateLabel: String(pub.date),
+    description: pub.authors.join(', '),
+    subtitle: pub.venue,
+    tags: pub.tags ?? [],
+    links: dedupeLinks([...extraLinks(pub.urls), ...extraLinks(pub.features)]),
+  }))
   .sort(byMainThenDate);
 
-const posts = (isRouteEnabled('blog') ? (await getCollection('blog')).filter(p => !p.data.draft) : [])
-  .map(entry => ({ main: entry.data.main, sortDate: entry.data.date.valueOf(), entry, readingTime: getReadingTime(entry.body!) }))
+const postItems: WorkItem[] = (isRouteEnabled('blog') ? (await getCollection('blog')).filter(p => !p.data.draft) : [])
+  .map(entry => ({
+    kind: 'Blog' as const,
+    main: entry.data.main,
+    sortDate: entry.data.date.valueOf(),
+    title: entry.data.title,
+    href: `${base}/blog/${entry.id}`,
+    external: false,
+    dateLabel: `${fmtFullDate(entry.data.date)} · ${getReadingTime(entry.body!)}`,
+    description: entry.data.description,
+    tags: entry.data.tags ?? [],
+    links: dedupeLinks([...extraLinks(entry.data.urls), ...extraLinks(entry.data.features)]),
+  }))
   .sort(byMainThenDate);
 
 // "Recent activity" — every enabled category merged into one feed, same sort.
-const activity = [
-  ...projects.map(p => ({
-    kind: 'Project' as const,
-    main: p.main,
-    sortDate: p.sortDate,
-    title: p.entry.data.title,
-    href: `${base}/projects/${p.entry.id}`,
-    external: false,
-    dateLabel: p.entry.data.endDate
-      ? `${fmtMonthYear(p.entry.data.startDate)} – ${fmtMonthYear(p.entry.data.endDate)}`
-      : `${fmtMonthYear(p.entry.data.startDate)} – Present`,
-    blurb: p.entry.data.description,
-  })),
-  ...pubs.map(p => ({
-    kind: 'Publication' as const,
-    main: p.main,
-    sortDate: p.sortDate,
-    title: p.pub.title,
-    href: p.pub.url || null,
-    external: true,
-    dateLabel: String(p.pub.date),
-    blurb: `${p.pub.authors.join(', ')} · ${p.pub.venue}`,
-  })),
-  ...posts.map(p => ({
-    kind: 'Blog' as const,
-    main: p.main,
-    sortDate: p.sortDate,
-    title: p.entry.data.title,
-    href: `${base}/blog/${p.entry.id}`,
-    external: false,
-    dateLabel: `${fmtFullDate(p.entry.data.date)} · ${p.readingTime}`,
-    blurb: p.entry.data.description,
-  })),
-].sort(byMainThenDate);
+const activity: WorkItem[] = [...projectItems, ...pubItems, ...postItems].sort(byMainThenDate);
 
 // Tab order: Recent activity, Publications, Projects, Blog posts. A tab is
 // listed only when it has something to show.
 const tabs = [
   activity.length > 0 && { id: 'recent', label: 'Recent activity' },
-  pubs.length > 0 && { id: 'publications', label: 'Publications' },
-  projects.length > 0 && { id: 'projects', label: 'Projects' },
-  posts.length > 0 && { id: 'blog', label: 'Blog posts' },
+  pubItems.length > 0 && { id: 'publications', label: 'Publications' },
+  projectItems.length > 0 && { id: 'projects', label: 'Projects' },
+  postItems.length > 0 && { id: 'blog', label: 'Blog posts' },
 ].filter(Boolean) as { id: string; label: string }[];
 
 const activeId = tabs[0]?.id ?? null;
@@ -128,87 +169,138 @@ const activeId = tabs[0]?.id ?? null;
       {activity.length > 0 && (
         <section class="works-panel" id="panel-recent" role="tabpanel" aria-labelledby="tab-recent" hidden={activeId !== 'recent'}>
           <h2 class="panel-heading">Recent activity</h2>
-          <ul class="activity-list">
-            {activity.map(item => (
-              <li class="activity-item">
-                <div class="activity-meta">
-                  <span class="activity-kind" style={`--cat: ${KIND_CAT[item.kind]}`}>{item.kind}</span>
-                  {item.main && <span class="activity-featured" title="Featured — flagged as a highlight">★ Featured</span>}
-                </div>
-                <div class="activity-row">
-                  {item.href
-                    ? <a class="activity-title" href={item.href} {...(item.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{item.title}</a>
-                    : <span class="activity-title">{item.title}</span>}
-                  <span class="activity-date">{item.dateLabel}</span>
-                </div>
-                {item.blurb && <p class="activity-blurb">{item.blurb}</p>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {pubs.length > 0 && (
-        <section class="works-panel" id="panel-publications" role="tabpanel" aria-labelledby="tab-publications" hidden={activeId !== 'publications'}>
-          <h2 class="panel-heading">Publications</h2>
-          <ol class="pub-list">
-            {pubs.map(({ pub, main }) => (
-              <li>
-                <span class="pub-title">
-                  {pub.url
-                    ? <a href={pub.url} target="_blank" rel="noopener noreferrer">{pub.title}</a>
-                    : pub.title}
-                  {main && <span class="featured-tag">★ Featured</span>}
-                </span>
-                <span class="pub-authors">{pub.authors.join(', ')}</span>
-                <span class="pub-venue">{pub.venue}, {pub.date}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {projects.length > 0 && (
-        <section class="works-panel" id="panel-projects" role="tabpanel" aria-labelledby="tab-projects" hidden={activeId !== 'projects'}>
-          <h2 class="panel-heading">Projects</h2>
-          {projects.map(({ entry, main }) => (
-            <ProjectCard
-              title={entry.data.title}
-              description={entry.data.description}
-              startDate={entry.data.startDate}
-              endDate={entry.data.endDate}
-              href={`${base}/projects/${entry.id}`}
-              url={entry.data.url}
-              repo={entry.data.repo}
-              tags={entry.data.tags}
-              featured={main}
+          {activity.map(item => (
+            <WorkCard
+              title={item.title}
+              href={item.href}
+              external={item.external}
+              dateLabel={item.dateLabel}
+              description={item.description}
+              subtitle={item.subtitle}
+              tags={item.tags}
+              links={item.links}
+              featured={item.main}
+              kind={item.kind}
+              kindColor={KIND_CAT[item.kind]}
             />
           ))}
         </section>
       )}
 
-      {posts.length > 0 && (
+      {pubItems.length > 0 && (
+        <section class="works-panel" id="panel-publications" role="tabpanel" aria-labelledby="tab-publications" hidden={activeId !== 'publications'}>
+          <h2 class="panel-heading">Publications</h2>
+          {pubItems.map(item => (
+            <WorkCard
+              title={item.title}
+              href={item.href}
+              external={item.external}
+              dateLabel={item.dateLabel}
+              description={item.description}
+              subtitle={item.subtitle}
+              tags={item.tags}
+              links={item.links}
+              featured={item.main}
+            />
+          ))}
+        </section>
+      )}
+
+      {projectItems.length > 0 && (
+        <section class="works-panel" id="panel-projects" role="tabpanel" aria-labelledby="tab-projects" hidden={activeId !== 'projects'}>
+          <h2 class="panel-heading">Projects</h2>
+          {projectItems.map(item => (
+            <WorkCard
+              title={item.title}
+              href={item.href}
+              external={item.external}
+              dateLabel={item.dateLabel}
+              description={item.description}
+              subtitle={item.subtitle}
+              tags={item.tags}
+              links={item.links}
+              featured={item.main}
+            />
+          ))}
+        </section>
+      )}
+
+      {postItems.length > 0 && (
         <section class="works-panel" id="panel-blog" role="tabpanel" aria-labelledby="tab-blog" hidden={activeId !== 'blog'}>
           <h2 class="panel-heading">Blog posts</h2>
-          <ul class="post-list">
-            {posts.map(({ entry, readingTime, main }) => (
-              <li>
-                <a href={`${base}/blog/${entry.id}`}>
-                  <span class="post-title">{entry.data.title}{main && <span class="featured-tag">★ Featured</span>}</span>
-                  <span class="post-date">
-                    {entry.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    {' – '}
-                    {readingTime}
-                  </span>
-                </a>
-                <p class="post-desc">{entry.data.description}</p>
-              </li>
-            ))}
-          </ul>
+          {postItems.map(item => (
+            <WorkCard
+              title={item.title}
+              href={item.href}
+              external={item.external}
+              dateLabel={item.dateLabel}
+              description={item.description}
+              subtitle={item.subtitle}
+              tags={item.tags}
+              links={item.links}
+              featured={item.main}
+            />
+          ))}
         </section>
       )}
     </div>
   )}
+
+  {/* Pick the right tab (and scroll) BEFORE the first paint. Kept is:inline and
+      placed after the panels so it runs synchronously during parse — the module
+      script below is deferred and only runs after paint, so leaving this to it
+      would flash the default tab / jump the scroll from the top. Handles both
+      the "← Back to Works" return and any /works#<tab> deep link or browser-back. */}
+  <script is:inline>
+    (function () {
+      try {
+        const root = document.querySelector('.works');
+        if (!root) return;
+        const tabs = Array.prototype.slice.call(root.querySelectorAll('[role="tab"]'));
+        const ids = tabs.map((t) => t.dataset.tab);
+        const show = (id) => {
+          if (ids.indexOf(id) === -1) return false;
+          tabs.forEach((t) => {
+            const sel = t.dataset.tab === id;
+            t.setAttribute('aria-selected', sel ? 'true' : 'false');
+            t.tabIndex = sel ? 0 : -1;
+          });
+          root.querySelectorAll('[role="tabpanel"]').forEach((p) => {
+            p.hidden = p.id !== 'panel-' + id;
+          });
+          return true;
+        };
+
+        // (1) Returning via a detail page's "← Back to Works" button: reopen the
+        // saved tab AND restore the saved scroll. One-shot flag.
+        if (sessionStorage.getItem('works:restore')) {
+          sessionStorage.removeItem('works:restore');
+          const saved = JSON.parse(sessionStorage.getItem('works:return') || 'null');
+          sessionStorage.removeItem('works:return');
+          if (saved) {
+            if (saved.tab && show(saved.tab)) history.replaceState(null, '', '#' + saved.tab);
+            if (typeof saved.y === 'number') {
+              // The footer parses AFTER this script, so the page isn't tall enough
+              // yet and scrollTo would clamp short (snapping toward the top on the
+              // first frame). Reserve just enough height to land the scroll exactly,
+              // then release it once the real content has fully parsed.
+              const de = document.documentElement;
+              const prevMinHeight = de.style.minHeight;
+              de.style.minHeight = (saved.y + window.innerHeight) + 'px';
+              window.scrollTo(0, saved.y);
+              window.addEventListener('DOMContentLoaded', () => { de.style.minHeight = prevMinHeight; }, { once: true });
+            }
+            return;
+          }
+        }
+
+        // (2) Deep link / redirect / browser-back to /works#<tab>: open that tab
+        // up front too, so it never flashes the default tab first.
+        const hash = location.hash.replace(/^#/, '');
+        if (hash) show(hash);
+      } catch (e) { /* corrupt state — fall back to the default view */ }
+    })();
+  </script>
 
   {/* No-JS fallback: show every panel stacked with its heading, hide the
       (non-functional) tab bar. Kept inside <noscript> via is:inline so Astro
@@ -248,6 +340,20 @@ const activeId = tabs[0]?.id ?? null;
       });
     });
 
+    // The currently selected tab id (falls back to the first tab).
+    const activeTab = () =>
+      tabs.find(t => t.getAttribute('aria-selected') === 'true')?.dataset.tab ?? ids[0];
+
+    // Clicking through to a project/blog detail page: remember which tab was
+    // open and how far down the visitor had scrolled, so its "← Back to Works"
+    // button can drop them right back where they were. Internal detail links
+    // only — external ones (publication titles, ↗ chips) open a new tab.
+    works.addEventListener('click', (event) => {
+      const link = (event.target as HTMLElement).closest?.('.work-title a') as HTMLAnchorElement | null;
+      if (!link || link.target === '_blank') return;
+      sessionStorage.setItem('works:return', JSON.stringify({ tab: activeTab(), y: window.scrollY }));
+    });
+
     works.querySelector('.works-tablist')!.addEventListener('keydown', (event) => {
       const e = event as KeyboardEvent;
       const current = (document.activeElement as HTMLElement | null)?.dataset?.tab;
@@ -272,6 +378,11 @@ const activeId = tabs[0]?.id ?? null;
     });
     const initial = location.hash.replace(/^#/, '');
     if (ids.includes(initial)) activate(initial);
+
+    // NOTE: restoring the tab + scroll when returning from a detail page is done
+    // by the separate is:inline script above — it runs synchronously before the
+    // first paint, whereas this module script is deferred and loads *after* it
+    // (which would make the restored scroll visibly jump from the top).
   }
 </script>
 
@@ -323,181 +434,5 @@ const activeId = tabs[0]?.id ?? null;
 
   .works-panel[hidden] {
     display: none;
-  }
-
-  /* ── Recent activity feed ──────────────────────────────────────────────── */
-  .activity-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .activity-item {
-    padding: 0.9rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .activity-item:last-child {
-    border-bottom: none;
-  }
-
-  /* Kind label + featured tag on their own line above the title, so every
-     title left-aligns to the item edge. */
-  .activity-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    margin-bottom: 0.3rem;
-  }
-
-  /* Colour-keyed to the experience timeline via the inline --cat variable
-     (see KIND_CAT); the swatch mirrors the timeline legend. */
-  .activity-kind {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.65rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--cat);
-  }
-
-  .activity-kind::before {
-    content: '';
-    width: 0.55rem;
-    height: 0.55rem;
-    border-radius: 2px;
-    background: var(--cat);
-  }
-
-  /* Indicator for items that floated to the top because they're flagged `main`. */
-  .activity-featured {
-    font-size: 0.65rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #d4a017;
-    white-space: nowrap;
-  }
-
-  /* Same "★ Featured" tag, inline after a title in the Publications/Blog tabs. */
-  .featured-tag {
-    font-size: 0.62rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #d4a017;
-    white-space: nowrap;
-    margin-left: 0.5rem;
-  }
-
-  .activity-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 1rem;
-  }
-
-  .activity-title {
-    font-weight: 500;
-    color: var(--text);
-    text-decoration: none;
-  }
-
-  a.activity-title:hover {
-    color: var(--accent);
-  }
-
-  .activity-date {
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .activity-blurb {
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    margin: 0.3rem 0 0;
-  }
-
-  /* ── Publications list (mirrors the old /publications page) ─────────────── */
-  .pub-list {
-    list-style: none;
-    padding: 0;
-    counter-reset: pub;
-  }
-
-  .pub-list li {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    padding: 1rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .pub-list li:last-child {
-    border-bottom: none;
-  }
-
-  .pub-title {
-    font-weight: 500;
-  }
-
-  .pub-authors {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-  }
-
-  .pub-venue {
-    font-size: 0.85rem;
-    font-style: italic;
-    color: var(--text-muted);
-  }
-
-  /* ── Blog list (mirrors the old /blog index) ───────────────────────────── */
-  .post-list {
-    list-style: none;
-    padding: 0;
-  }
-
-  .post-list li {
-    padding: 1rem 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .post-list li:last-child {
-    border-bottom: none;
-  }
-
-  .post-list a {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 1rem;
-    text-decoration: none;
-  }
-
-  .post-title {
-    font-weight: 500;
-    color: var(--text);
-  }
-
-  .post-list a:hover .post-title {
-    color: var(--accent);
-  }
-
-  .post-date {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-
-  .post-desc {
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    margin-top: 0.3rem;
-    margin-bottom: 0;
   }
 </style>

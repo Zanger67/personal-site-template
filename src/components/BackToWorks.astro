@@ -1,0 +1,40 @@
+---
+// "← Back to Works" — sits atop the project & blog detail pages (the only
+// Works items with an internal page; publications link straight out). Returns
+// to /works and, with JS, restores the tab + scroll position the visitor left
+// from — captured in sessionStorage by the Works page when they clicked through.
+// No-JS fallback: a plain link to the default (first) Works tab.
+const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
+---
+
+<a class="back-to-works" href={`${base}/works`} data-back-to-works>
+  <span aria-hidden="true">←</span> Back to Works
+</a>
+
+<script is:inline>
+  // Flag the arrival so the Works page restores the saved tab + scroll instead of
+  // opening its default tab at the top. is:inline + delegation so the handler is
+  // live during parse (a deferred bundle could miss a quick click). Synchronous,
+  // so it lands before the link navigates.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('[data-back-to-works]')) {
+      sessionStorage.setItem('works:restore', '1');
+    }
+  });
+</script>
+
+<style>
+  .back-to-works {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    margin-bottom: 1.5rem;
+  }
+
+  .back-to-works:hover {
+    color: var(--accent);
+  }
+</style>

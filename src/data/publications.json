@@ -9,6 +9,11 @@
       { "title": "PDF", "url": "https://example.com/wing-aerodynamics.pdf" },
       { "url": "https://arxiv.org/abs/2501.00000" }
     ],
+    "features": [
+      { "url": "https://www.lesswrong.com/posts/buzz-wing-aerodynamics" },
+      { "url": "https://buzz.substack.com/p/on-yellow-jacket-wings" }
+    ],
+    "tags": ["Aerodynamics", "Spirit"],
     "main": true,
     "relationGroups": ["aerodynamics"]
   },
