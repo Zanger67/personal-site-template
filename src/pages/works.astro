@@ -87,6 +87,7 @@ const projectItems: WorkItem[] = (isRouteEnabled('projects') ? await getCollecti
       ? `${fmtMonthYear(entry.data.startDate)} – ${fmtMonthYear(entry.data.endDate)}`
       : `${fmtMonthYear(entry.data.startDate)} – Present`,
     description: entry.data.description,
+    subtitle: entry.data.role,
     tags: entry.data.tags,
     links: dedupeLinks([
       ...(entry.data.url ? [{ label: 'Live', url: entry.data.url }] : []),

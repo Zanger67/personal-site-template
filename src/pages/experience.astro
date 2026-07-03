@@ -541,7 +541,7 @@ const items: Item[] = [
   ]),
   ...projects.map(p => mkItem({
     title: p.data.title, type: 'projects', start: p.data.startDate, end: p.data.endDate, entity: p.data.title,
-    description: p.data.description, affiliations: p.data.affiliations || [],
+    description: p.data.description, subtitle: p.data.role ?? null, affiliations: p.data.affiliations || [],
     links: [
       ...(projectsEnabled ? [{ label: 'Details', url: `${base}/projects/${p.id}` }] : []),
       { label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }, ...extraLinks(p.data.urls), ...extraLinks(p.data.features),

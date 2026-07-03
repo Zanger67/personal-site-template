@@ -36,6 +36,10 @@ const projects = defineCollection({
   schema: z.object({
     title: z.string(),
     description: z.string(),
+    // Your role on the project (e.g. "Co-Creator & Maintainer"). Surfaced as the
+    // subtitle on Works cards + the timeline drawer, and under the title on the
+    // project detail page. Omit for solo/unlabelled projects.
+    role: z.string().optional(),
     startDate: z.coerce.date(),
     endDate: z.coerce.date().optional(),
     url: z.string().optional(),

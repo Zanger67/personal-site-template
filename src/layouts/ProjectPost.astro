@@ -11,6 +11,7 @@ import { hostLabel, type UrlEntry } from '../utils/links';
 interface Props {
   title: string;
   description: string;
+  role?: string;
   startDate: Date;
   endDate?: Date;
   tags?: string[];
@@ -20,7 +21,7 @@ interface Props {
   features?: UrlEntry[];
 }
 
-const { title, description, startDate, endDate, tags = [], url, repo, urls = [], features = [] } = Astro.props;
+const { title, description, role, startDate, endDate, tags = [], url, repo, urls = [], features = [] } = Astro.props;
 
 const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 const dateRange = endDate ? `${fmt(startDate)} – ${fmt(endDate)}` : `${fmt(startDate)} – Present`;
@@ -40,6 +41,7 @@ const links = [
   <article class="prose">
     <header>
       <h1>{title}</h1>
+      {role && <p class="post-role">{role}</p>}
       <span class="post-meta">{dateRange}</span>
       {tags.length > 0 && (
         <div class="tags">
@@ -60,6 +62,14 @@ const links = [
 </BaseLayout>
 
 <style>
+  /* Role line under the title — mirrors WorkCard's italic subtitle. */
+  .post-role {
+    font-size: 0.95rem;
+    font-style: italic;
+    color: var(--accent);
+    margin: 0.2rem 0 0.35rem;
+  }
+
   .post-meta {
     color: var(--text-muted);
     font-size: 0.9rem;
