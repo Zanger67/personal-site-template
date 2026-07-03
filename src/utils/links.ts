@@ -25,6 +25,12 @@ const KNOWN_HOSTS: Record<string, string> = {
   'arxiv.org': 'arXiv',
   'lesswrong.com': 'LessWrong',
   'substack.com': 'Substack',
+  'linkedin.com': 'LinkedIn',
+  'youtube.com': 'YouTube',
+  'medium.com': 'Medium',
+  // X's old + new domains both label as "Twitter".
+  'x.com': 'Twitter',
+  'twitter.com': 'Twitter',
 };
 
 // Strip protocol + leading "www.", then either return a known-platform label
