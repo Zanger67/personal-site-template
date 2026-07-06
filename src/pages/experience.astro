@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { isRouteEnabled } from '@config/site';
+import { isRouteEnabled, showIncomingEntries } from '@config/site';
 import { getCollection } from 'astro:content';
 import affiliations from '../data/affiliations.json';
 import education from '../data/education.json';
@@ -335,6 +335,10 @@ const exclusiveEnd = (d: Date): Date => new Date(d.getFullYear(), d.getMonth() +
 // of a month fills that whole column; storing the index here (rather than deriving
 // it from the ms timestamp client-side) avoids a month-boundary slip across zones.
 const monthNum = (d: Date): number => d.getFullYear() * 12 + d.getMonth();
+// Current month as an absolute index, for detecting "incoming" (future-dated)
+// entries. Comparison is month-granular: an entry whose start month is strictly
+// later than this reads as future; one starting in the current month is current.
+const nowMonthIdx = monthNum(new Date());
 
 let _id = 0;
 interface ItemOpts {
@@ -346,6 +350,12 @@ interface ItemOpts {
 function mkItem(o: ItemOpts): Item | null {
   const s = parseDate(o.start);
   if (!s) return null;
+  // An entry whose start month is later than the current month is "incoming": it
+  // hasn't begun yet. It charts as a single-month marker in its start month (never
+  // a bar running to Present) and its title gets an "(incoming)" tag. The whole
+  // class can be hidden via the timeline.showIncoming config switch.
+  const isFuture = monthNum(s) > nowMonthIdx;
+  if (isFuture && !showIncomingEntries()) return null;
   let start: number, end: number | null, dateLabel: string, endMonthNum: number | null;
   if (o.point) {
     const yearOnly = typeof o.start === 'string' && o.start.length === 4;
@@ -360,6 +370,17 @@ function mkItem(o: ItemOpts): Item | null {
     endMonthNum = ex ? monthNum(ex) : null;
     dateLabel = e ? `${fmtMonth(s)} – ${fmtMonth(e)}` : `${fmtMonth(s)} – Present`;
   }
+  // Incoming entries collapse to a single column at their start month. A known end
+  // date still reads in the drawer (a planned span stays informative), but an
+  // open-ended incoming role shows just its start month — "– Present" would be
+  // nonsensical for something that hasn't started.
+  if (isFuture) {
+    const e1 = new Date(s.getFullYear(), s.getMonth() + 1, 1);
+    start = s.getTime(); end = e1.getTime(); endMonthNum = monthNum(e1);
+    if (!o.point && !parseDate(o.end)) dateLabel = fmtMonth(s);
+  }
+  // Tag the title "(incoming)" — unless it already says so (any case).
+  const title = isFuture && !/\bincoming\b/i.test(o.title) ? `${o.title} (incoming)` : o.title;
   // Drop empties, then de-dupe by URL (keep the first) so a `urls` entry that
   // repeats the main `url`/`repo` — or an org-level link already on the role —
   // doesn't render the same destination twice.
@@ -367,11 +388,13 @@ function mkItem(o: ItemOpts): Item | null {
     .filter((l): l is { label: string; url: string } => !!l && !!l.url)
     .filter((l, i, arr) => arr.findIndex(x => x.url === l.url) === i);
   const description = o.description || null;
+  // Grouping/lane keys stay on the ORIGINAL (untagged) title so an incoming role
+  // still chains with its org's other bars and matches the list view.
   const entity = o.entity || o.title;
   const entityShort = o.entityShort || entity; // falls back to the long-form org
   const cats = Array.from(new Set<CatKey>([o.type, ...(o.also || [])]));
   return {
-    id: _id++, title: o.title, type: o.type, start, end, startMonthNum: monthNum(s), endMonthNum, dateLabel,
+    id: _id++, title, type: o.type, start, end, startMonthNum: monthNum(s), endMonthNum, dateLabel,
     description, subtitle: o.subtitle || null, links, entity, entityShort, group: `${o.type}::${entity}`,
     affiliations: o.affiliations || [],
     relationGroups: o.relationGroups || [],

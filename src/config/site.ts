@@ -97,3 +97,17 @@ export type HomeSectionId = keyof typeof homeSections;
 export function showHomeSection(id: HomeSectionId): boolean {
   return homeSections[id];
 }
+
+// Experience-page timeline behaviour.
+export const timeline = {
+  // Future-dated entries — whose start MONTH is later than the current month —
+  // chart as a single-month "(incoming)" marker in their start month, instead
+  // of a bar running to Present, and their title is tagged "(incoming)". Flip
+  // this off to hide every such entry from the timeline until it actually begins.
+  showIncoming: true,
+} as const;
+
+/** Should future-dated ("incoming") entries chart on the timeline? */
+export function showIncomingEntries(): boolean {
+  return timeline.showIncoming;
+}
