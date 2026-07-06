@@ -706,11 +706,12 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       var de = document.documentElement;
       de.classList.add('view-init');
       var hash = location.hash.replace('#', '');
-      // The Gantt timeline is unwieldy on a narrow screen, so narrow viewports
-      // default to the list view — the SAME breakpoint at which the info tab
-      // becomes an overlay. `#list` always wins; an empty hash falls back to list
-      // when narrow / timeline otherwise; any other hash is a category filter,
-      // which implies the timeline view. (The module script below mirrors this.)
+      // The Gantt timeline is unwieldy on a truly narrow screen, so narrow
+      // viewports (≤830px) default to the list view. (The info tab switches to an
+      // overlay at a wider breakpoint, 1050px — a separate concern; see the width
+      // styles.) `#list` always wins; an empty hash falls back to list when narrow
+      // / timeline otherwise; any other hash is a category filter, which implies
+      // the timeline view. (The module script below mirrors this.)
       var narrow = window.matchMedia('(max-width: 830px)').matches;
       de.dataset.initialView = (hash === 'list' || (hash === '' && narrow)) ? 'list' : 'timeline';
     })();
@@ -1055,15 +1056,23 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      Below this width the chart and side panel can't share the row comfortably,
      so the info tab floats OVER everything as a full-screen overlay (see the
      scoped styles) instead of pushing. We must not widen `main` for it, and we
-     lock the page behind it. (The page also defaults to the list view at this
-     same width — see the inline + module scripts.) */
-  @media (max-width: 830px) {
+     lock the page behind it.
+       The breakpoint is 1050px, not the list-view breakpoint (830px): now that
+     the timeline never shrinks below the list width (--max-width, floored below),
+     the push layout needs room for a full list-width chart PLUS the tab beside it
+     (~680 + ~300 ≈ 1000px). Below ~1043px that doesn't fit, so we overlay instead
+     of pushing — otherwise opening the tab would squeeze the chart under the list
+     width. Above it, --tl-chart-w is already ≥ the list width, so the push rules
+     need no floor. (The list-view default at ≤830px is a separate concern — a
+     narrow *viewport* — and keeps its own breakpoint in the scripts.) */
+  @media (max-width: 1050px) {
     /* Overlay mode: the tab floats above (position:fixed), so the chart no longer
        reserves room beside it — let it use the full page width, and do NOT grow
        the page when the tab opens (it must stay put behind the overlay). Both the
-       closed and open timeline rules collapse to one wide value here. */
+       closed and open timeline rules collapse to one wide value here — floored at
+       the list width so navigating list → timeline never shrinks the page. */
     main:has(.view-timeline.active),
-    main:has(.view-timeline.active .tl-detail.open) { max-width: min(1360px, 94vw); }
+    main:has(.view-timeline.active .tl-detail.open) { max-width: max(min(1360px, 94vw), var(--max-width)); }
     main:has(.view-list:not([hidden]) .tl-detail.open) { max-width: var(--max-width); }
     /* Lock scroll behind the panel, and drop the reserved gutter (no scrollbar
        while locked) so the fixed panel's `right: 0` reaches the true edge. */
@@ -1500,8 +1509,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      `.tl-layout`, whose inherited `align-self` would otherwise collapse it to
      content height. The gutter is reclaimed while open (see is:global) so `right:
      0` meets the true viewport edge. Applies to BOTH views' tabs, so the rules
-     target `.tl-detail` directly. */
-  @media (max-width: 830px) {
+     target `.tl-detail` directly. (Breakpoint matches the width rules above — see
+     the note there on why the tab overlays below 1050px rather than 830px.) */
+  @media (max-width: 1050px) {
     .tl-detail {
       position: fixed; top: 0; right: 0;
       height: 100vh; height: 100dvh;
@@ -2053,7 +2063,8 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     // push layout the tab is sticky, not a fixed sheet, so there's nothing to slide
     // away. `touch-action: pan-y` on the panel (see CSS) stops the browser from
     // claiming the horizontal gesture for back-navigation before we see it.
-    const overlayMQ = window.matchMedia('(max-width: 830px)');
+    // Matches the overlay CSS breakpoint (1050px), NOT the list-view default (830px).
+    const overlayMQ = window.matchMedia('(max-width: 1050px)');
     document.querySelectorAll<HTMLElement>('.tl-detail').forEach(panel => {
       let sx = 0, sy = 0, w = 1, dragging = false, decided = false, horizontal = false;
       panel.addEventListener('touchstart', e => {
