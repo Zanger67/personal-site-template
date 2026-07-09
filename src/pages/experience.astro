@@ -10,6 +10,10 @@ import awards from '../data/awards.json';
 import conferences from '../data/conferences.json';
 import misc from '../data/misc.json';
 import profile from '../data/profile.json';
+// Optional display-label overrides for the drawer's related-tabs (affiliation
+// org name → short tab label). Falls back to an item's `entityShort`, then the
+// full name, so the map only needs entries you want to force. See buildDrawer.
+import relationLabels from '../data/relationLabels.json';
 import { hostLabel, extraLinks, type UrlEntry } from '../utils/links';
 import { resolvePeople } from '../utils/collaborators';
 
@@ -312,6 +316,7 @@ interface Item {
   entityShort: string;     // shortform org label for the compact bar; defaults to `entity`
   group: string;           // `${type}::${entity}`
   affiliations: string[];  // (projects) org/role names this project is tagged to
+  isWork: boolean;         // a "work" (project or publication) — eligible for the drawer's affiliation/works related-tabs
   // Relation-groups: free-form shared tags that link items across the whole
   // timeline. Selecting an item highlights every other item that shares any of
   // its relation-groups (independent of category/org). Many-to-many — give
@@ -360,7 +365,7 @@ let _id = 0;
 interface ItemOpts {
   title: string; type: CatKey; start: any; end?: any; point?: boolean;
   entity?: string; entityShort?: string | null; description?: string | null; subtitle?: string | null; links?: ({ label: string; url: string | null | undefined })[];
-  affiliations?: string[]; main?: boolean; also?: CatKey[];
+  affiliations?: string[]; isWork?: boolean; main?: boolean; also?: CatKey[];
   relationGroups?: string[]; tags?: string[];
 }
 function mkItem(o: ItemOpts): Item | null {
@@ -413,6 +418,7 @@ function mkItem(o: ItemOpts): Item | null {
     id: _id++, title, type: o.type, start, end, startMonthNum: monthNum(s), endMonthNum, dateLabel,
     description, subtitle: o.subtitle || null, links, entity, entityShort, group: `${o.type}::${entity}`,
     affiliations: o.affiliations || [],
+    isWork: !!o.isWork,
     relationGroups: o.relationGroups || [],
     tags: o.tags || [],
     main: !!o.main, cats,
@@ -544,7 +550,7 @@ const items: Item[] = [
   ]),
   ...(publications as any[]).map(p => mkItem({
     // Publications share the "awards/pubs" category with awards/scholarships.
-    title: p.title, type: 'awards', start: p.date, point: true, entity: p.title,
+    title: p.title, type: 'awards', start: p.date, point: true, entity: p.title, isWork: true,
     // Authorship role (e.g. "Lead author") reads as the drawer subtitle.
     subtitle: p.role ?? null,
     description: [(p.authors && p.authors.length) ? resolvePeople(p.authors).map(a => a.name).join(', ') : null, p.venue].filter(Boolean).join(' — '),
@@ -583,7 +589,7 @@ const items: Item[] = [
     })),
   ]),
   ...projects.map(p => mkItem({
-    title: p.data.title, type: 'projects', start: p.data.startDate, end: p.data.endDate, entity: p.data.title,
+    title: p.data.title, type: 'projects', start: p.data.startDate, end: p.data.endDate, entity: p.data.title, isWork: true,
     description: p.data.description, subtitle: p.data.role ?? null, affiliations: p.data.affiliations || [],
     links: [
       ...(projectsEnabled ? [{ label: 'Details', url: `${base}/projects/${p.id}` }] : []),
@@ -608,6 +614,25 @@ const items: Item[] = [
     relationGroups: m.relationGroups,
   })),
 ].filter((s): s is Item => s !== null);
+
+// Projects list for the Experience (list) view. Unlike roles/awards these rows
+// do NOT open the info tab — clicking one navigates to the project's detail page
+// (the same destination as the Works page), so projects stay a single source of
+// truth. Sorted present-first, then newest end, then newest start (the site-wide
+// project order). Falls back to the external URL if project pages are disabled.
+const projDate = (d: Date | null): string | null =>
+  d ? d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
+const projectListItems = projects
+  .map(p => ({
+    title: p.data.title,
+    href: projectsEnabled ? `${base}/projects/${p.id}` : (p.data.url ?? p.data.repo ?? null),
+    dateLabel: p.data.endDate
+      ? `${projDate(p.data.startDate)} – ${projDate(p.data.endDate)}`
+      : `${projDate(p.data.startDate)} – Present`,
+    endSort: p.data.endDate ? p.data.endDate.valueOf() : Number.MAX_SAFE_INTEGER,
+    startSort: p.data.startDate.valueOf(),
+  }))
+  .sort((a, b) => b.endSort - a.endSort || b.startSort - a.startSort);
 
 // ---------------------------------------------------------------------------
 // Bottom strips. Things that aren't (or can't be) bars, shown as chips beneath
@@ -713,7 +738,7 @@ counts.main = items.filter(s => s.main).length + bottomItems.filter(u => u.main)
 const shownCategories = CATEGORIES.filter(c => counts[c.key] > 0);
 const showMain = counts.main > 0;
 
-const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_COLS };
+const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_COLS, relationLabels };
 ---
 
 <BaseLayout title="Experience" description={profile.pageMeta.experience}>
@@ -939,6 +964,27 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
             </div>
           ))}
         </div>
+      </>
+    )}
+
+    {projectListItems.length > 0 && (
+      <>
+        <h2>Projects</h2>
+        <ul class="involvement-list">
+          {projectListItems.map(p => (
+            <li class="proj-row">
+              {p.href
+                ? <a class="proj-link" href={p.href}>
+                    <span class="inv-name">{p.title}</span>
+                    {p.dateLabel && <span class="role-dates">{p.dateLabel}</span>}
+                  </a>
+                : <span class="proj-link">
+                    <span class="inv-name">{p.title}</span>
+                    {p.dateLabel && <span class="role-dates">{p.dateLabel}</span>}
+                  </span>}
+            </li>
+          ))}
+        </ul>
       </>
     )}
 
@@ -1200,6 +1246,14 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .d-tl-link:hover .d-tl-title { color: var(--accent); }
   .d-tl-date { font-size: 0.68rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   .d-tl-desc { font-size: 0.68rem; color: var(--text-muted); line-height: 1.45; margin-top: 0.15rem; white-space: normal; text-align: left; }
+  /* Related-tabs — shown only for a selected project with related items on both
+     the affiliation and works sides (see buildDrawer). Each tab swaps a sibling
+     .d-timeline panel. */
+  .d-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.1rem 0 0.7rem; }
+  .d-tab { font: inherit; font-size: 0.72rem; line-height: 1.4; padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--text-muted); cursor: pointer; }
+  .d-tab:hover { border-color: var(--accent); color: var(--text); }
+  .d-tab.is-active { background: var(--accent-light); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .d-timeline[hidden] { display: none; }
 </style>
 
 <style>
@@ -1340,6 +1394,21 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .inv-name {
     font-weight: 500;
   }
+
+  /* Project rows link straight to the detail page (they don't open the info tab),
+     so the whole row is one flex anchor mirroring the award-row layout. */
+  .proj-row { padding: 0; }
+  .proj-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.4rem;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .proj-link:hover .inv-name { color: var(--accent); }
 
   .inv-role {
     color: var(--text-muted);
@@ -1578,7 +1647,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       id: number; title: string; type: string; start: number; end: number | null;
       startMonthNum: number; endMonthNum: number | null; dateLabel: string;
       description: string | null; subtitle: string | null; links: { label: string; url: string }[];
-      entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[];
+      entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[]; isWork: boolean;
       tags: string[]; main: boolean; cats: string[]; laneKey?: string | null;
     }
     const items: Item[] = JSON.parse(dataEl.textContent || '[]');
@@ -1600,6 +1669,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const colorOf: Record<string, string> = {};
     const labelOf: Record<string, string> = {};
     for (const c of cfg.categories) { colorOf[c.key] = c.color; labelOf[c.key] = c.label; }
+    // Affiliation-tab labels: an explicit override from relationLabels.json wins,
+    // else the org's short form (entityShort) carried on its own items, else the
+    // full org name.
+    const relationLabels: Record<string, string> = cfg.relationLabels || {};
+    const tabLabelFor = (org: string, bucketItems: Item[]): string =>
+      relationLabels[org]
+      || (bucketItems[0]?.entityShort && bucketItems[0].entityShort !== org ? bucketItems[0].entityShort : org);
     const order: Record<string, number> = cfg.typeOrder;
     // Present items fill THROUGH the current month, so their exclusive end column
     // is the first of next month (absolute month index, matching item.*MonthNum).
@@ -1669,7 +1745,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       }
     }
 
-    function buildDrawer(it: Item) {
+    function buildDrawer(it: Item, preferTab?: string) {
       drawerBody.innerHTML = '';
       const h = document.createElement('h2'); h.className = 'd-title'; h.textContent = it.title;
       const meta = document.createElement('div'); meta.className = 'd-meta';
@@ -1734,37 +1810,86 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         .filter(x => x.id !== it.id && inForeground(x))
         .sort(byRecency)
         .filter(x => { const k = roleKey(x); if (seenRoles.has(k)) return false; seenRoles.add(k); return true; });
-      if (related.length) {
-        // Slot the clicked item back into its chronological place among the
-        // related ones so it reads in context, flagged as "you are here".
-        const timeline = [...related, it].sort(byRecency);
-        const lab = document.createElement('div'); lab.className = 'd-related-label'; lab.textContent = 'Related';
-        const ul = document.createElement('ul'); ul.className = 'd-timeline';
-        for (const r of timeline) {
-          const isCurrent = r.id === it.id;
-          const li = document.createElement('li'); li.className = 'd-tl-item';
-          if (isCurrent) li.classList.add('is-current');
-          const dot = document.createElement('span'); dot.className = 'd-tl-dot'; dot.style.background = colorOf[r.type];
-          const btn = document.createElement('button'); btn.className = 'd-tl-link';
-          if (isCurrent) btn.setAttribute('aria-current', 'true');
-          btn.addEventListener('click', () => selectItem(r, { scroll: true }));
-          const t = document.createElement('span'); t.className = 'd-tl-title';
-          t.textContent = r.entityShort && r.entityShort !== r.title ? `${r.title} · ${r.entityShort}` : r.title;
-          const d = document.createElement('span'); d.className = 'd-tl-date'; d.textContent = r.dateLabel;
-          btn.appendChild(t); btn.appendChild(d);
-          if (r.description) {
-            const desc = document.createElement('span'); desc.className = 'd-tl-desc'; desc.textContent = r.description;
-            btn.appendChild(desc);
-          }
-          li.appendChild(dot); li.appendChild(btn);
-          ul.appendChild(li);
+      if (!related.length) return;
+
+      // One related row (dot + link). `current` marks the clicked item slotted
+      // into a merged timeline for context — it reads as "you are here" and isn't
+      // itself a link.
+      const relatedItemEl = (r: Item, current: boolean): HTMLLIElement => {
+        const li = document.createElement('li'); li.className = 'd-tl-item';
+        if (current) li.classList.add('is-current');
+        const dot = document.createElement('span'); dot.className = 'd-tl-dot'; dot.style.background = colorOf[r.type];
+        const btn = document.createElement('button'); btn.className = 'd-tl-link';
+        if (current) btn.setAttribute('aria-current', 'true');
+        else btn.addEventListener('click', () => selectItem(r, { scroll: true, viaRelated: true }));
+        const t = document.createElement('span'); t.className = 'd-tl-title';
+        t.textContent = r.entityShort && r.entityShort !== r.title ? `${r.title} · ${r.entityShort}` : r.title;
+        const d = document.createElement('span'); d.className = 'd-tl-date'; d.textContent = r.dateLabel;
+        btn.appendChild(t); btn.appendChild(d);
+        if (r.description) {
+          const desc = document.createElement('span'); desc.className = 'd-tl-desc'; desc.textContent = r.description;
+          btn.appendChild(desc);
         }
-        drawerBody.appendChild(lab); drawerBody.appendChild(ul);
+        li.appendChild(dot); li.appendChild(btn);
+        return li;
+      };
+      // A vertical-timeline <ul> from a list of related items. `withCurrent` slots
+      // the clicked item back into chronological place (used for the merged list).
+      const timelineUl = (list: Item[], withCurrent: boolean): HTMLUListElement => {
+        const seq = withCurrent ? [...list, it].sort(byRecency) : list;
+        const ul = document.createElement('ul'); ul.className = 'd-timeline';
+        for (const r of seq) ul.appendChild(relatedItemEl(r, withCurrent && r.id === it.id));
+        return ul;
+      };
+
+      const lab = document.createElement('div'); lab.className = 'd-related-label'; lab.textContent = 'Related';
+
+      // A selected WORK (project or publication) can split its related list into
+      // tabs: one per affiliated org — that org's education, roles & memberships —
+      // plus a "Works" tab holding everything else related (other projects, papers,
+      // …). Only when BOTH sides carry ≥2 items — otherwise a tab would be near-
+      // empty, so fall back to the single merged timeline. Selecting a role never
+      // tabs; it always shows the merged timeline.
+      const affOrgs = it.affiliations || [];
+      const affBuckets = affOrgs
+        .map(org => ({ key: 'aff:' + org, org, items: related.filter(x => x.entity === org) }))
+        .filter(b => b.items.length > 0);
+      const affTotal = affBuckets.reduce((n, b) => n + b.items.length, 0);
+      const worksItems = related.filter(x => !affOrgs.includes(x.entity));
+      const useTabs = it.isWork && affTotal >= 2 && worksItems.length >= 2;
+
+      if (useTabs) {
+        const tabs = [
+          ...affBuckets.map(b => ({ key: b.key, label: tabLabelFor(b.org, b.items), items: b.items })),
+          { key: 'works', label: 'Works', items: worksItems },
+        ];
+        // Default tab: `preferTab` (set when arriving from a role at an affiliated
+        // org) if it exists, else "Works" — a direct click lands on peer works.
+        let active = preferTab && tabs.some(t => t.key === preferTab) ? preferTab : 'works';
+        const tablist = document.createElement('div'); tablist.className = 'd-tabs'; tablist.setAttribute('role', 'tablist');
+        const panels = document.createElement('div'); panels.className = 'd-tabpanels';
+        for (const t of tabs) {
+          const tb = document.createElement('button'); tb.type = 'button'; tb.className = 'd-tab';
+          tb.dataset.tab = t.key; tb.textContent = t.label;
+          if (t.key === active) tb.classList.add('is-active');
+          tb.addEventListener('click', () => {
+            active = t.key;
+            tablist.querySelectorAll<HTMLElement>('.d-tab').forEach(el => el.classList.toggle('is-active', el.dataset.tab === active));
+            panels.querySelectorAll<HTMLElement>('.d-timeline').forEach(p => { p.hidden = p.dataset.panel !== active; });
+          });
+          tablist.appendChild(tb);
+          const ul = timelineUl(t.items, false);
+          ul.dataset.panel = t.key; ul.hidden = t.key !== active;
+          panels.appendChild(ul);
+        }
+        drawerBody.appendChild(lab); drawerBody.appendChild(tablist); drawerBody.appendChild(panels);
+      } else {
+        drawerBody.appendChild(lab); drawerBody.appendChild(timelineUl(related, true));
       }
     }
 
     // Open / close the INFO TAB (the sliding detail panel).
-    function openDrawer(it: Item) { buildDrawer(it); drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); }
+    function openDrawer(it: Item, preferTab?: string) { buildDrawer(it, preferTab); drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); }
     function closeDrawer() { drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); }
 
     // Bring a freshly-selected item's bar into view (used when jumping to a
@@ -1807,13 +1932,20 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       window.scrollBy({ top: delta, left: 0, behavior: reduce ? 'auto' : 'smooth' });
     }
 
-    function selectItem(it: Item, opts?: { scroll?: boolean }) {
+    function selectItem(it: Item, opts?: { scroll?: boolean; viaRelated?: boolean }) {
       if (selectedId === it.id) { deselect(); return; }
+      // The item selected just before this one — only meaningful when navigating
+      // via a related-list link (not a fresh click on a bar).
+      const prev = (opts?.viaRelated && selectedId !== null) ? byId[selectedId] : null;
       selectedId = it.id; selectedGroup = it.group; selectedEntity = it.entity; selectedTitle = it.title;
       selectedGroups = it.relationGroups || [];
       selectedAffiliations = it.affiliations || [];
+      // When arriving at a work from a role at one of its affiliated orgs, open
+      // that org's related-tab first; otherwise the drawer defaults to "Works".
+      const preferTab = (prev && !prev.isWork && (it.affiliations || []).includes(prev.entity))
+        ? 'aff:' + prev.entity : undefined;
       applySelection();
-      openDrawer(it); // every item opens the info tab — even sparse ones show title/category/related
+      openDrawer(it, preferTab); // every item opens the info tab — even sparse ones show title/category/related
       if (opts?.scroll) scrollToItem(it);
     }
     function deselect() {

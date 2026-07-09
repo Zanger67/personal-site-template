@@ -6,6 +6,7 @@ affiliations: ["Georgia Tech Athletic Association"]
 collaborators: ["g-t-ramblin", "buzz-jr"]
 startDate: 2025-03-01
 tags: ["Analytics", "Sports"]
+relationGroups: ["game-day"]
 url: "https://example.com/hype-analytics"
 repo: "https://github.com/buzz/hype-analytics"
 urls:

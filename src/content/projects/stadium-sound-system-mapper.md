@@ -4,6 +4,7 @@ description: "Mapped Bobby Dodd Stadium's speaker placement to optimize crowd ch
 startDate: 2024-08-01
 endDate: 2024-11-01
 tags: ["Audio", "Mapping"]
+relationGroups: ["game-day"]
 order: 6
 ---
 

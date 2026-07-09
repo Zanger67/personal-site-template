@@ -5,7 +5,7 @@
     "venue": "Journal of Mascot Sciences",
     "date": "2025",
     "role": "Lead author",
-    "affiliations": ["Buzz Robotics Society"],
+    "affiliations": ["Buzz Robotics Society", "Georgia Institute of Technology"],
     "url": null,
     "urls": [
       { "title": "PDF", "url": "https://example.com/wing-aerodynamics.pdf" },
@@ -17,7 +17,7 @@
     ],
     "tags": ["Aerodynamics", "Spirit"],
     "main": true,
-    "relationGroups": ["aerodynamics"]
+    "relationGroups": ["game-day"]
   },
   {
     "title": "Crowd Engagement Dynamics at College Football Games: A Longitudinal Study",
