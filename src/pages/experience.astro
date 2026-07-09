@@ -276,8 +276,8 @@ const conferenceRows = (conferences as any[]).map(c => ({
   ...c,
   liId: pushDetail({
     title: c.name, type: 'misc', dateLabel: c.date ? formatDate(c.date) : null,
-    subtitle: c.location ?? null, description: c.description ?? null,
-    links: detailLinks([{ label: 'View', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)]),
+    subtitle: [c.role, c.location].filter(Boolean).join(' · ') || null, description: c.description ?? null,
+    links: detailLinks([{ label: 'Website', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)]),
     entity: c.name, relationGroups: c.relationGroups ?? [], main: !!c.main,
   }),
 }));
@@ -607,8 +607,11 @@ const items: Item[] = [
   // point markers, unless a misc entry sets an `end` (then it becomes a ranged bar).
   ...(conferences as any[]).map(c => mkItem({
     title: c.name, type: 'misc', start: c.date, point: true, entity: c.name,
-    subtitle: c.location || null, description: c.description ?? null,
-    links: [{ label: 'View', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)], main: c.main,
+    subtitle: [c.role, c.location].filter(Boolean).join(' · ') || null, description: c.description ?? null,
+    // A conference can be tagged to an org (e.g. attended/organised on its behalf) —
+    // cross-links to that org's bar and shows the outlined "@ org" chip, same as pubs.
+    affiliations: c.affiliations || [],
+    links: [{ label: 'Website', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)], main: c.main,
     relationGroups: c.relationGroups,
   })),
   ...(misc as any[]).map(m => mkItem({
@@ -2233,7 +2236,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     }));
     viewButtons.forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view!)));
     document.querySelector('.view-timeline .tl-detail-close')?.addEventListener('click', () => deselect());
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') { deselect(); ldDeselect(); } });
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      // First Esc closes an open info tab (either view's drawer carries `.open`).
+      // A second Esc — with no tab open — clears the category filter back to "all".
+      if (document.querySelector('.tl-detail.open')) { deselect(); ldDeselect(); return; }
+      if (currentFilter !== 'all') setFilter('all');
+    });
     // When the info tab floats as an overlay, tapping the dimmed strip of content
     // showing beside it (the scrim) closes whichever panel is open (harmless
     // no-op when nothing is selected).
