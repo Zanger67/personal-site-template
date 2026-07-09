@@ -14,6 +14,10 @@ import profile from '../data/profile.json';
 // org name → short tab label). Falls back to an item's `entityShort`, then the
 // full name, so the map only needs entries you want to force. See buildDrawer.
 import relationLabels from '../data/relationLabels.json';
+// Optional human-facing names for relation-group slugs (e.g. "hackathon" →
+// "Hackathons"). Any that a selected item carries are appended to the drawer's
+// "Related" header as "Related (…)". Unmapped slugs add nothing. See buildDrawer.
+import relationGroupLabels from '../data/relationGroupLabels.json';
 import { hostLabel, extraLinks, type UrlEntry } from '../utils/links';
 import { resolvePeople } from '../utils/collaborators';
 
@@ -738,7 +742,7 @@ counts.main = items.filter(s => s.main).length + bottomItems.filter(u => u.main)
 const shownCategories = CATEGORIES.filter(c => counts[c.key] > 0);
 const showMain = counts.main > 0;
 
-const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_COLS, relationLabels };
+const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_COLS, relationLabels, relationGroupLabels };
 ---
 
 <BaseLayout title="Experience" description={profile.pageMeta.experience}>
@@ -1676,6 +1680,15 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const tabLabelFor = (org: string, bucketItems: Item[]): string =>
       relationLabels[org]
       || (bucketItems[0]?.entityShort && bucketItems[0].entityShort !== org ? bucketItems[0].entityShort : org);
+    // The selected item's relation-groups that carry a human-facing name (from
+    // relationGroupLabels.json), deduped and joined into a " (…)" suffix for the
+    // drawer's "Related" header — e.g. "Related (Hackathons)". No named group →
+    // empty string, so the header stays plain "Related".
+    const relationGroupLabels: Record<string, string> = cfg.relationGroupLabels || {};
+    const relatedGroupSuffix = (groups: string[]): string => {
+      const names = [...new Set((groups || []).map(g => relationGroupLabels[g]).filter(Boolean))];
+      return names.length ? ` (${names.join(', ')})` : '';
+    };
     const order: Record<string, number> = cfg.typeOrder;
     // Present items fill THROUGH the current month, so their exclusive end column
     // is the first of next month (absolute month index, matching item.*MonthNum).
@@ -1842,7 +1855,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         return ul;
       };
 
-      const lab = document.createElement('div'); lab.className = 'd-related-label'; lab.textContent = 'Related';
+      const lab = document.createElement('div'); lab.className = 'd-related-label'; lab.textContent = 'Related' + relatedGroupSuffix(it.relationGroups);
 
       // A selected WORK (project or publication) can split its related list into
       // tabs: one per affiliated org — that org's education, roles & memberships —
@@ -2113,7 +2126,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         // compact vertical timeline the bar drawer uses; kept in list order.
         const related = ldItems.filter(x => x.id !== d.id && ldForeground(x, d));
         if (related.length) {
-          const rlab = document.createElement('div'); rlab.className = 'd-related-label'; rlab.textContent = 'Related';
+          const rlab = document.createElement('div'); rlab.className = 'd-related-label'; rlab.textContent = 'Related' + relatedGroupSuffix(d.relationGroups);
           const ul = document.createElement('ul'); ul.className = 'd-timeline';
           for (const r of related) {
             const li = document.createElement('li'); li.className = 'd-tl-item';
