@@ -1,0 +1,45 @@
+{
+  "buzz": {
+    "display-name": "Buzz",
+    "url": null,
+    "urls": {}
+  },
+  "g-t-ramblin": {
+    "display-name": "G. T. Ramblin",
+    "url": "https://example.com/gt-ramblin",
+    "urls": {
+      "GitHub": "https://github.com/gt-ramblin",
+      "Website": "https://example.com/gt-ramblin"
+    }
+  },
+  "w-r-eck": {
+    "display-name": "W. R. Eck",
+    "url": "https://example.com/wr-eck",
+    "urls": {}
+  },
+  "a-t-lanta": {
+    "display-name": "A. T. Lanta",
+    "url": "https://example.com/at-lanta",
+    "urls": {}
+  },
+  "ramblin-wreck": {
+    "display-name": "Ramblin' Wreck",
+    "url": "https://example.com/ramblin-wreck",
+    "urls": {}
+  },
+  "hairy-dawg": {
+    "display-name": "Hairy Dawg",
+    "url": "https://example.com/uga-hairy-dawg",
+    "urls": {}
+  },
+  "aubie": {
+    "display-name": "Aubie",
+    "url": "https://example.com/auburn-aubie",
+    "urls": {}
+  },
+  "the-tiger": {
+    "display-name": "The Tiger",
+    "url": "https://example.com/clemson-tiger",
+    "urls": {}
+  }
+}

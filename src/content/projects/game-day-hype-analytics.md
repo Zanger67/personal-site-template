@@ -2,6 +2,8 @@
 title: "Game Day Hype Analytics"
 description: "Tracked crowd energy levels across 24 home football games to optimize push-up timing and crowd engagement strategy."
 role: "Data Lead"
+affiliations: ["Georgia Tech Athletic Association"]
+collaborators: ["g-t-ramblin", "buzz-jr"]
 startDate: 2025-03-01
 tags: ["Analytics", "Sports"]
 url: "https://example.com/hype-analytics"

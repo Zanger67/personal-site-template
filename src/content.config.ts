@@ -23,6 +23,17 @@ const blog = defineCollection({
     main: z.boolean().optional().default(false),
     // Topic tags — rendered as chips on the Works cards, same as projects.
     tags: z.array(z.string()).optional().default([]),
+    // Your role/authorship on the post (e.g. "Guest author"). Shown as the italic
+    // subtitle on Works cards and under the title on the post page. Omit for a
+    // standard solo post.
+    role: z.string().nullable().optional(),
+    // Orgs/labs this post is affiliated with — displayed as chips on the Works
+    // card and post header (the same affiliation tag projects & publications carry).
+    affiliations: z.array(z.string()).optional().default([]),
+    // Collaborators / co-authors — raw name strings, resolved via
+    // src/data/collaborators.json into clickable links on the post page (same
+    // mechanism as a project's `collaborators` / a publication's `authors`).
+    collaborators: z.array(z.string()).optional().default([]),
     // Extra links rendered as buttons in the post header.
     urls: z.array(urlEntry).optional().default([]),
     // "Featured in" / press coverage — a list parallel to `urls`, same shape,
@@ -39,20 +50,31 @@ const projects = defineCollection({
     // Your role on the project (e.g. "Co-Creator & Maintainer"). Surfaced as the
     // subtitle on Works cards + the timeline drawer, and under the title on the
     // project detail page. Omit for solo/unlabelled projects.
-    role: z.string().optional(),
+    role: z.string().nullable().optional(),
     startDate: z.coerce.date(),
-    endDate: z.coerce.date().optional(),
-    url: z.string().optional(),
-    repo: z.string().optional(),
+    // Optional scalars are .nullable() so personal-site items can carry explicit
+    // `null` placeholders (see the "fully-explicit" data convention in CLAUDE.md);
+    // null reads the same as omitted. endDate MUST be nullable — a bare
+    // z.coerce.date() would coerce null into a bogus 1970 date.
+    endDate: z.coerce.date().nullable().optional(),
+    url: z.string().nullable().optional(),
+    repo: z.string().nullable().optional(),
     // Extra info-tab links beyond `url`/`repo` (see urlEntry above).
     urls: z.array(urlEntry).optional().default([]),
     // "Featured in" / press coverage — a list parallel to `urls`, same shape,
     // rendered as its own set of buttons after them.
     features: z.array(urlEntry).optional().default([]),
     tags: z.array(z.string()).optional().default([]),
-    // Tags linking project to an experience/role (e.g. lab name, employer)
+    // Tags linking project to an experience/role (e.g. lab name, employer).
+    // Displayed as affiliation chips on Works cards / detail pages, and cross-links
+    // the project to that org on the timeline. Publications (publications.json) and
+    // blog posts carry the same field.
     affiliations: z.array(z.string()).optional().default([]),
-    // TODO: publications should also support affiliations (partner orgs, labs)
+    // Collaborators / co-authors — raw name strings. Synonymous with a
+    // publication's `authors` (both resolve the same way). Each name is looked up
+    // by EXACT match in src/data/collaborators.json; a matched name carrying a
+    // `url` renders as a clickable link on the detail page, others as plain text.
+    collaborators: z.array(z.string()).optional().default([]),
     // Timeline relation-groups: a shared free-form tag that groups items across
     // the whole timeline. Selecting any item highlights every item that shares
     // one of its relation-groups (independent of category/org). Many-to-many —

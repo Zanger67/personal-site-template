@@ -26,6 +26,8 @@ interface Props {
   description?: string | null;
   /** Optional italic line between header and description (e.g. a publication venue). */
   subtitle?: string | null;
+  /** Affiliated orgs/labs — rendered as distinct outlined chips before the tags. */
+  affiliations?: string[];
   tags?: string[];
   /** Live / Repo / extra links — rendered as chips; simply omitted when empty. */
   links?: WorkLink[];
@@ -44,6 +46,7 @@ const {
   dateLabel = null,
   description = null,
   subtitle = null,
+  affiliations = [],
   tags = [],
   links = [],
   featured = false,
@@ -77,10 +80,11 @@ const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {
   {subtitle && <p class="work-subtitle">{subtitle}</p>}
   {description && <p class="work-desc">{description}</p>}
 
-  {(tags.length > 0 || links.length > 0) && (
+  {(affiliations.length > 0 || tags.length > 0 || links.length > 0) && (
     <div class="work-metarow">
-      {tags.length > 0 && (
+      {(affiliations.length > 0 || tags.length > 0) && (
         <div class="tags">
+          {affiliations.map(a => <span class="affil-chip" title={`Affiliated with ${a}`}>{a}</span>)}
           {tags.map(tag => <span class="tag">{tag}</span>)}
         </div>
       )}
@@ -217,6 +221,22 @@ const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {
     background: var(--accent-light);
     padding: 0.15rem 0.5rem;
     border-radius: 3px;
+  }
+
+  /* Affiliation chip — an org/lab the item is tied to. Outlined + muted (with a
+     leading "@") to read as a distinct entity, not a topic tag. */
+  .affil-chip {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+  }
+
+  .affil-chip::before {
+    content: '@';
+    margin-right: 0.15rem;
+    opacity: 0.6;
   }
 
   .ext-links {

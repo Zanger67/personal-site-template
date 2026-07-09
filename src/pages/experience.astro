@@ -11,6 +11,7 @@ import conferences from '../data/conferences.json';
 import misc from '../data/misc.json';
 import profile from '../data/profile.json';
 import { hostLabel, extraLinks, type UrlEntry } from '../utils/links';
+import { resolvePeople } from '../utils/collaborators';
 
 if (!isRouteEnabled('experience')) return Astro.rewrite('/404');
 
@@ -544,7 +545,11 @@ const items: Item[] = [
   ...(publications as any[]).map(p => mkItem({
     // Publications share the "awards/pubs" category with awards/scholarships.
     title: p.title, type: 'awards', start: p.date, point: true, entity: p.title,
-    description: [(p.authors && p.authors.length) ? p.authors.join(', ') : null, p.venue].filter(Boolean).join(' — '),
+    // Authorship role (e.g. "Lead author") reads as the drawer subtitle.
+    subtitle: p.role ?? null,
+    description: [(p.authors && p.authors.length) ? resolvePeople(p.authors).map(a => a.name).join(', ') : null, p.venue].filter(Boolean).join(' — '),
+    // Partner labs/orgs — cross-link the paper to that org on the timeline, same as projects.
+    affiliations: p.affiliations || [],
     links: [{ label: 'Read', url: p.url }, ...extraLinks(p.urls), ...extraLinks(p.features)], main: p.main,
     relationGroups: p.relationGroups,
   })),
@@ -1174,6 +1179,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .d-desc { font-size: 0.9rem; margin-bottom: 0.9rem; line-height: 1.6; }
   .d-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
   .d-tag { font-size: 0.75rem; color: var(--accent); background: var(--accent-light); padding: 0.15rem 0.5rem; border-radius: 3px; }
+  /* Affiliation chips — outlined "@ org", distinct from the filled topic tags. */
+  .d-affils { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: -0.2rem 0 1rem; }
+  .d-affil { font-size: 0.75rem; color: var(--text-muted); border: 1px solid var(--border); padding: 0.15rem 0.5rem; border-radius: 3px; }
+  .d-affil::before { content: '@'; margin-right: 0.15rem; opacity: 0.6; }
   .d-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
   .d-links a { font-size: 0.82rem; padding: 0.25rem 0.6rem; border: 1px solid var(--border); border-radius: 4px; text-decoration: none; color: var(--accent); }
   .d-links a:hover { border-color: var(--accent); }
@@ -1635,9 +1644,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     function inForeground(it: Item): boolean {
       if (selectedGroup === null) return true;
       if (it.group === selectedGroup) return true;
-      // projects tagged (via affiliations) to the selected organisation stay lit
-      if (it.type === 'projects' && selectedEntity && it.affiliations.includes(selectedEntity)) return true;
-      // reverse: a selected project lights up the orgs it's affiliated with (and their roles)
+      // items tagged (via affiliations) to the selected organisation stay lit —
+      // projects and publications alike (any affiliated item)
+      if (selectedEntity && it.affiliations.length && it.affiliations.includes(selectedEntity)) return true;
+      // reverse: a selected project/publication lights up the orgs it's affiliated with (and their roles)
       if (selectedAffiliations.length && selectedAffiliations.includes(it.entity)) return true;
       // shared relation-group tags (many-to-many, matched live on selection)
       if (selectedGroups.length && it.relationGroups.some(g => selectedGroups.includes(g))) return true;
@@ -1671,6 +1681,18 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       if (it.subtitle) {
         const sub = document.createElement('div'); sub.className = 'd-subtitle'; sub.textContent = it.subtitle;
         drawerBody.appendChild(sub);
+      }
+      // Affiliation chips — orgs/labs this item is tied to (projects & publications).
+      // Same outlined "@ org" chips as the Works cards; selecting the item also
+      // lights these orgs up on the timeline and in the Related list below.
+      if (it.affiliations && it.affiliations.length) {
+        const aw = document.createElement('div'); aw.className = 'd-affils';
+        for (const a of it.affiliations) {
+          const chip = document.createElement('span'); chip.className = 'd-affil';
+          chip.title = `Affiliated with ${a}`; chip.textContent = a;
+          aw.appendChild(chip);
+        }
+        drawerBody.appendChild(aw);
       }
       if (it.description) {
         const p = document.createElement('p'); p.className = 'd-desc'; p.textContent = it.description;

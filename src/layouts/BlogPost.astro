@@ -2,6 +2,7 @@
 import BaseLayout from './BaseLayout.astro';
 import BackToWorks from '../components/BackToWorks.astro';
 import { extraLinks, type UrlEntry } from '../utils/links';
+import { resolvePeople } from '../utils/collaborators';
 
 // The "urls"/"features" listed formats (same as the timeline's info-tab buttons):
 // each entry renders as a labelled link in the post header. A button shows its
@@ -12,11 +13,17 @@ interface Props {
   date: Date;
   description: string;
   readingTime: string;
+  role?: string | null;
+  affiliations?: string[];
+  collaborators?: string[];
   urls?: UrlEntry[];
   features?: UrlEntry[];
 }
 
-const { title, date, description, readingTime, urls = [], features = [] } = Astro.props;
+const { title, date, description, readingTime, role, affiliations = [], collaborators = [], urls = [], features = [] } = Astro.props;
+
+// Collaborators — raw names resolved to clickable links via collaborators.json.
+const people = resolvePeople(collaborators);
 const links = [...extraLinks(urls), ...extraLinks(features)];
 const formattedDate = date.toLocaleDateString('en-US', {
   year: 'numeric',
@@ -30,6 +37,25 @@ const formattedDate = date.toLocaleDateString('en-US', {
   <article class="prose">
     <header>
       <h1>{title}</h1>
+      {role && <p class="post-role">{role}</p>}
+      {affiliations.length > 0 && (
+        <div class="post-affils">
+          {affiliations.map(a => <span class="affil-chip" title={`Affiliated with ${a}`}>{a}</span>)}
+        </div>
+      )}
+      {people.length > 0 && (
+        <p class="post-people">
+          <span class="post-people-label">Collaborators:</span>{' '}
+          {people.map((p, i) => (
+            <Fragment>
+              {i > 0 && ', '}
+              {p.url
+                ? <a href={p.url} target="_blank" rel="noopener noreferrer">{p.name}</a>
+                : <span>{p.name}</span>}
+            </Fragment>
+          ))}
+        </p>
+      )}
       <span class="post-meta">
         <time datetime={date.toISOString()}>{formattedDate}</time> – {readingTime}
       </span>
@@ -47,6 +73,57 @@ const formattedDate = date.toLocaleDateString('en-US', {
 </BaseLayout>
 
 <style>
+  /* Role/authorship line under the title — mirrors ProjectPost's `.post-role`. */
+  .post-role {
+    font-size: 0.95rem;
+    font-style: italic;
+    color: var(--accent);
+    margin: 0.2rem 0 0.35rem;
+  }
+
+  /* Affiliation chips — mirror WorkCard's outlined "@ org" chips. */
+  .post-affils {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.6rem;
+  }
+
+  .affil-chip {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+  }
+
+  .affil-chip::before {
+    content: '@';
+    margin-right: 0.15rem;
+    opacity: 0.6;
+  }
+
+  /* Collaborators / co-authors — inline list; names with a collaborators.json
+     `url` render as links, the rest as plain muted text. */
+  .post-people {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 0.1rem 0 0.5rem;
+  }
+
+  .post-people-label {
+    font-weight: 600;
+  }
+
+  .post-people a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .post-people a:hover {
+    text-decoration: underline;
+  }
+
   .post-meta {
     color: var(--text-muted);
     font-size: 0.9rem;

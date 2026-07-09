@@ -5,6 +5,7 @@ import { isRouteEnabled } from '@config/site';
 import { getCollection } from 'astro:content';
 import { getReadingTime } from '../utils/reading-time';
 import { extraLinks, type UrlEntry, type Link as WorkLink } from '../utils/links';
+import { resolvePeople } from '../utils/collaborators';
 import profile from '../data/profile.json';
 import publications from '../data/publications.json';
 
@@ -54,7 +55,8 @@ interface WorkItem {
   external: boolean;
   dateLabel: string;
   description?: string;
-  subtitle?: string;
+  subtitle?: string | null;
+  affiliations: string[];
   tags: string[];
   links: WorkLink[];
 }
@@ -64,6 +66,10 @@ interface Publication {
   authors: string[];
   venue: string;
   date: string;
+  // Authorship/contributor role (e.g. "Lead author") — folds into the subtitle.
+  role?: string;
+  // Orgs/labs this paper is affiliated with (partner labs, sponsoring orgs).
+  affiliations?: string[];
   url?: string | null;
   urls?: UrlEntry[];
   features?: UrlEntry[];
@@ -88,6 +94,7 @@ const projectItems: WorkItem[] = (isRouteEnabled('projects') ? await getCollecti
       : `${fmtMonthYear(entry.data.startDate)} – Present`,
     description: entry.data.description,
     subtitle: entry.data.role,
+    affiliations: entry.data.affiliations,
     tags: entry.data.tags,
     links: dedupeLinks([
       ...(entry.data.url ? [{ label: 'Live', url: entry.data.url }] : []),
@@ -108,8 +115,11 @@ const pubItems: WorkItem[] = (isRouteEnabled('publications') ? pubData : [])
     href: pub.url || null,
     external: true,
     dateLabel: String(pub.date),
-    description: pub.authors.join(', '),
-    subtitle: pub.venue,
+    // `authors` are people-registry refs (slugs) — resolve to display names.
+    description: resolvePeople(pub.authors).map(a => a.name).join(', '),
+    // Authorship role leads the venue when present ("Lead author · Venue").
+    subtitle: pub.role ? `${pub.role} · ${pub.venue}` : pub.venue,
+    affiliations: pub.affiliations ?? [],
     tags: pub.tags ?? [],
     links: dedupeLinks([...extraLinks(pub.urls), ...extraLinks(pub.features)]),
   }))
@@ -125,6 +135,8 @@ const postItems: WorkItem[] = (isRouteEnabled('blog') ? (await getCollection('bl
     external: false,
     dateLabel: `${fmtFullDate(entry.data.date)} · ${getReadingTime(entry.body!)}`,
     description: entry.data.description,
+    subtitle: entry.data.role,
+    affiliations: entry.data.affiliations,
     tags: entry.data.tags ?? [],
     links: dedupeLinks([...extraLinks(entry.data.urls), ...extraLinks(entry.data.features)]),
   }))
@@ -178,6 +190,7 @@ const activeId = tabs[0]?.id ?? null;
               dateLabel={item.dateLabel}
               description={item.description}
               subtitle={item.subtitle}
+              affiliations={item.affiliations}
               tags={item.tags}
               links={item.links}
               featured={item.main}
@@ -199,6 +212,7 @@ const activeId = tabs[0]?.id ?? null;
               dateLabel={item.dateLabel}
               description={item.description}
               subtitle={item.subtitle}
+              affiliations={item.affiliations}
               tags={item.tags}
               links={item.links}
               featured={item.main}
@@ -218,6 +232,7 @@ const activeId = tabs[0]?.id ?? null;
               dateLabel={item.dateLabel}
               description={item.description}
               subtitle={item.subtitle}
+              affiliations={item.affiliations}
               tags={item.tags}
               links={item.links}
               featured={item.main}
@@ -237,6 +252,7 @@ const activeId = tabs[0]?.id ?? null;
               dateLabel={item.dateLabel}
               description={item.description}
               subtitle={item.subtitle}
+              affiliations={item.affiliations}
               tags={item.tags}
               links={item.links}
               featured={item.main}

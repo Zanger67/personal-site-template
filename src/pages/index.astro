@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import NorthAmericaMap from '../components/NorthAmericaMap.astro';
 import { showHomeSection, isRouteEnabled } from '@config/site';
 import { getCollection, getEntry, render } from 'astro:content';
+import { resolvePeople } from '../utils/collaborators';
 import profile from '../data/profile.json';
 import affiliations from '../data/affiliations.json';
 import publications from '../data/publications.json';
@@ -144,8 +145,16 @@ const { Content: Intro } = await render(introEntry);
           <div class="misc-row">
             <span class="misc-label">{profile.friendsLabel}:</span>
             <ul class="inline-list">
-              {profile.friends.map(friend => (
-                <li><a href={friend.url} target="_blank" rel="noopener noreferrer">{friend.label}</a></li>
+              {/* Friends are name references into the shared people registry
+                  (src/data/collaborators.json) — same source projects/publications
+                  resolve names from. A registered name with a `url` links out;
+                  an unknown name (or one without a url) renders as plain text. */}
+              {resolvePeople(profile.friends).map(friend => (
+                <li>
+                  {friend.url
+                    ? <a href={friend.url} target="_blank" rel="noopener noreferrer">{friend.name}</a>
+                    : <span>{friend.name}</span>}
+                </li>
               ))}
             </ul>
           </div>

@@ -3,6 +3,8 @@ title: "Hello, World"
 date: 2026-04-07
 description: "First post — welcome to the hive."
 tags: ["Meta", "Campus Life"]
+affiliations: ["Yellow Jacket Spirit Squad"]
+collaborators: ["w-r-eck"]
 urls:
   - title: "Discussion"
     url: "https://example.com/hello-world-thread"

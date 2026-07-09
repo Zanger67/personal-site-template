@@ -19,6 +19,6 @@ const { Content } = await render(post);
 const readingTime = getReadingTime(post.body!);
 ---
 
-<BlogPost title={post.data.title} date={post.data.date} description={post.data.description} readingTime={readingTime} urls={post.data.urls} features={post.data.features}>
+<BlogPost title={post.data.title} date={post.data.date} description={post.data.description} readingTime={readingTime} role={post.data.role} affiliations={post.data.affiliations} collaborators={post.data.collaborators} urls={post.data.urls} features={post.data.features}>
   <Content />
 </BlogPost>

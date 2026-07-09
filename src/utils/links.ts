@@ -22,6 +22,7 @@ export interface Link { label: string; url: string; }
 // teach the whole site a new platform, add one row here.
 const KNOWN_HOSTS: Record<string, string> = {
   'github.com': 'GitHub',
+  'devpost.com': 'Devpost',
   'arxiv.org': 'arXiv',
   'lesswrong.com': 'LessWrong',
   'substack.com': 'Substack',

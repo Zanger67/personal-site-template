@@ -8,12 +8,7 @@
   "profileShape": "circle",
   "profileImage": "/images/profile.svg",
   "friendsLabel": "Friends",
-  "friends": [
-    { "label": "Ramblin' Wreck", "url": "https://example.com/ramblin-wreck" },
-    { "label": "Hairy Dawg", "url": "https://example.com/uga-hairy-dawg" },
-    { "label": "Aubie", "url": "https://example.com/auburn-aubie" },
-    { "label": "The Tiger", "url": "https://example.com/clemson-tiger" }
-  ],
+  "friends": ["ramblin-wreck", "hairy-dawg", "aubie", "the-tiger"],
   "llmNote": "",
   "contactIntro": "Want to book me for an event or just say hello? Reach out below.",
   "pageMeta": {
