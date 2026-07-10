@@ -208,7 +208,7 @@ def load_projects(content_dir: Path):
 
 
 def load_area(data_dir: Path, content_dir: Path):
-    """Load the 8 item sources from one data/content pair (the live src/ tree or
+    """Load the 9 item sources from one data/content pair (the live src/ tree or
     the src/dev archive). Missing files/dirs load empty."""
     return {
         "education": load_json(data_dir / "education.json"),
@@ -216,6 +216,7 @@ def load_area(data_dir: Path, content_dir: Path):
         "organizations": load_json(data_dir / "organizations.json"),
         "publications": load_json(data_dir / "publications.json"),
         "awards": load_json(data_dir / "awards.json"),
+        "certifications": load_json(data_dir / "certifications.json"),
         "conferences": load_json(data_dir / "conferences.json"),
         "misc": load_json(data_dir / "misc.json"),
         "projects": load_projects(content_dir),
@@ -474,6 +475,16 @@ def build_items(data, show_incoming, area="live"):
             date_label=(fmt_range(a.get("date"), None, point=True) if a.get("date") else None),
             charted=charted, not_charted_reason=reason,
             incoming=is_incoming(a.get("date")), is_org_entity=False)
+
+    # --- certifications (awards/pubs, point events) ----------------------
+    for c in data["certifications"]:
+        charted, reason = point_charted(bool(c.get("date")))
+        add(title=c.get("name"), category="awards", kind="certification",
+            entity=c.get("name"), affiliations=[],
+            relation_groups=c.get("relationGroups") or [], main=bool(c.get("main")),
+            date_label=(fmt_range(c.get("date"), None, point=True) if c.get("date") else None),
+            charted=charted, not_charted_reason=reason,
+            incoming=is_incoming(c.get("date")), is_org_entity=False)
 
     # --- projects (content collection) -----------------------------------
     for p in data["projects"]:

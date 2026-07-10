@@ -118,6 +118,7 @@ Shared frontmatter fields worth knowing:
 | `education.json`            | Education entries                                             |
 | `publications.json`         | Publications list                                            |
 | `awards.json`               | Awards                                                       |
+| `certifications.json`       | Certifications (name, issuer, url, date)                     |
 | `conferences.json`          | Conferences                                                  |
 | `misc.json`                 | Misc. point-events on the timeline                           |
 | `contacts.json`             | Contact-page primary/sub link tree                           |

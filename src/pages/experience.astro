@@ -7,6 +7,7 @@ import education from '../data/education.json';
 import publications from '../data/publications.json';
 import organizations from '../data/organizations.json';
 import awards from '../data/awards.json';
+import certifications from '../data/certifications.json';
 import conferences from '../data/conferences.json';
 import misc from '../data/misc.json';
 import profile from '../data/profile.json';
@@ -270,6 +271,18 @@ const awardRows = (awards as any[]).map(a => ({
     subtitle: null, description: a.description ?? null,
     links: detailLinks([{ label: 'View', url: a.url }, ...extraLinks(a.urls), ...extraLinks(a.features)]),
     entity: a.name, relationGroups: a.relationGroups ?? [], main: !!a.main,
+  }),
+}));
+// Certifications mirror awards (point events, single-month date), but carry an
+// optional `issuer` shown as the detail subtitle. They share the "awards/pubs"
+// category, so no new colour/filter — only their own list section below.
+const certRows = (certifications as any[]).map(c => ({
+  ...c,
+  liId: pushDetail({
+    title: c.name, type: 'awards', dateLabel: c.date ? formatDate(c.date) : null,
+    subtitle: c.issuer ?? null, description: c.description ?? null,
+    links: detailLinks([{ label: 'View', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)]),
+    entity: c.name, relationGroups: c.relationGroups ?? [], main: !!c.main,
   }),
 }));
 const conferenceRows = (conferences as any[]).map(c => ({
@@ -569,6 +582,14 @@ const items: Item[] = [
     links: [{ label: 'View', url: a.url }, ...extraLinks(a.urls), ...extraLinks(a.features)], main: a.main,
     relationGroups: a.relationGroups,
   })),
+  ...(certifications as any[]).map(c => mkItem({
+    // Certifications — point events sharing the "awards/pubs" category; the
+    // issuing body (`issuer`) reads as the drawer subtitle.
+    title: c.name, type: 'awards', start: c.date, point: true, entity: c.name,
+    subtitle: c.issuer ?? null,
+    links: [{ label: 'View', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)], main: c.main,
+    relationGroups: c.relationGroups,
+  })),
   ...orgs.flatMap(org => [
     // Clubs mirror work roles: the role is the title, while the organisation,
     // location and an optional freeform detail line live in the drawer body.
@@ -649,9 +670,9 @@ const projectListItems = projects
 //               entries lead (each with its involvement span); undated entries
 //               trail in a separate paragraph. alumnus orgs are excluded (their
 //               own strip below).
-//   • Undated — point events (awards, publications, conferences, misc) with no
-//               date recorded, so they can never be charted; surfaced here
-//               instead of vanishing.
+//   • Undated — point events (awards, certifications, publications, conferences,
+//               misc) with no date recorded, so they can never be charted;
+//               surfaced here instead of vanishing.
 //   • Alumni  — a former-member relationship: an `alumnus` window on a club or a
 //               work affiliation (its category colours the chip)
 // Every entry shares the chip shape { title, category, detail, url, main }; a
@@ -698,11 +719,13 @@ const datedInv = involvementOrgs.filter(x => orgInvolvementRange(x.o) !== null)
 const undatedInv = involvementOrgs.filter(x => orgInvolvementRange(x.o) === null)
   .map(x => involvementChip(x.o, x.category));
 
-// Undated point events — awards/pubs/conferences/misc with no `date`, which can't
-// be charted (mkItem drops them); surfaced here so they don't silently vanish.
+// Undated point events — awards/certifications/pubs/conferences/misc with no
+// `date`, which can't be charted (mkItem drops them); surfaced here so they
+// don't silently vanish.
 const undatedPoints: BottomEntry[] = [
   ...(publications as any[]).filter(p => !p.date).map(p => ({ title: p.title, category: 'awards' as CatKey, detail: p.venue ?? null, url: p.url ?? null, main: !!p.main })),
   ...(awards as any[]).filter(a => !a.date).map(a => ({ title: a.name, category: 'awards' as CatKey, detail: null, url: a.url ?? null, main: !!a.main })),
+  ...(certifications as any[]).filter(c => !c.date).map(c => ({ title: c.name, category: 'awards' as CatKey, detail: c.issuer ?? null, url: c.url ?? null, main: !!c.main })),
   ...(conferences as any[]).filter(c => !c.date).map(c => ({ title: c.name, category: 'misc' as CatKey, detail: c.location ?? null, url: c.url ?? null, main: !!c.main })),
   ...(misc as any[]).filter(m => !m.date).map(m => ({ title: m.name, category: 'misc' as CatKey, detail: m.location ?? null, url: m.url ?? null, main: !!m.main })),
 ];
@@ -1003,6 +1026,20 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
             <li class="award-row" data-li={award.liId} role="button" tabindex="0">
               <span class="inv-name">{award.name}</span>
               <span class="role-dates">{formatDate(award.date)}</span>
+            </li>
+          ))}
+        </ul>
+      </>
+    )}
+
+    {certRows.length > 0 && (
+      <>
+        <h2>Certifications</h2>
+        <ul class="involvement-list">
+          {certRows.map(cert => (
+            <li class="award-row" data-li={cert.liId} role="button" tabindex="0">
+              <span class="inv-name">{cert.name}</span>
+              <span class="role-dates">{formatDate(cert.date)}</span>
             </li>
           ))}
         </ul>
