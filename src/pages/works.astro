@@ -23,6 +23,15 @@ const byMainThenDate = (
 
 const fmtMonthYear = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 const fmtFullDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+// Publication dates are loose strings — "YYYY", "YYYY-MM", or "YYYY-MM-DD".
+// Year-only passes through as-is; anything month-precise renders "Mon YYYY"
+// (the awards/conference point-event style on the experience timeline). Parts
+// build a LOCAL Date so a "2025-06" value can't roll back to May in timezones
+// behind UTC (the pitfall parseDate warns about in experience.astro).
+const fmtPubDate = (v: string): string => {
+  const [y, m] = String(v).split('-');
+  return m ? fmtMonthYear(new Date(parseInt(y), parseInt(m) - 1)) : y;
+};
 
 // Kind → experience-timeline category colour, so the feed is colour-keyed to the
 // timeline (see CATEGORIES in experience.astro). Blog has no timeline category,
@@ -114,7 +123,7 @@ const pubItems: WorkItem[] = (isRouteEnabled('publications') ? pubData : [])
     // The paper link is the title's href; the extra `urls`/`features` become chips.
     href: pub.url || null,
     external: true,
-    dateLabel: String(pub.date),
+    dateLabel: fmtPubDate(String(pub.date)),
     // `authors` are people-registry refs (slugs) — resolve to display names.
     description: resolvePeople(pub.authors).map(a => a.name).join(', '),
     // Authorship role leads the venue when present ("Lead author · Venue").
