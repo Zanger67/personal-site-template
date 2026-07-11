@@ -27,7 +27,7 @@ if (!isRouteEnabled('experience')) return Astro.rewrite('/404');
 
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 // Project detail pages only exist when the projects route is enabled; gate the
-// drawer's "Details" link on it so it never points at a 404.
+// drawer's "see full" link on it so it never points at a 404.
 const projectsEnabled = isRouteEnabled('projects');
 
 // ===========================================================================
@@ -332,6 +332,10 @@ interface Item {
   description: string | null;
   subtitle: string | null;   // org · location context line (clubs/work-style items)
   links: { label: string; url: string }[];
+  // Internal link to this item's OWN detail page (projects). Rendered as a light
+  // "see full" affordance under the description — not a boxed d-links button —
+  // and navigates in the same tab. null for items without a detail page.
+  detailUrl: string | null;
   // Grouping: items in the same group stay lit together when one is selected.
   entity: string;          // organisation / institution / (project = own title)
   entityShort: string;     // shortform org label for the compact bar; defaults to `entity`
@@ -389,6 +393,7 @@ let _id = 0;
 interface ItemOpts {
   title: string; type: CatKey; start: any; end?: any; point?: boolean;
   entity?: string; entityShort?: string | null; description?: string | null; subtitle?: string | null; links?: ({ label: string; url: string | null | undefined })[];
+  detailUrl?: string | null;
   affiliations?: string[]; isWork?: boolean; main?: boolean; also?: CatKey[];
   relationGroups?: string[]; tags?: string[]; metrics?: Metrics;
 }
@@ -440,7 +445,7 @@ function mkItem(o: ItemOpts): Item | null {
   const cats = Array.from(new Set<CatKey>([o.type, ...(o.also || [])]));
   return {
     id: _id++, title, type: o.type, start, end, startMonthNum: monthNum(s), endMonthNum, dateLabel,
-    description, subtitle: o.subtitle || null, links, entity, entityShort, group: `${o.type}::${entity}`,
+    description, subtitle: o.subtitle || null, links, detailUrl: o.detailUrl ?? null, entity, entityShort, group: `${o.type}::${entity}`,
     affiliations: o.affiliations || [],
     isWork: !!o.isWork,
     relationGroups: o.relationGroups || [],
@@ -624,8 +629,10 @@ const items: Item[] = [
   ...projects.map(p => mkItem({
     title: p.data.title, type: 'projects', start: p.data.startDate, end: p.data.endDate, entity: p.data.title, isWork: true,
     description: p.data.description, subtitle: p.data.role ?? null, affiliations: p.data.affiliations || [],
+    // The project's own detail page — surfaced as a "see full" link under the
+    // description (see buildDrawer), not as a d-links button. Gated on the route.
+    detailUrl: projectsEnabled ? `${base}/projects/${p.id}` : null,
     links: [
-      ...(projectsEnabled ? [{ label: 'Details', url: `${base}/projects/${p.id}` }] : []),
       { label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }, ...extraLinks(p.data.urls), ...extraLinks(p.data.features),
     ], main: p.data.main,
     relationGroups: p.data.relationGroups, tags: p.data.tags, metrics: p.data.metrics,
@@ -1279,6 +1286,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .d-desc a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
   .d-desc a:hover { text-decoration: none; }
   .d-desc code, .d-tl-desc code { font-size: 0.85em; background: var(--accent-light); border-radius: 3px; padding: 0.05em 0.3em; }
+  /* "See full" link — sits snug under the description, above the tags. Tighten
+     the description's bottom margin when it's immediately followed by one. */
+  .d-seefull { display: inline-block; font-size: 0.82rem; color: var(--accent); text-decoration: none; margin: 0 0 1rem; }
+  .d-seefull:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .d-desc:has(+ .d-seefull) { margin-bottom: 0.4rem; }
   .d-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
   .d-tag { font-size: 0.75rem; color: var(--accent); background: var(--accent-light); padding: 0.15rem 0.5rem; border-radius: 3px; }
   /* Affiliation chips — outlined "@ org", distinct from the filled topic tags. */
@@ -1715,7 +1727,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     interface Item {
       id: number; title: string; type: string; start: number; end: number | null;
       startMonthNum: number; endMonthNum: number | null; dateLabel: string;
-      description: string | null; subtitle: string | null; links: { label: string; url: string }[];
+      description: string | null; subtitle: string | null; links: { label: string; url: string }[]; detailUrl: string | null;
       entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[]; isWork: boolean;
       tags: string[]; metrics: MetricRow[]; main: boolean; cats: string[]; laneKey?: string | null;
     }
@@ -1875,6 +1887,15 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         // src/utils/markdown.ts. Authored HTML is escaped, so innerHTML is safe.
         const p = document.createElement('p'); p.className = 'd-desc'; p.innerHTML = inlineMarkdown(it.description);
         drawerBody.appendChild(p);
+      }
+      // "See full" affordance — an internal link to this item's own detail page
+      // (projects). Sits right under the description, above the tags: a lighter
+      // touch than a boxed d-links button, and it navigates in the SAME tab
+      // (internal route) rather than opening a new one like the external links.
+      if (it.detailUrl) {
+        const more = document.createElement('a'); more.className = 'd-seefull';
+        more.href = it.detailUrl; more.textContent = 'Click to see full →';
+        drawerBody.appendChild(more);
       }
       // Topic tags (e.g. a project's tech chips) — descriptive labels, not links.
       if (it.tags && it.tags.length) {
