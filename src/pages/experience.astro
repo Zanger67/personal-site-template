@@ -803,7 +803,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       // / timeline otherwise; any other hash is a category filter, which implies
       // the timeline view. (The module script below mirrors this.)
       var narrow = window.matchMedia('(max-width: 830px)').matches;
-      de.dataset.initialView = (hash === 'list' || (hash === '' && narrow)) ? 'list' : 'timeline';
+      // The hash may carry several tokens joined by "&" (e.g. list&sel=3), so
+      // detect the list view by presence of the `list` token, not equality.
+      var parts = hash.split('&').filter(Boolean);
+      var isList = parts.indexOf('list') !== -1;
+      de.dataset.initialView = (isList || (parts.length === 0 && narrow)) ? 'list' : 'timeline';
     })();
   </script>
   <h1>Experience</h1>
@@ -1822,6 +1826,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const rows = Array.from(document.querySelectorAll<HTMLElement>('.tl-row'));
 
     // --- selection state ---
+    // `restoring` is set while we replay a history state (the initial hash or a
+    // popstate) so the select/deselect helpers below don't record NEW history
+    // for a move the user made with Back/Forward.
+    let restoring = false;
     let selectedId: number | null = null;
     let selectedGroup: string | null = null;
     let selectedEntity: string | null = null;
@@ -2058,8 +2066,8 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       window.scrollBy({ top: delta, left: 0, behavior: reduce ? 'auto' : 'smooth' });
     }
 
-    function selectItem(it: Item, opts?: { scroll?: boolean; viaRelated?: boolean }) {
-      if (selectedId === it.id) { deselect(); return; }
+    function selectItem(it: Item, opts?: { scroll?: boolean; viaRelated?: boolean; history?: 'push' | 'none' }) {
+      if (selectedId === it.id) { deselect(opts); return; }
       // The item selected just before this one — only meaningful when navigating
       // via a related-list link (not a fresh click on a bar).
       const prev = (opts?.viaRelated && selectedId !== null) ? byId[selectedId] : null;
@@ -2073,11 +2081,14 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       applySelection();
       openDrawer(it, preferTab); // every item opens the info tab — even sparse ones show title/category/related
       if (opts?.scroll) scrollToItem(it);
+      if (!restoring && opts?.history !== 'none') syncHistory('push');
     }
-    function deselect() {
+    function deselect(opts?: { history?: 'push' | 'none' }) {
+      const wasSelected = selectedId !== null;
       selectedId = selectedGroup = null; selectedEntity = selectedTitle = null;
       selectedGroups = []; selectedAffiliations = [];
       applySelection(); closeDrawer();
+      if (!restoring && wasSelected && opts?.history !== 'none') syncHistory('push');
     }
 
     function layout(filter: string) {
@@ -2179,7 +2190,12 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     // shared relation-group — dimming the rest, mirroring the timeline's
     // selection emphasis. `ldDeselect` is exposed (no-op until wired) so the
     // view switcher and Esc can close this tab too.
-    let ldDeselect = () => {};
+    let ldDeselect: (opts?: { history?: 'push' | 'none' }) => void = () => {};
+    // Hooks into the list view's selection, wired when its block runs below, so
+    // the outer history layer can read/drive it (the list drawer lives in a
+    // nested scope). No-ops until then.
+    let ldGetSelected: () => number | null = () => null;
+    let ldSelectById: (id: number, opts?: { scroll?: boolean; history?: 'push' | 'none' }) => void = () => {};
     const listDataEl = document.getElementById('tl-list-data');
     const listDrawer = document.querySelector<HTMLElement>('.view-list .tl-detail');
     const listDrawerBody = listDrawer?.querySelector<HTMLElement>('.tl-detail-body') ?? null;
@@ -2261,15 +2277,23 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       function ldOpen() { listDrawer!.classList.add('open'); listDrawer!.setAttribute('aria-hidden', 'false'); }
       function ldClose() { listDrawer!.classList.remove('open'); listDrawer!.setAttribute('aria-hidden', 'true'); }
 
-      function ldSelect(id: number, opts?: { scroll?: boolean }) {
-        if (ldSelected === id) { ldDeselect(); return; }   // clicking the open row closes it
+      function ldSelect(id: number, opts?: { scroll?: boolean; history?: 'push' | 'none' }) {
+        if (ldSelected === id) { ldDeselect(opts); return; }   // clicking the open row closes it
         const d = ldById[id]; if (!d) return;
         ldSelected = id;
         ldBuild(d); ldApply(); ldOpen();
         if (opts?.scroll) ldRowById[id]?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+        if (!restoring && opts?.history !== 'none') syncHistory('push');
       }
 
-      ldDeselect = () => { if (ldSelected === null) return; ldSelected = null; ldApply(); ldClose(); };
+      ldDeselect = (opts?: { history?: 'push' | 'none' }) => {
+        if (ldSelected === null) return;
+        ldSelected = null; ldApply(); ldClose();
+        if (!restoring && opts?.history !== 'none') syncHistory('push');
+      };
+      // Expose the list selection to the outer history layer.
+      ldGetSelected = () => ldSelected;
+      ldSelectById = (id, opts) => ldSelect(id, opts);
 
       for (const row of ldRows) {
         const id = parseInt(row.dataset.li!);
@@ -2288,13 +2312,66 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     let currentView = 'timeline';
     let currentFilter = 'all';
 
-    // One hash carries both bits of state: `#list` selects the list view;
-    // any category key (or nothing) selects the timeline view at that filter.
-    function syncHash() {
-      let h = '';
-      if (currentView === 'list') h = 'list';
-      else if (currentFilter !== 'all') h = currentFilter;
-      history.replaceState(null, '', h ? `#${h}` : location.pathname);
+    // --- browser-history integration ------------------------------------
+    // View, category filter, and the open info tab are all mirrored into the
+    // browser history. Opening an item, hopping between related items, and
+    // closing the tab each PUSH a history entry, so Back/Forward step through
+    // them — and returning from a detail page (the drawer's "see full" link)
+    // reopens the tab you left. View/filter changes REPLACE the current entry
+    // (they keep the URL + state in sync without adding a step). The hash stays
+    // human-readable: `#list`, `#<filter>`, `#sel=<id>`, joined by "&".
+    function currentSel(): number | null {
+      return currentView === 'list' ? ldGetSelected() : selectedId;
+    }
+    function stateHash(view: string, filter: string, sel: number | null): string {
+      const parts: string[] = [];
+      if (view === 'list') parts.push('list');
+      else if (filter !== 'all') parts.push(filter);
+      if (sel != null) parts.push('sel=' + sel);
+      return parts.length ? '#' + parts.join('&') : '';
+    }
+    function syncHistory(mode: 'push' | 'replace') {
+      if (restoring) return;   // don't record while replaying a popped state
+      const sel = currentSel();
+      const state = { exp: true, view: currentView, filter: currentFilter, sel };
+      const h = stateHash(currentView, currentFilter, sel);
+      const url = h || location.pathname + location.search;
+      if (mode === 'push') history.pushState(state, '', url);
+      else history.replaceState(state, '', url);
+    }
+    // Parse a hash into a normalized state. `explicit` = the hash carried a
+    // recognized token (an empty/garbage hash can then fall back to the narrow
+    // default). Used on first load and as a popstate fallback for entries that
+    // predate our state object.
+    function parseHash(hash: string): { view: string; filter: string; sel: number | null; explicit: boolean } {
+      const parts = (hash || '').replace(/^#/, '').split('&').filter(Boolean);
+      let view = 'timeline', filter = 'all', sel: number | null = null, explicit = false;
+      for (const p of parts) {
+        if (p === 'list') { view = 'list'; explicit = true; }
+        else if (p.startsWith('sel=')) { const n = parseInt(p.slice(4)); if (!isNaN(n)) { sel = n; explicit = true; } }
+        else if (buttons.some(b => b.dataset.filter === p)) { filter = p; explicit = true; }
+      }
+      return { view, filter, sel, explicit };
+    }
+    // Drive the UI to match a state WITHOUT recording new history (guarded by
+    // `restoring`). Order: view, then filter (either may re-render), then the
+    // selection on top. Every step is guarded against no-op churn, so replaying
+    // the state the page is already in can't accidentally toggle it off.
+    function applyState(s: { view: string; filter: string; sel: number | null }) {
+      restoring = true;
+      try {
+        if (s.view !== currentView) setView(s.view);
+        if (s.filter !== currentFilter) setFilter(s.filter);
+        if (s.view === 'list') {
+          if (s.sel != null) { if (ldGetSelected() !== s.sel) ldSelectById(s.sel, { scroll: true }); }
+          else if (ldGetSelected() != null) ldDeselect();
+        } else {
+          if (s.sel != null) { if (selectedId !== s.sel) { const it = byId[s.sel]; if (it) selectItem(it, { scroll: true }); } }
+          else if (selectedId != null) deselect();
+        }
+      } finally {
+        restoring = false;
+      }
     }
 
     function setView(v: string) {
@@ -2307,9 +2384,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       });
       if (timelineView) { timelineView.hidden = !tlActive; timelineView.classList.toggle('active', tlActive); }
       if (listView) listView.hidden = tlActive;
-      deselect();      // clear any timeline selection + close its info tab
-      ldDeselect();    // clear any list selection + close its info tab
-      syncHash();
+      deselect({ history: 'none' });   // clear any timeline selection + close its info tab
+      ldDeselect({ history: 'none' }); // clear any list selection + close its info tab
+      syncHistory('replace');
       syncDetailTop(); // re-measure the now-visible layout for the sticky info tab
     }
 
@@ -2337,7 +2414,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         g.hidden = !Array.from(g.querySelectorAll<HTMLElement>('.undated-item')).some(c => !c.hidden);
       });
       layout(f);
-      syncHash();
+      syncHistory('replace');
     }
 
     buttons.forEach(btn => btn.addEventListener('click', () => {
@@ -2398,6 +2475,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       panel.addEventListener('touchcancel', release, { passive: true });
     });
 
+    // Back/Forward: replay the state recorded for this history entry (falling
+    // back to the hash for any entry that predates our state object).
+    window.addEventListener('popstate', (e) => {
+      const st: any = (e.state && e.state.exp) ? e.state : parseHash(location.hash);
+      applyState({ view: st.view || 'timeline', filter: st.filter || 'all', sel: st.sel ?? null });
+    });
+
     // Measure the gap above the info tab at rest — i.e. the page header (title +
     // view switch) that sits above .tl-layout — and expose it as --tl-detail-top.
     // The CSS shows that FULL gap when scrolled to the top and pins the tab at
@@ -2419,14 +2503,28 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
 
     // Initial state from the hash. Always build the timeline first (so its bars
     // are ready even when the list view is shown first), then pick the view.
-    const initial = location.hash.replace('#', '');
-    const isFilter = buttons.some(b => b.dataset.filter === initial);
-    setFilter(isFilter ? initial : 'all');
+    const parsed = parseHash(location.hash);
+    setFilter(parsed.filter);
     // Mirror the pre-hydration script: narrow viewports default to the list view
-    // unless the hash asks otherwise (#list, or a category filter ⇒ timeline).
+    // unless the hash asks otherwise (#list, a category filter, or #sel ⇒ honour
+    // it; only a bare/empty hash falls back to the list on narrow screens).
     const narrow = window.matchMedia('(max-width: 830px)').matches;
-    const initialView = (initial === 'list' || (initial === '' && narrow)) ? 'list' : 'timeline';
+    const initialView = parsed.view === 'list' ? 'list'
+      : (!parsed.explicit && narrow) ? 'list'
+      : 'timeline';
     setView(initialView);
+    // Reopen the info tab named in the hash — e.g. a Back into `#sel=<id>` after
+    // a detail-page visit that came back as a fresh load (not bfcache). Suppress
+    // history while doing so, then pin this state onto the current entry so the
+    // first Back/Forward has something to read.
+    if (parsed.sel != null) {
+      restoring = true;
+      try {
+        if (initialView === 'list') ldSelectById(parsed.sel, { scroll: true });
+        else { const it = byId[parsed.sel]; if (it) selectItem(it, { scroll: true }); }
+      } finally { restoring = false; }
+    }
+    syncHistory('replace');
 
     // The view above now matches what the pre-hydration CSS already painted, so
     // drop `view-init` (after a frame, to be sure the initial state has painted)
