@@ -8,15 +8,22 @@
 //                                 project/blog detail pages (mirrors the timeline
 //                                 info-drawer's Related list, but as real links).
 //
-// "Relatedness" mirrors the experience timeline's drawer: another work is related
+// "Relatedness" mirrors the experience timeline's drawer: another item is related
 // when it shares a `relationGroups` tag OR an `affiliation` with the current one
-// (see inForeground() in experience.astro). The candidate pool is every enabled
-// works category — a category disabled in src/config/site.ts drops out entirely,
-// exactly as it does on the Works page.
+// (see inForeground() in experience.astro). Two kinds of related item surface:
+//   • other WORKS — projects/papers/posts, rendered as clickable rows;
+//   • linked ORG ROLES — a role at an org this work is affiliated with, or one
+//     sharing a relation-group. These have no detail page, so they render as
+//     NON-clickable rows (href: null), matching how the timeline drawer lights up
+//     an affiliated org's roles alongside a selected work.
+// The works pool is every enabled works category — a category disabled in
+// src/config/site.ts drops out entirely, exactly as it does on the Works page.
 import { getCollection } from 'astro:content';
 import { isRouteEnabled } from '@config/site';
 import { resolvePeople } from './collaborators';
 import publications from '../data/publications.json';
+import organizations from '../data/organizations.json';
+import affiliations from '../data/affiliations.json';
 import relationGroupLabels from '../data/relationGroupLabels.json';
 
 export type WorkKind = 'Project' | 'Publication' | 'Blog';
@@ -54,9 +61,10 @@ export function relatedGroupSuffix(groups?: string[] | null): string {
 
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 
-// The display shape a <RelatedItems> row needs.
+// The display shape a <RelatedItems> row needs. `kind` is a work kind for the
+// clickable work rows, or 'Role' for the non-clickable org-role rows (href null).
 export interface RelatedItem {
-  kind: WorkKind;
+  kind: WorkKind | 'Role';
   title: string;
   href: string | null;
   external: boolean;
@@ -145,6 +153,97 @@ async function allWorks(): Promise<PooledWork[]> {
   return [...projects, ...pubs, ...posts];
 }
 
+// --- Org roles ------------------------------------------------------------
+// The linked/associated roles that show up NON-clickably in the Related list —
+// e.g. a project affiliated with "GT Athletics" surfaces that org's "Game Day
+// Director" role. Two sources share organizations.json's org shape:
+//   • organizations.json — clubs/societies (always the "clubs" category);
+//   • affiliations.json  — work affiliations (category from `categories`, else work).
+// This mirrors experience.astro's timeline model, but a Related LIST only needs
+// dated named roles: the blanket `membership` window (carved on the timeline) and
+// undated roles are omitted, since a dateless row has no place in a chronology.
+
+// Timeline category → dot colour. Mirrors CATEGORIES in experience.astro (the
+// source of truth); KIND_CAT above already reuses three of these for works.
+const CAT_COLOR: Record<string, string> = {
+  education: '#5b8def',
+  work: 'var(--accent)',
+  research: '#a06fd6',
+  awards: '#d4a017',
+  projects: '#e0883c',
+  clubs: '#e06c84',
+  misc: '#3aa6ad',
+};
+
+interface OrgRole {
+  role: string;
+  roleDetail?: string;
+  start?: string | null;
+  end?: string | null;
+  description?: string | null;
+  relationGroups?: string[];
+  categories?: string[];
+}
+interface Org {
+  organization: string;
+  organizationShort?: string;
+  relationGroups?: string[];
+  categories?: string[];
+  roles?: OrgRole[];
+}
+
+// Role dates are loose "YYYY-MM"/"YYYY" strings (like publications) — reuse
+// fmtPubDate per endpoint, then join into a range. An open end reads "– Present".
+const fmtRoleRange = (start?: string | null, end?: string | null): string => {
+  if (!start && !end) return '';
+  if (start && !end) return `${fmtPubDate(start)} – Present`;
+  if (!start && end) return fmtPubDate(end);
+  return `${fmtPubDate(start!)} – ${fmtPubDate(end!)}`;
+};
+// Loose date → ms, for sorting roles into the same chronology as works (which sort
+// on a JS Date valueOf). Year-only lands on January; missing → epoch (sorts last).
+const looseMs = (v?: string | null): number => {
+  if (!v) return 0;
+  const [y, m] = String(v).split('-');
+  return new Date(parseInt(y), m ? parseInt(m) - 1 : 0).valueOf();
+};
+
+interface RoleRow {
+  title: string;            // "Role · OrgShort"
+  entity: string;           // org name — matched against a work's affiliations
+  relationGroups: string[]; // the role's own tags, else the org's
+  dateLabel: string;
+  description: string | null;
+  color: string;
+  sortDate: number;
+}
+
+// Every dated named role across clubs + work affiliations, as candidate rows.
+function orgRoleRows(): RoleRow[] {
+  const rows: RoleRow[] = [];
+  const push = (org: Org, r: OrgRole, color: string) => {
+    if (!r.start && !r.end) return;   // undated roles have no place on a dated list
+    const short = org.organizationShort || org.organization;
+    rows.push({
+      title: `${r.roleDetail ?? r.role} · ${short}`,
+      entity: org.organization,
+      relationGroups: r.relationGroups ?? org.relationGroups ?? [],
+      dateLabel: fmtRoleRange(r.start, r.end),
+      description: r.description ?? null,
+      color,
+      sortDate: looseMs(r.start ?? r.end),
+    });
+  };
+  for (const org of organizations as Org[])
+    for (const r of org.roles ?? []) push(org, r, CAT_COLOR.clubs);
+  for (const org of affiliations as Org[])
+    for (const r of org.roles ?? []) {
+      const cat = (r.categories ?? org.categories ?? ['work'])[0];
+      push(org, r, CAT_COLOR[cat] ?? CAT_COLOR.work);
+    }
+  return rows;
+}
+
 // The current work, identified so it can be excluded and matched against the pool.
 export interface RelatedSelf {
   key: string;                 // `${kind}:${id|title}` — matches PooledWork.key
@@ -152,20 +251,38 @@ export interface RelatedSelf {
   affiliations?: string[];
 }
 
-// Works related to `self`: shares a relationGroups tag OR an affiliation. Sorted
-// newest-first, self excluded. Returns [] when there's nothing to relate to (so
-// the caller can drop the whole section, like the drawer does).
+// Items related to `self`: shares a relationGroups tag OR an affiliation. Returns
+// clickable WORK rows plus non-clickable ORG-ROLE rows, merged newest-first with
+// self excluded. Empty when there's nothing to relate to (so the caller can drop
+// the whole section, like the drawer does).
 export async function getRelatedWorks(self: RelatedSelf): Promise<RelatedItem[]> {
   const groups = new Set(self.relationGroups ?? []);
   const affils = new Set((self.affiliations ?? []).map(norm));
   if (!groups.size && !affils.size) return [];
 
-  return (await allWorks())
+  // Related WORKS — clickable rows to another project / paper / post.
+  const workRows = (await allWorks())
     .filter(w => w.key !== self.key)
     .filter(w =>
       w.relationGroups.some(g => groups.has(g)) ||
       w.affiliations.some(a => affils.has(norm(a))))
+    .map(w => ({
+      kind: w.kind, title: w.title, href: w.href, external: w.external,
+      dateLabel: w.dateLabel, description: w.description, color: w.color, sortDate: w.sortDate,
+    }));
+
+  // Related ORG ROLES — a role at an affiliated org, or one sharing a relation-
+  // group. No detail page ⇒ non-clickable (href null). Deduped by display title.
+  const seenRole = new Set<string>();
+  const roleRows = orgRoleRows()
+    .filter(r => affils.has(norm(r.entity)) || r.relationGroups.some(g => groups.has(g)))
+    .filter(r => { if (seenRole.has(r.title)) return false; seenRole.add(r.title); return true; })
+    .map(r => ({
+      kind: 'Role' as const, title: r.title, href: null, external: false,
+      dateLabel: r.dateLabel, description: r.description, color: r.color, sortDate: r.sortDate,
+    }));
+
+  return [...workRows, ...roleRows]
     .sort((a, b) => b.sortDate - a.sortDate || a.title.localeCompare(b.title))
-    .map(({ kind, title, href, external, dateLabel, description, color }) =>
-      ({ kind, title, href, external, dateLabel, description, color }));
+    .map(({ sortDate, ...row }) => row);
 }
