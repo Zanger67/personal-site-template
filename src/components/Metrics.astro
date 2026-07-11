@@ -1,0 +1,86 @@
+---
+// Generic per-item metrics, rendered as small "label value" stat chips. Fed the
+// raw `metrics` dict (see src/utils/metrics.ts) from any item — Works cards, the
+// project/blog detail headers, etc. A scalar renders one value; a list renders
+// its parts comma-joined; any part carrying a `url` becomes a link. Renders
+// nothing when there are no metrics, so it's safe to drop in unconditionally.
+//
+// The experience drawer can't use this component (its content is built in client
+// JS), so it mirrors this markup/style in renderMetrics() + the `.d-metrics`
+// rules in experience.astro — keep the three in sync.
+import { normalizeMetrics, type Metrics } from '../utils/metrics';
+
+interface Props {
+  metrics?: Metrics | null;
+  /** Extra class(es) for spacing tweaks at the call site. */
+  class?: string;
+}
+const { metrics = null, class: className } = Astro.props;
+const items = normalizeMetrics(metrics);
+---
+{items.length > 0 && (
+  <ul class:list={['metrics', className]}>
+    {items.map(m => (
+      <li class="metric">
+        <span class="metric-label">{m.label}</span>
+        <span class="metric-value">
+          {m.parts.map((p, i) => (
+            <Fragment>
+              {i > 0 && <span class="metric-sep">, </span>}
+              {p.url
+                ? <a href={p.url} target="_blank" rel="noopener noreferrer">{p.text}</a>
+                : <span>{p.text}</span>}
+            </Fragment>
+          ))}
+        </span>
+      </li>
+    ))}
+  </ul>
+)}
+
+<style>
+  .metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.5rem;
+    /* Top margin spaces the row below whatever precedes it (card metarow, detail
+       header, tags). Metrics always render as their own block, so this is safe. */
+    margin: 0.6rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* One "Label 1.2k" chip — outlined to read as a distinct stat, not a topic tag. */
+  .metric {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.15rem 0.5rem;
+  }
+
+  .metric-label {
+    color: var(--text-muted);
+  }
+
+  .metric-value {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .metric-value a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .metric-value a:hover {
+    text-decoration: underline;
+  }
+
+  .metric-sep {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+</style>

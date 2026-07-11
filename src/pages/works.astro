@@ -6,6 +6,8 @@ import { getCollection } from 'astro:content';
 import { getReadingTime } from '../utils/reading-time';
 import { extraLinks, type UrlEntry, type Link as WorkLink } from '../utils/links';
 import { resolvePeople } from '../utils/collaborators';
+import type { Metrics } from '../utils/metrics';
+import { KIND_CAT, fmtMonthYear, fmtFullDate, fmtPubDate } from '../utils/works';
 import profile from '../data/profile.json';
 import publications from '../data/publications.json';
 
@@ -21,26 +23,8 @@ const byMainThenDate = (
   b: { main: boolean; sortDate: number },
 ) => (Number(b.main) - Number(a.main)) || (b.sortDate - a.sortDate);
 
-const fmtMonthYear = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-const fmtFullDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-// Publication dates are loose strings — "YYYY", "YYYY-MM", or "YYYY-MM-DD".
-// Year-only passes through as-is; anything month-precise renders "Mon YYYY"
-// (the awards/conference point-event style on the experience timeline). Parts
-// build a LOCAL Date so a "2025-06" value can't roll back to May in timezones
-// behind UTC (the pitfall parseDate warns about in experience.astro).
-const fmtPubDate = (v: string): string => {
-  const [y, m] = String(v).split('-');
-  return m ? fmtMonthYear(new Date(parseInt(y), parseInt(m) - 1)) : y;
-};
-
-// Kind → experience-timeline category colour, so the feed is colour-keyed to the
-// timeline (see CATEGORIES in experience.astro). Blog has no timeline category,
-// so it borrows Misc by design.
-const KIND_CAT: Record<'Project' | 'Publication' | 'Blog', string> = {
-  Project: '#e0883c',     // timeline 'projects'
-  Publication: '#a06fd6', // timeline 'research'
-  Blog: '#3aa6ad',        // timeline 'misc'
-};
+// Date formatters (fmtMonthYear/fmtFullDate/fmtPubDate) and the kind→colour map
+// (KIND_CAT) are shared with the detail-page "Related" section — see ../utils/works.
 
 // The "urls"/"features" listed-links formats and their label logic are shared
 // by every entity — see ../utils/links (hostLabel, extraLinks, UrlEntry).
@@ -67,6 +51,7 @@ interface WorkItem {
   subtitle?: string | null;
   affiliations: string[];
   tags: string[];
+  metrics: Metrics;
   links: WorkLink[];
 }
 
@@ -83,6 +68,7 @@ interface Publication {
   urls?: UrlEntry[];
   features?: UrlEntry[];
   tags?: string[];
+  metrics?: Metrics;
   main?: boolean;
 }
 const pubData = publications as Publication[];
@@ -105,6 +91,7 @@ const projectItems: WorkItem[] = (isRouteEnabled('projects') ? await getCollecti
     subtitle: entry.data.role,
     affiliations: entry.data.affiliations,
     tags: entry.data.tags,
+    metrics: entry.data.metrics,
     links: dedupeLinks([
       ...(entry.data.url ? [{ label: 'Live', url: entry.data.url }] : []),
       ...(entry.data.repo ? [{ label: 'Repo', url: entry.data.repo }] : []),
@@ -130,6 +117,7 @@ const pubItems: WorkItem[] = (isRouteEnabled('publications') ? pubData : [])
     subtitle: pub.role ? `${pub.role} · ${pub.venue}` : pub.venue,
     affiliations: pub.affiliations ?? [],
     tags: pub.tags ?? [],
+    metrics: pub.metrics ?? {},
     links: dedupeLinks([...extraLinks(pub.urls), ...extraLinks(pub.features)]),
   }))
   .sort(byMainThenDate);
@@ -147,6 +135,7 @@ const postItems: WorkItem[] = (isRouteEnabled('blog') ? (await getCollection('bl
     subtitle: entry.data.role,
     affiliations: entry.data.affiliations,
     tags: entry.data.tags ?? [],
+    metrics: entry.data.metrics,
     links: dedupeLinks([...extraLinks(entry.data.urls), ...extraLinks(entry.data.features)]),
   }))
   .sort(byMainThenDate);
@@ -201,6 +190,7 @@ const activeId = tabs[0]?.id ?? null;
               subtitle={item.subtitle}
               affiliations={item.affiliations}
               tags={item.tags}
+              metrics={item.metrics}
               links={item.links}
               featured={item.main}
               kind={item.kind}
@@ -223,6 +213,7 @@ const activeId = tabs[0]?.id ?? null;
               subtitle={item.subtitle}
               affiliations={item.affiliations}
               tags={item.tags}
+              metrics={item.metrics}
               links={item.links}
               featured={item.main}
             />
@@ -243,6 +234,7 @@ const activeId = tabs[0]?.id ?? null;
               subtitle={item.subtitle}
               affiliations={item.affiliations}
               tags={item.tags}
+              metrics={item.metrics}
               links={item.links}
               featured={item.main}
             />
@@ -263,6 +255,7 @@ const activeId = tabs[0]?.id ?? null;
               subtitle={item.subtitle}
               affiliations={item.affiliations}
               tags={item.tags}
+              metrics={item.metrics}
               links={item.links}
               featured={item.main}
             />

@@ -3,6 +3,7 @@ import { getCollection, render } from 'astro:content';
 import BlogPost from '../../layouts/BlogPost.astro';
 import { getReadingTime } from '../../utils/reading-time';
 import { isRouteEnabled } from '@config/site';
+import { getRelatedWorks } from '../../utils/works';
 
 export async function getStaticPaths() {
   // When the blog route is disabled, build no post pages at all.
@@ -17,8 +18,15 @@ export async function getStaticPaths() {
 const { post } = Astro.props;
 const { Content } = await render(post);
 const readingTime = getReadingTime(post.body!);
+
+// "Related" list (bottom of the page): other works sharing an affiliation. Blog
+// posts carry no relationGroups field, so affiliation is the only cross-link.
+const related = await getRelatedWorks({
+  key: `Blog:${post.id}`,
+  affiliations: post.data.affiliations,
+});
 ---
 
-<BlogPost title={post.data.title} date={post.data.date} description={post.data.description} readingTime={readingTime} role={post.data.role} affiliations={post.data.affiliations} collaborators={post.data.collaborators} urls={post.data.urls} features={post.data.features}>
+<BlogPost title={post.data.title} date={post.data.date} description={post.data.description} readingTime={readingTime} role={post.data.role} affiliations={post.data.affiliations} collaborators={post.data.collaborators} urls={post.data.urls} features={post.data.features} metrics={post.data.metrics} related={related}>
   <Content />
 </BlogPost>

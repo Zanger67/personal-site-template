@@ -2,6 +2,7 @@
 import { getCollection, render } from 'astro:content';
 import ProjectPost from '../../layouts/ProjectPost.astro';
 import { isRouteEnabled } from '@config/site';
+import { getRelatedWorks, relatedGroupSuffix } from '../../utils/works';
 
 export async function getStaticPaths() {
   // When the projects route is disabled, build no detail pages at all.
@@ -15,6 +16,15 @@ export async function getStaticPaths() {
 
 const { project } = Astro.props;
 const { Content } = await render(project);
+
+// "Related" list (bottom of the page): other works sharing a relation-group or
+// affiliation. The header mirrors the timeline drawer's "Related (…)".
+const related = await getRelatedWorks({
+  key: `Project:${project.id}`,
+  relationGroups: project.data.relationGroups,
+  affiliations: project.data.affiliations,
+});
+const relatedLabel = 'Related' + relatedGroupSuffix(project.data.relationGroups);
 ---
 
 <ProjectPost
@@ -30,6 +40,9 @@ const { Content } = await render(project);
   repo={project.data.repo}
   urls={project.data.urls}
   features={project.data.features}
+  metrics={project.data.metrics}
+  related={related}
+  relatedLabel={relatedLabel}
 >
   <Content />
 </ProjectPost>

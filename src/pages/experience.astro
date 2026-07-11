@@ -20,6 +20,7 @@ import relationLabels from '../data/relationLabels.json';
 // "Related" header as "Related (…)". Unmapped slugs add nothing. See buildDrawer.
 import relationGroupLabels from '../data/relationGroupLabels.json';
 import { hostLabel, extraLinks, type UrlEntry } from '../utils/links';
+import { normalizeMetrics, type Metrics, type NormalizedMetric } from '../utils/metrics';
 import { resolvePeople } from '../utils/collaborators';
 
 if (!isRouteEnabled('experience')) return Astro.rewrite('/404');
@@ -116,6 +117,9 @@ interface Org {
   roles?: OrgRole[];
   // Affiliations only: default categories for this org's roles (see OrgRole).
   categories?: string[];
+  // Org-level metrics (see src/utils/metrics.ts) — propagated to every one of this
+  // org's role/membership bars + list rows, since metrics describe the org itself.
+  metrics?: Metrics;
 }
 const orgs = organizations as Org[];
 // Work affiliations share organizations.json's shape (array of orgs, each with
@@ -168,7 +172,7 @@ interface ListDetail {
   id: number; title: string; type: CatKey; dateLabel: string | null;
   subtitle: string | null; description: string | null;
   links: { label: string; url: string }[]; entity: string;
-  relationGroups: string[]; main: boolean;
+  relationGroups: string[]; main: boolean; metrics: NormalizedMetric[];
 }
 const listItems: ListDetail[] = [];
 const pushDetail = (d: Omit<ListDetail, 'id'>): number => { const id = listItems.length; listItems.push({ id, ...d }); return id; };
@@ -210,7 +214,7 @@ function buildRoleRows(org: Org, club: boolean): ListRole[] {
       subtitle: subtitleOf(r.location), description: r.description ?? null,
       links: detailLinks([{ label: 'Website', url: r.url ?? org.url }, ...extraLinks(r.urls), ...extraLinks(org.urls), ...extraLinks(r.features), ...extraLinks(org.features)]),
       entity: org.organization, relationGroups: r.relationGroups ?? org.relationGroups ?? [],
-      main: r.main ?? org.main ?? false,
+      main: r.main ?? org.main ?? false, metrics: normalizeMetrics(org.metrics),
     });
     rows.push({ id, role: withIncoming(r.roleDetail ?? r.role, r.start), start: r.start, end: r.end, url: r.url ?? null });
   }
@@ -219,7 +223,7 @@ function buildRoleRows(org: Org, club: boolean): ListRole[] {
       title: withIncoming('Member', org.membership.start), type: catOf(), dateLabel: dateRange(org.membership.start, org.membership.end),
       subtitle: subtitleOf(null), description: org.membership.description ?? null,
       links: detailLinks([{ label: 'Website', url: org.membership.url ?? org.url }, ...extraLinks(org.membership.urls), ...extraLinks(org.urls), ...extraLinks(org.membership.features), ...extraLinks(org.features)]),
-      entity: org.organization, relationGroups: org.relationGroups ?? [], main: !!org.main,
+      entity: org.organization, relationGroups: org.relationGroups ?? [], main: !!org.main, metrics: normalizeMetrics(org.metrics),
     });
     rows.push({ id, role: withIncoming('Member', org.membership.start), start: org.membership.start, end: org.membership.end, url: org.membership.url ?? null });
   }
@@ -240,7 +244,7 @@ const involvementListItems = orgs.filter(o => !hasDatedRole(o) && !isAlumnusOnly
     title: o.organization, type: 'clubs', dateLabel: orgInvolvementRange(o),
     subtitle: o.location ?? null, description: null,
     links: detailLinks([{ label: 'Website', url: o.url }, ...extraLinks(o.urls), ...extraLinks(o.features)]),
-    entity: o.organization, relationGroups: o.relationGroups ?? [], main: !!o.main,
+    entity: o.organization, relationGroups: o.relationGroups ?? [], main: !!o.main, metrics: normalizeMetrics(o.metrics),
   }),
 }));
 
@@ -270,7 +274,7 @@ const awardRows = (awards as any[]).map(a => ({
     title: a.name, type: 'awards', dateLabel: a.date ? formatDate(a.date) : null,
     subtitle: null, description: a.description ?? null,
     links: detailLinks([{ label: 'View', url: a.url }, ...extraLinks(a.urls), ...extraLinks(a.features)]),
-    entity: a.name, relationGroups: a.relationGroups ?? [], main: !!a.main,
+    entity: a.name, relationGroups: a.relationGroups ?? [], main: !!a.main, metrics: normalizeMetrics(a.metrics),
   }),
 }));
 // Certifications mirror awards (point events, single-month date), but carry an
@@ -282,7 +286,7 @@ const certRows = (certifications as any[]).map(c => ({
     title: c.name, type: 'awards', dateLabel: c.date ? formatDate(c.date) : null,
     subtitle: c.issuer ?? null, description: c.description ?? null,
     links: detailLinks([{ label: 'View', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)]),
-    entity: c.name, relationGroups: c.relationGroups ?? [], main: !!c.main,
+    entity: c.name, relationGroups: c.relationGroups ?? [], main: !!c.main, metrics: normalizeMetrics(c.metrics),
   }),
 }));
 const conferenceRows = (conferences as any[]).map(c => ({
@@ -291,7 +295,7 @@ const conferenceRows = (conferences as any[]).map(c => ({
     title: c.name, type: 'misc', dateLabel: c.date ? formatDate(c.date) : null,
     subtitle: [c.role, c.location].filter(Boolean).join(' · ') || null, description: c.description ?? null,
     links: detailLinks([{ label: 'Website', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)]),
-    entity: c.name, relationGroups: c.relationGroups ?? [], main: !!c.main,
+    entity: c.name, relationGroups: c.relationGroups ?? [], main: !!c.main, metrics: normalizeMetrics(c.metrics),
   }),
 }));
 
@@ -343,6 +347,9 @@ interface Item {
   // unlike relationGroups they don't drive selection/highlighting; the drawer
   // just lists them. Empty for items that carry none.
   tags: string[];
+  // Generic label→value stat chips (see src/utils/metrics.ts), rendered in the
+  // drawer. Normalized server-side so the client just paints them.
+  metrics: NormalizedMetric[];
   main: boolean;           // cross-cutting "main"/highlights flag (orthogonal to type)
   cats: CatKey[];          // every category this item matches (primary `type` first).
                            // Extras let one item appear under multiple filters (e.g. a
@@ -383,7 +390,7 @@ interface ItemOpts {
   title: string; type: CatKey; start: any; end?: any; point?: boolean;
   entity?: string; entityShort?: string | null; description?: string | null; subtitle?: string | null; links?: ({ label: string; url: string | null | undefined })[];
   affiliations?: string[]; isWork?: boolean; main?: boolean; also?: CatKey[];
-  relationGroups?: string[]; tags?: string[];
+  relationGroups?: string[]; tags?: string[]; metrics?: Metrics;
 }
 function mkItem(o: ItemOpts): Item | null {
   const s = parseDate(o.start);
@@ -438,6 +445,7 @@ function mkItem(o: ItemOpts): Item | null {
     isWork: !!o.isWork,
     relationGroups: o.relationGroups || [],
     tags: o.tags || [],
+    metrics: normalizeMetrics(o.metrics),
     main: !!o.main, cats,
   };
 }
@@ -540,7 +548,7 @@ const items: Item[] = [
     title: e.degree, type: 'education', start: e.start, end: e.end, entity: e.institution, entityShort: e.institutionShort,
     description: [e.institution, e.honors].filter(Boolean).join(' · '),
     links: [{ label: 'Website', url: e.url }, ...extraLinks(e.urls), ...extraLinks(e.features)], main: e.main,
-    relationGroups: e.relationGroups,
+    relationGroups: e.relationGroups, metrics: e.metrics,
   })),
   // Work affiliations share the org shape, so they build exactly like clubs
   // (below) — only the category differs (their `categories`, default "work").
@@ -552,7 +560,7 @@ const items: Item[] = [
       description: r.description ?? null,
       links: [{ label: 'Website', url: r.url ?? org.url }, ...extraLinks(r.urls), ...extraLinks(org.urls), ...extraLinks(r.features), ...extraLinks(org.features)],
       main: r.main ?? org.main,
-      relationGroups: r.relationGroups ?? org.relationGroups,
+      relationGroups: r.relationGroups ?? org.relationGroups, metrics: org.metrics,
     })),
     // Blanket `membership` carved into "Member" segments around those roles.
     ...membershipSegments(org).map(seg => mkItem({
@@ -562,7 +570,7 @@ const items: Item[] = [
       description: org.membership?.description ?? null,
       links: [{ label: 'Website', url: org.membership?.url ?? org.url }, ...extraLinks(org.membership?.urls), ...extraLinks(org.urls), ...extraLinks(org.membership?.features), ...extraLinks(org.features)],
       main: org.main,
-      relationGroups: org.relationGroups,
+      relationGroups: org.relationGroups, metrics: org.metrics,
     })),
   ]),
   ...(publications as any[]).map(p => mkItem({
@@ -574,13 +582,13 @@ const items: Item[] = [
     // Partner labs/orgs — cross-link the paper to that org on the timeline, same as projects.
     affiliations: p.affiliations || [],
     links: [{ label: 'Read', url: p.url }, ...extraLinks(p.urls), ...extraLinks(p.features)], main: p.main,
-    relationGroups: p.relationGroups,
+    relationGroups: p.relationGroups, metrics: p.metrics,
   })),
   ...(awards as any[]).map(a => mkItem({
     // Awards, honors & scholarships — point events under "awards/pubs".
     title: a.name, type: 'awards', start: a.date, point: true, entity: a.name,
     links: [{ label: 'View', url: a.url }, ...extraLinks(a.urls), ...extraLinks(a.features)], main: a.main,
-    relationGroups: a.relationGroups,
+    relationGroups: a.relationGroups, metrics: a.metrics,
   })),
   ...(certifications as any[]).map(c => mkItem({
     // Certifications — point events sharing the "awards/pubs" category; the
@@ -588,7 +596,7 @@ const items: Item[] = [
     title: c.name, type: 'awards', start: c.date, point: true, entity: c.name,
     subtitle: c.issuer ?? null,
     links: [{ label: 'View', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)], main: c.main,
-    relationGroups: c.relationGroups,
+    relationGroups: c.relationGroups, metrics: c.metrics,
   })),
   ...orgs.flatMap(org => [
     // Clubs mirror work roles: the role is the title, while the organisation,
@@ -600,7 +608,7 @@ const items: Item[] = [
       description: r.description ?? null,
       links: [{ label: 'Website', url: r.url ?? org.url }, ...extraLinks(r.urls), ...extraLinks(org.urls), ...extraLinks(r.features), ...extraLinks(org.features)],
       main: r.main ?? org.main,
-      relationGroups: r.relationGroups ?? org.relationGroups,
+      relationGroups: r.relationGroups ?? org.relationGroups, metrics: org.metrics,
     })),
     // Blanket `membership` carved into "Member" segments around those roles. The
     // literal title "Member" keeps the client's lane-chain detection working.
@@ -610,7 +618,7 @@ const items: Item[] = [
       description: org.membership?.description ?? null,
       links: [{ label: 'Website', url: org.membership?.url ?? org.url }, ...extraLinks(org.membership?.urls), ...extraLinks(org.urls), ...extraLinks(org.membership?.features), ...extraLinks(org.features)],
       main: org.main,
-      relationGroups: org.relationGroups,
+      relationGroups: org.relationGroups, metrics: org.metrics,
     })),
   ]),
   ...projects.map(p => mkItem({
@@ -620,7 +628,7 @@ const items: Item[] = [
       ...(projectsEnabled ? [{ label: 'Details', url: `${base}/projects/${p.id}` }] : []),
       { label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }, ...extraLinks(p.data.urls), ...extraLinks(p.data.features),
     ], main: p.data.main,
-    relationGroups: p.data.relationGroups, tags: p.data.tags,
+    relationGroups: p.data.relationGroups, tags: p.data.tags, metrics: p.data.metrics,
   })),
   // "Misc." — a catch-all for conferences attended and any other one-off timeline
   // events worth noting (talks, trips, ceremonies, milestones, etc.). Conferences
@@ -633,13 +641,13 @@ const items: Item[] = [
     // cross-links to that org's bar and shows the outlined "@ org" chip, same as pubs.
     affiliations: c.affiliations || [],
     links: [{ label: 'Website', url: c.url }, ...extraLinks(c.urls), ...extraLinks(c.features)], main: c.main,
-    relationGroups: c.relationGroups,
+    relationGroups: c.relationGroups, metrics: c.metrics,
   })),
   ...(misc as any[]).map(m => mkItem({
     title: m.name, type: 'misc', start: m.date, end: m.end, point: !m.end, entity: m.name,
     subtitle: m.location || null, description: m.description ?? null,
     links: [{ label: 'View', url: m.url }, ...extraLinks(m.urls), ...extraLinks(m.features)], main: m.main,
-    relationGroups: m.relationGroups,
+    relationGroups: m.relationGroups, metrics: m.metrics,
   })),
 ].filter((s): s is Item => s !== null);
 
@@ -1267,6 +1275,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .d-subtitle { font-size: 0.88rem; color: var(--text); margin: -0.4rem 0 0.8rem; line-height: 1.45; }
   .d-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
   .d-desc { font-size: 0.9rem; margin-bottom: 0.9rem; line-height: 1.6; }
+  /* Inline markdown inside drawer descriptions (see src/utils/markdown.ts). */
+  .d-desc a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .d-desc a:hover { text-decoration: none; }
+  .d-desc code, .d-tl-desc code { font-size: 0.85em; background: var(--accent-light); border-radius: 3px; padding: 0.05em 0.3em; }
   .d-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
   .d-tag { font-size: 0.75rem; color: var(--accent); background: var(--accent-light); padding: 0.15rem 0.5rem; border-radius: 3px; }
   /* Affiliation chips — outlined "@ org", distinct from the filled topic tags. */
@@ -1276,6 +1288,14 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .d-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
   .d-links a { font-size: 0.82rem; padding: 0.25rem 0.6rem; border: 1px solid var(--border); border-radius: 4px; text-decoration: none; color: var(--accent); }
   .d-links a:hover { border-color: var(--accent); }
+  /* Metric stat chips — the drawer mirror of <Metrics> / .metric (Metrics.astro). */
+  .d-metrics { display: flex; flex-wrap: wrap; gap: 0.4rem 0.5rem; margin: 0 0 1rem; padding: 0; list-style: none; }
+  .d-metric { display: inline-flex; align-items: baseline; gap: 0.35rem; font-size: 0.75rem; border: 1px solid var(--border); border-radius: 3px; padding: 0.15rem 0.5rem; }
+  .d-metric-label { color: var(--text-muted); }
+  .d-metric-value { color: var(--text); font-weight: 600; }
+  .d-metric-value a { color: var(--accent); text-decoration: none; }
+  .d-metric-value a:hover { text-decoration: underline; }
+  .d-metric-sep { color: var(--text-muted); font-weight: 400; }
   .d-related-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0.25rem 0 0.6rem; }
   .d-timeline { list-style: none; margin: 0; padding: 0; position: relative; }
   .d-timeline::before { content: ''; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 1px; background: var(--border); }
@@ -1684,15 +1704,42 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
 </style>
 
 <script>
+  import { inlineMarkdown } from '../utils/markdown';
+
   const dataEl = document.getElementById('tl-data');
   const cfgEl = document.getElementById('tl-cfg');
   if (dataEl && cfgEl) {
+    // Normalized metric (mirrors NormalizedMetric in src/utils/metrics.ts) —
+    // serialized into the timeline/list datasets, painted by renderMetrics().
+    interface MetricRow { label: string; parts: { text: string; url: string | null }[]; }
     interface Item {
       id: number; title: string; type: string; start: number; end: number | null;
       startMonthNum: number; endMonthNum: number | null; dateLabel: string;
       description: string | null; subtitle: string | null; links: { label: string; url: string }[];
       entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[]; isWork: boolean;
-      tags: string[]; main: boolean; cats: string[]; laneKey?: string | null;
+      tags: string[]; metrics: MetricRow[]; main: boolean; cats: string[]; laneKey?: string | null;
+    }
+    // Paint a metrics list into `container` as "label value" chips — the client
+    // mirror of <Metrics> (see src/components/Metrics.astro). A part with a `url`
+    // renders as a link. No-op when empty, so callers can invoke it blindly.
+    function renderMetrics(container: HTMLElement, metrics: MetricRow[] | undefined | null) {
+      if (!metrics || !metrics.length) return;
+      const ul = document.createElement('ul'); ul.className = 'd-metrics';
+      for (const m of metrics) {
+        const li = document.createElement('li'); li.className = 'd-metric';
+        const lab = document.createElement('span'); lab.className = 'd-metric-label'; lab.textContent = m.label;
+        const val = document.createElement('span'); val.className = 'd-metric-value';
+        m.parts.forEach((p, i) => {
+          if (i > 0) { const sep = document.createElement('span'); sep.className = 'd-metric-sep'; sep.textContent = ', '; val.appendChild(sep); }
+          if (p.url) {
+            const a = document.createElement('a'); a.href = p.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = p.text; val.appendChild(a);
+          } else {
+            const s = document.createElement('span'); s.textContent = p.text; val.appendChild(s);
+          }
+        });
+        li.appendChild(lab); li.appendChild(val); ul.appendChild(li);
+      }
+      container.appendChild(ul);
     }
     const items: Item[] = JSON.parse(dataEl.textContent || '[]');
     const cfg = JSON.parse(cfgEl.textContent || '{}');
@@ -1824,7 +1871,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         drawerBody.appendChild(aw);
       }
       if (it.description) {
-        const p = document.createElement('p'); p.className = 'd-desc'; p.textContent = it.description;
+        // Inline markdown (bold/italic/code/strike/links + line breaks) — see
+        // src/utils/markdown.ts. Authored HTML is escaped, so innerHTML is safe.
+        const p = document.createElement('p'); p.className = 'd-desc'; p.innerHTML = inlineMarkdown(it.description);
         drawerBody.appendChild(p);
       }
       // Topic tags (e.g. a project's tech chips) — descriptive labels, not links.
@@ -1844,6 +1893,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         }
         drawerBody.appendChild(wrap);
       }
+      renderMetrics(drawerBody, it.metrics);
       // Everything highlighted alongside this item (same organisation, tagged
       // projects, shared relation-groups), shown as a compact vertical timeline
       // (newest first). A role may be several bars — its own carved
@@ -1880,7 +1930,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         const d = document.createElement('span'); d.className = 'd-tl-date'; d.textContent = r.dateLabel;
         btn.appendChild(t); btn.appendChild(d);
         if (r.description) {
-          const desc = document.createElement('span'); desc.className = 'd-tl-desc'; desc.textContent = r.description;
+          // Related hints live inside a <button>, so render markdown WITHOUT links
+          // (a nested <a> would be invalid interactive HTML).
+          const desc = document.createElement('span'); desc.className = 'd-tl-desc'; desc.innerHTML = inlineMarkdown(r.description, { links: false });
           btn.appendChild(desc);
         }
         li.appendChild(dot); li.appendChild(btn);
@@ -2115,7 +2167,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         id: number; title: string; type: string; dateLabel: string | null;
         subtitle: string | null; description: string | null;
         links: { label: string; url: string }[]; entity: string;
-        relationGroups: string[]; main: boolean;
+        relationGroups: string[]; main: boolean; metrics: MetricRow[];
       }
       const ldItems: LDetail[] = JSON.parse(listDataEl.textContent || '[]');
       const ldById: Record<number, LDetail> = {};
@@ -2156,12 +2208,13 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         meta.appendChild(dot); meta.appendChild(mt);
         listDrawerBody!.appendChild(h); listDrawerBody!.appendChild(meta);
         if (d.subtitle) { const s = document.createElement('div'); s.className = 'd-subtitle'; s.textContent = d.subtitle; listDrawerBody!.appendChild(s); }
-        if (d.description) { const p = document.createElement('p'); p.className = 'd-desc'; p.textContent = d.description; listDrawerBody!.appendChild(p); }
+        if (d.description) { const p = document.createElement('p'); p.className = 'd-desc'; p.innerHTML = inlineMarkdown(d.description); listDrawerBody!.appendChild(p); }
         if (d.links.length) {
           const wrap = document.createElement('div'); wrap.className = 'd-links';
           for (const l of d.links) { const a = document.createElement('a'); a.href = l.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = l.label; wrap.appendChild(a); }
           listDrawerBody!.appendChild(wrap);
         }
+        renderMetrics(listDrawerBody!, d.metrics);
         // Related rows (same entity / shared relation-group), shown as the same
         // compact vertical timeline the bar drawer uses; kept in list order.
         const related = ldItems.filter(x => x.id !== d.id && ldForeground(x, d));
@@ -2177,7 +2230,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
             t.textContent = r.entity && r.entity !== r.title ? `${r.title} · ${r.entity}` : r.title;
             btn.appendChild(t);
             if (r.dateLabel) { const dt = document.createElement('span'); dt.className = 'd-tl-date'; dt.textContent = r.dateLabel; btn.appendChild(dt); }
-            if (r.description) { const ds = document.createElement('span'); ds.className = 'd-tl-desc'; ds.textContent = r.description; btn.appendChild(ds); }
+            if (r.description) { const ds = document.createElement('span'); ds.className = 'd-tl-desc'; ds.innerHTML = inlineMarkdown(r.description, { links: false }); btn.appendChild(ds); }
             li.appendChild(rdot); li.appendChild(btn); ul.appendChild(li);
           }
           listDrawerBody!.appendChild(rlab); listDrawerBody!.appendChild(ul);

@@ -9,6 +9,9 @@
 //     "★ Featured" tag rides the top type-row alongside the kind label.
 //   • Every other tab omits `kind`, so "★ Featured" sits in the header row
 //     next to the title (the tab itself already says what the item is).
+import Metrics from './Metrics.astro';
+import type { Metrics as MetricsDict } from '../utils/metrics';
+
 interface WorkLink {
   label: string;
   url: string;
@@ -29,6 +32,8 @@ interface Props {
   /** Affiliated orgs/labs — rendered as distinct outlined chips before the tags. */
   affiliations?: string[];
   tags?: string[];
+  /** Generic stat chips (Repo Stars, Citations, …) — rendered on their own row. */
+  metrics?: MetricsDict | null;
   /** Live / Repo / extra links — rendered as chips; simply omitted when empty. */
   links?: WorkLink[];
   /** `main`-flagged highlight — shows a "★ Featured" tag. */
@@ -48,6 +53,7 @@ const {
   subtitle = null,
   affiliations = [],
   tags = [],
+  metrics = null,
   links = [],
   featured = false,
   kind = null,
@@ -97,6 +103,8 @@ const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {
       )}
     </div>
   )}
+
+  <Metrics metrics={metrics} class="work-metrics" />
 </article>
 
 <style>

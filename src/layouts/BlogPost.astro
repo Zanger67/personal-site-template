@@ -1,7 +1,11 @@
 ---
 import BaseLayout from './BaseLayout.astro';
 import BackToWorks from '../components/BackToWorks.astro';
+import Metrics from '../components/Metrics.astro';
+import RelatedItems from '../components/RelatedItems.astro';
 import { extraLinks, type UrlEntry } from '../utils/links';
+import type { Metrics as MetricsDict } from '../utils/metrics';
+import type { RelatedItem } from '../utils/works';
 import { resolvePeople } from '../utils/collaborators';
 
 // The "urls"/"features" listed formats (same as the timeline's info-tab buttons):
@@ -18,9 +22,14 @@ interface Props {
   collaborators?: string[];
   urls?: UrlEntry[];
   features?: UrlEntry[];
+  metrics?: MetricsDict | null;
+  // "Related" list shown at the bottom — works sharing a relation-group or
+  // affiliation (see getRelatedWorks). `relatedLabel` carries the "(…)" suffix.
+  related?: RelatedItem[];
+  relatedLabel?: string;
 }
 
-const { title, date, description, readingTime, role, affiliations = [], collaborators = [], urls = [], features = [] } = Astro.props;
+const { title, date, description, readingTime, role, affiliations = [], collaborators = [], urls = [], features = [], metrics = null, related = [], relatedLabel = 'Related' } = Astro.props;
 
 // Collaborators — raw names resolved to clickable links via collaborators.json.
 const people = resolvePeople(collaborators);
@@ -66,10 +75,12 @@ const formattedDate = date.toLocaleDateString('en-US', {
           ))}
         </div>
       )}
+      <Metrics metrics={metrics} />
     </header>
     <hr />
     <slot />
   </article>
+  <RelatedItems label={relatedLabel} items={related} />
 </BaseLayout>
 
 <style>

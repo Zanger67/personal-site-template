@@ -1,0 +1,143 @@
+---
+// The "Related" section shown at the bottom of a project/blog detail page — the
+// same list that appears in the experience timeline's info-drawer (a colour-keyed
+// dot + title + date + description per item), but here each row is a real link to
+// that work's page instead of a button that re-opens a drawer.
+//
+// Markup + styling are ported from the drawer's `.d-related-label` / `.d-timeline`
+// / `.d-tl-*` in experience.astro so the two read identically. Descriptions render
+// INLINE markdown with links OFF (an <a> can't nest another <a>), same as the drawer.
+import { inlineMarkdown } from '../utils/markdown';
+import type { RelatedItem } from '../utils/works';
+
+interface Props {
+  // Header text, e.g. "Related" or "Related (Game Day)" — built with
+  // relatedGroupSuffix() by the caller, matching the drawer header.
+  label: string;
+  items: RelatedItem[];
+}
+
+const { label, items } = Astro.props;
+---
+
+{items.length > 0 && (
+  <section class="related-works" aria-label={label}>
+    <div class="d-related-label">{label}</div>
+    <ul class="d-timeline">
+      {items.map(it => {
+        const rel = it.external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+        return (
+          <li class="d-tl-item">
+            <span class="d-tl-dot" style={`background:${it.color}`}></span>
+            <a class="d-tl-link" href={it.href} {...rel}>
+              <span class="d-tl-title">{it.title}</span>
+              <span class="d-tl-date">{it.dateLabel}</span>
+              {it.description && (
+                <span class="d-tl-desc" set:html={inlineMarkdown(it.description, { links: false })} />
+              )}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+)}
+
+<style>
+  /* Separate the Related list from the article prose above it. */
+  .related-works {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Ported verbatim from the timeline info-drawer (.d-related-label / .d-timeline
+     / .d-tl-*) so the detail-page Related list matches the drawer exactly. */
+  .d-related-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 0.25rem 0 0.6rem;
+  }
+
+  .d-timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+  }
+
+  .d-timeline::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 6px;
+    bottom: 6px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .d-tl-item {
+    position: relative;
+    padding-left: 1rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .d-tl-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .d-tl-dot {
+    position: absolute;
+    left: 0;
+    top: 0.3rem;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--bg);
+  }
+
+  /* The drawer's `.d-tl-link` is a <button>; here it's an <a>. Same flex column. */
+  .d-tl-link {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.05rem;
+    text-align: left;
+    text-decoration: none;
+    width: 100%;
+  }
+
+  .d-tl-title {
+    font-size: 0.8rem;
+    color: var(--text);
+    line-height: 1.3;
+  }
+
+  .d-tl-link:hover .d-tl-title {
+    color: var(--accent);
+  }
+
+  .d-tl-date {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .d-tl-desc {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    margin-top: 0.15rem;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .d-tl-desc :global(code) {
+    font-size: 0.85em;
+    background: var(--accent-light);
+    border-radius: 3px;
+    padding: 0.05em 0.3em;
+  }
+</style>

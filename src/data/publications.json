@@ -17,7 +17,8 @@
     ],
     "tags": ["Aerodynamics", "Spirit"],
     "main": true,
-    "relationGroups": ["game-day"]
+    "relationGroups": ["game-day"],
+    "metrics": { "Citations": 12, "Reads": "3.4k" }
   },
   {
     "title": "Crowd Engagement Dynamics at College Football Games: A Longitudinal Study",

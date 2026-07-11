@@ -11,6 +11,21 @@ const urlEntry = z.object({
   url: z.string(),
 });
 
+// The generic per-item "metrics" dict — an open label→value map surfaced as small
+// stat chips (Repo Stars, Citations, Users, …). The KEY is the display label. The
+// VALUE stays loose on purpose so the same field holds a plain count now and a
+// linkable list later (see src/utils/metrics.ts + <Metrics>):
+//   "Repo Stars": 1200                       plain scalar
+//   "Homepage": { value: "…", url: "…" }     linked scalar
+//   "Used by": [{ label: "MIT", url: "…" }]  list (parts optionally linked)
+const metricScalar = z.union([z.string(), z.number()]);
+const metricLink = z.object({ label: metricScalar, url: z.string().optional() });
+const metricValue = z.union([
+  metricScalar,
+  z.object({ value: metricScalar, url: z.string().optional() }),
+  z.array(z.union([metricScalar, metricLink])),
+]);
+
 const blog = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/blog' }),
   schema: z.object({
@@ -39,6 +54,8 @@ const blog = defineCollection({
     // "Featured in" / press coverage — a list parallel to `urls`, same shape,
     // rendered as its own set of buttons after them.
     features: z.array(urlEntry).optional().default([]),
+    // Generic label→value stat chips (see metricValue above / <Metrics>).
+    metrics: z.record(z.string(), metricValue).optional().default({}),
   }),
 });
 
@@ -64,6 +81,8 @@ const projects = defineCollection({
     // "Featured in" / press coverage — a list parallel to `urls`, same shape,
     // rendered as its own set of buttons after them.
     features: z.array(urlEntry).optional().default([]),
+    // Generic label→value stat chips (see metricValue above / <Metrics>).
+    metrics: z.record(z.string(), metricValue).optional().default({}),
     tags: z.array(z.string()).optional().default([]),
     // Tags linking project to an experience/role (e.g. lab name, employer).
     // Displayed as affiliation chips on Works cards / detail pages, and cross-links
