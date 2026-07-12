@@ -1761,6 +1761,14 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const cfg = JSON.parse(cfgEl.textContent || '{}');
     const byId: Record<number, Item> = {};
     for (const it of items) byId[it.id] = it;
+    // Recency order (newest first): newest end, then newest start; same-span
+    // items fall back to alphabetical (organisation, then title). Shared by the
+    // drawer's "Related" list and arrow-key navigation.
+    const byRecency = (a: Item, b: Item) => {
+      const ka = a.end ?? Number.MAX_SAFE_INTEGER, kb = b.end ?? Number.MAX_SAFE_INTEGER;
+      return kb - ka || b.start - a.start
+        || a.entity.localeCompare(b.entity) || a.title.localeCompare(b.title);
+    };
     // Lane chains: every bar of a multi-bar entity is kept on ONE timeline lane
     // (see layout()), so an org's roles read as a single continuous progression —
     // e.g. the Discrete-Math TA ladder (Undergraduate → Senior → Head) all at
@@ -1928,14 +1936,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       // (newest first). A role may be several bars — its own carved
       // continuations, or just a multi-year span — so collapse by (group +
       // title): drop the clicked item's own role and keep only the newest bar of
-      // every other role.
-      const byRecency = (a: Item, b: Item) => {
-        const ka = a.end ?? Number.MAX_SAFE_INTEGER, kb = b.end ?? Number.MAX_SAFE_INTEGER;
-        // recency first (newest end, then newest start); same-span items fall
-        // back to alphabetical — organisation, then title.
-        return kb - ka || b.start - a.start
-          || a.entity.localeCompare(b.entity) || a.title.localeCompare(b.title);
-      };
+      // every other role. (byRecency is hoisted to module scope.)
       const roleKey = (x: Item) => x.group + ' ' + x.title;
       const seenRoles = new Set<string>([roleKey(it)]);
       const related = items
@@ -2424,12 +2425,61 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     }));
     viewButtons.forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view!)));
     document.querySelector('.view-timeline .tl-detail-close')?.addEventListener('click', () => deselect());
+    // Step the selection to the next/previous item — dir +1 = next (down/right),
+    // -1 = previous (up/left). Walks the CURRENTLY-VISIBLE items in on-screen
+    // READING order — top-to-bottom, then left-to-right — so a step always moves
+    // down/across the page instead of hopping by date. With nothing selected yet
+    // it enters at the first (top-left) item; at either end it stays put (no
+    // wrap). Returns whether it consumed the key.
+    function navMove(dir: 1 | -1): boolean {
+      let ids: number[];
+      if (currentView === 'list') {
+        ids = Array.from(document.querySelectorAll<HTMLElement>('.view-list [data-li]'))
+          .filter(r => r.offsetParent !== null)   // skip any hidden rows
+          .map(r => parseInt(r.dataset.li!));
+      } else {
+        // Order by the rendered bars' geometry (top, then left). A multi-year item
+        // draws one bar per year, so keep only its first — topmost/leftmost —
+        // occurrence. `offsetParent` filters out bars in filtered-away years.
+        const seen = new Set<number>();
+        ids = Array.from(document.querySelectorAll<HTMLElement>('.view-timeline .tl-bar'))
+          .filter(b => b.offsetParent !== null)
+          .map(b => ({ id: parseInt(b.dataset.id!), r: b.getBoundingClientRect() }))
+          .sort((a, b) => (a.r.top - b.r.top) || (a.r.left - b.r.left))
+          .filter(x => { if (seen.has(x.id)) return false; seen.add(x.id); return true; })
+          .map(x => x.id);
+      }
+      if (!ids.length) return false;
+      const cur = currentSel();
+      const i = cur == null ? -1 : ids.indexOf(cur);
+      const n = i === -1 ? 0 : Math.min(Math.max(i + dir, 0), ids.length - 1);
+      if (n === i) return true;   // already at an end — consume the key, don't scroll
+      if (currentView === 'list') ldSelectById(ids[n], { scroll: true });
+      else { const it = byId[ids[n]]; if (it) selectItem(it, { scroll: true }); }
+      return true;
+    }
+    // Keyboard: Escape backs out (close the info tab, then clear the filter); the
+    // arrow keys step through items in on-screen reading order. Down/Right → next,
+    // Up/Left → previous. Up/Down keep scrolling the page until an item is open —
+    // then they drive navigation; Left/Right (which don't scroll a vertical page)
+    // enter navigation at the first item straight away. Escape returns to plain
+    // scrolling. Modifier combos and typing in a field are left untouched.
     document.addEventListener('keydown', e => {
-      if (e.key !== 'Escape') return;
-      // First Esc closes an open info tab (either view's drawer carries `.open`).
-      // A second Esc — with no tab open — clears the category filter back to "all".
-      if (document.querySelector('.tl-detail.open')) { deselect(); ldDeselect(); return; }
-      if (currentFilter !== 'all') setFilter('all');
+      if (e.key === 'Escape') {
+        // First Esc closes an open info tab (either view's drawer carries `.open`).
+        // A second Esc — with no tab open — clears the category filter back to "all".
+        if (document.querySelector('.tl-detail.open')) { deselect(); ldDeselect(); return; }
+        if (currentFilter !== 'all') setFilter('all');
+        return;
+      }
+      const dir = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1
+        : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+      if (!dir || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const horizontal = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+      if (currentSel() == null && !horizontal) return;   // let Up/Down scroll until an item is open
+      if (navMove(dir)) e.preventDefault();
     });
     // When the info tab floats as an overlay, tapping the dimmed strip of content
     // showing beside it (the scrim) closes whichever panel is open (harmless
