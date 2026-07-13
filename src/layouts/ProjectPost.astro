@@ -24,6 +24,8 @@ interface Props {
   tags?: string[];
   url?: string | null;
   repo?: string | null;
+  template?: string | null;
+  sample?: string | null;
   urls?: UrlEntry[];
   features?: UrlEntry[];
   metrics?: MetricsDict | null;
@@ -33,7 +35,7 @@ interface Props {
   relatedLabel?: string;
 }
 
-const { title, description, role, affiliations = [], collaborators = [], startDate, endDate, tags = [], url, repo, urls = [], features = [], metrics = null, related = [], relatedLabel = 'Related' } = Astro.props;
+const { title, description, role, affiliations = [], collaborators = [], startDate, endDate, tags = [], url, repo, template, sample, urls = [], features = [], metrics = null, related = [], relatedLabel = 'Related' } = Astro.props;
 
 // Collaborators — raw names resolved to clickable links via collaborators.json.
 const people = resolvePeople(collaborators);
@@ -44,6 +46,8 @@ const dateRange = endDate ? `${fmt(startDate)} – ${fmt(endDate)}` : `${fmt(sta
 const links = [
   url ? { label: 'Live', url } : null,
   repo ? { label: 'Repo', url: repo } : null,
+  template ? { label: 'Template', url: template } : null,
+  sample ? { label: 'Sample', url: sample } : null,
   ...(urls ?? []),
   ...(features ?? []),
 ]

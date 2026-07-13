@@ -76,6 +76,14 @@ const projects = defineCollection({
     endDate: z.coerce.date().nullable().optional(),
     url: z.string().nullable().optional(),
     repo: z.string().nullable().optional(),
+    // A "Template" link (label "Template") — the upstream repo/site a project is
+    // derived from. Renders as a primary chip right after `repo`, alongside the
+    // Live/Repo chips (see ProjectPost / works / experience).
+    template: z.string().nullable().optional(),
+    // A "Sample" link (label "Sample") — a live sample/demo of the thing working
+    // (a deployed demo, a recording, an example output). Renders as a primary chip
+    // right after `template`.
+    sample: z.string().nullable().optional(),
     // Extra info-tab links beyond `url`/`repo` (see urlEntry above).
     urls: z.array(urlEntry).optional().default([]),
     // "Featured in" / press coverage — a list parallel to `urls`, same shape,

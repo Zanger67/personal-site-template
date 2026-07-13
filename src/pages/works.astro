@@ -95,6 +95,8 @@ const projectItems: WorkItem[] = (isRouteEnabled('projects') ? await getCollecti
     links: dedupeLinks([
       ...(entry.data.url ? [{ label: 'Live', url: entry.data.url }] : []),
       ...(entry.data.repo ? [{ label: 'Repo', url: entry.data.repo }] : []),
+      ...(entry.data.template ? [{ label: 'Template', url: entry.data.template }] : []),
+      ...(entry.data.sample ? [{ label: 'Sample', url: entry.data.sample }] : []),
       ...extraLinks(entry.data.urls),
       ...extraLinks(entry.data.features),
     ]),

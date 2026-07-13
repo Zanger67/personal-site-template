@@ -633,7 +633,7 @@ const items: Item[] = [
     // description (see buildDrawer), not as a d-links button. Gated on the route.
     detailUrl: projectsEnabled ? `${base}/projects/${p.id}` : null,
     links: [
-      { label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }, ...extraLinks(p.data.urls), ...extraLinks(p.data.features),
+      { label: 'Visit', url: p.data.url }, { label: 'Repo', url: p.data.repo }, { label: 'Template', url: p.data.template }, { label: 'Sample', url: p.data.sample }, ...extraLinks(p.data.urls), ...extraLinks(p.data.features),
     ], main: p.data.main,
     relationGroups: p.data.relationGroups, tags: p.data.tags, metrics: p.data.metrics,
   })),
