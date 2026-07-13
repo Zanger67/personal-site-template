@@ -1,3 +1,5 @@
+# Made with Anthony's personal-site template: https://github.com/Zanger67/personal-site-template
+
 User-agent: *
 Allow: /
 

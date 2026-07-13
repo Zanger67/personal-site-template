@@ -41,3 +41,7 @@ Buzz is a Yellow Jacket who has served as the official mascot of Georgia Tech si
 ## Skills
 
 Crowd engagement, push-ups, motorcycle riding, crowd surfing, school spirit, mascot choreography, traditions maintenance
+
+## Colophon
+
+Made with Anthony Zang's open-source personal-site template: https://github.com/Zanger67/personal-site-template

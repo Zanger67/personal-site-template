@@ -34,7 +34,10 @@ const links = enabledFooterLinks.map(l => ({
           <option value="iosevka-charon">Iosevka Charon Mono</option>
         </select>
       </label>
-      <p>&copy; {new Date().getFullYear()} {profile.fullName}</p>
+      <div class="footer-copy">
+        <p>&copy; {new Date().getFullYear()} {profile.fullName}</p>
+        <p class="footer-credit">Made with <a href="https://github.com/Zanger67/personal-site-template" target="_blank" rel="noopener noreferrer">Anthony's template</a></p>
+      </div>
     </div>
   </div>
 </footer>
@@ -124,4 +127,32 @@ const links = enabledFooterLinks.map(l => ({
   }
 
   p { margin: 0; }
+
+  /* Copyright stays a normal single-line item, aligned with the links and
+     font picker in the row; the credit hangs just beneath it (absolute so it
+     doesn't offset the copyright's vertical alignment). */
+  .footer-copy {
+    position: relative;
+  }
+
+  .footer-credit {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.15rem;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    color: var(--text-muted);
+  }
+
+  .footer-credit a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.15s ease;
+  }
+
+  .footer-credit a:hover {
+    color: var(--accent);
+  }
 </style>
