@@ -4,6 +4,7 @@ import NorthAmericaMap from '../components/NorthAmericaMap.astro';
 import { showHomeSection, isRouteEnabled } from '@config/site';
 import { getCollection, getEntry, render } from 'astro:content';
 import { resolvePeople } from '../utils/collaborators';
+import { withIncoming } from '../utils/incoming';
 import profile from '../data/profile.json';
 import affiliations from '../data/affiliations.json';
 import publications from '../data/publications.json';
@@ -21,11 +22,14 @@ const profileShape = profile.profileShape as 'circle' | 'rectangle';
 // row when the membership is featured). A homepage role may also carry
 // `homepage_org_name` to override the group's title here (e.g. a short form)
 // without affecting the org's full name used elsewhere.
-interface AffilRole { role: string; roleDetail?: string; homepage?: boolean; homepage_org_name?: string; }
+// A future-dated role/membership (start month later than now) is tagged
+// "(incoming)" here just as on the experience page, via the shared withIncoming
+// helper — so a homepage-featured role that hasn't begun reads the same way.
+interface AffilRole { role: string; roleDetail?: string; start?: string | null; homepage?: boolean; homepage_org_name?: string; }
 interface AffilOrg {
   organization: string;
   url?: string | null;
-  membership?: { homepage?: boolean };
+  membership?: { start?: string | null; homepage?: boolean };
   roles?: AffilRole[];
 }
 const affilOrgs = affiliations as AffilOrg[];
@@ -37,8 +41,8 @@ const currentGroups = affilOrgs
       entity: homepageOrgName ?? o.organization,
       url: o.url ?? null,
       roles: [
-        ...homepageRoles.map(r => r.roleDetail ?? r.role),
-        ...(o.membership?.homepage ? ['Member'] : []),
+        ...homepageRoles.map(r => withIncoming(r.roleDetail ?? r.role, r.start)),
+        ...(o.membership?.homepage ? [withIncoming('Member', o.membership.start)] : []),
       ],
     };
   })

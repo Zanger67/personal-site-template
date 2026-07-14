@@ -22,6 +22,7 @@ import relationGroupLabels from '../data/relationGroupLabels.json';
 import { hostLabel, extraLinks, type UrlEntry } from '../utils/links';
 import { normalizeMetrics, type Metrics, type NormalizedMetric } from '../utils/metrics';
 import { resolvePeople } from '../utils/collaborators';
+import { withIncoming } from '../utils/incoming';
 
 if (!isRouteEnabled('experience')) return Astro.rewrite('/404');
 
@@ -181,20 +182,9 @@ const detailLinks = (ls: { label: string; url: string | null | undefined }[]): {
   ls.filter((l): l is { label: string; url: string } => !!l && !!l.url)
     .filter((l, i, arr) => arr.findIndex(x => x.url === l.url) === i);
 
-// "Incoming": a role/membership whose start MONTH is later than the current one
-// (it hasn't begun yet). The timeline bars tag these via mkItem; this shared
-// helper lets the list + detail rows below read "<name> (incoming)" too, so a
-// future-dated entry looks the same in every view. String-based (YYYY-MM / YYYY)
-// so it can sit above the Date helpers defined further down.
-const isIncomingStart = (start?: string | null): boolean => {
-  if (!start) return false;
-  const [y, m] = start.split('-').map(Number);
-  if (!Number.isFinite(y)) return false;
-  const now = new Date();
-  return y * 12 + (Number.isFinite(m) ? m - 1 : 0) > now.getFullYear() * 12 + now.getMonth();
-};
-const withIncoming = (name: string, start?: string | null): string =>
-  isIncomingStart(start) && !/\bincoming\b/i.test(name) ? `${name} (incoming)` : name;
+// "Incoming" (a future-dated role/membership) tagging lives in ../utils/incoming
+// (isIncomingStart / withIncoming), shared with the homepage sidebar so a
+// future-dated entry reads "<name> (incoming)" the same way in every view.
 
 // Rows for an org's tree: its specific roles, then the blanket `membership` shown
 // at FULL (uncarved) span — registering a detail per row. An `alumnus` window is
