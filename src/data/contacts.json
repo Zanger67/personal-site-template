@@ -1,7 +1,7 @@
 [
   {
     "label": "Email",
-    "value": "buzz [at] example [dot] com"
+    "email": { "u": "bmdsbA==", "d": "cWpteWJ4cQ==", "t": "b2F5" }
   },
   {
     "label": "LinkedIn",

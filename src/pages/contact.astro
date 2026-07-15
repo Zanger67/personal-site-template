@@ -12,11 +12,21 @@ interface SubLink {
   display: string;
 }
 
+// Split-and-join + encoded email: each fragment is base64(rot12(piece)) of a
+// piece of the address (u = local part, d = domain, t = TLD). The joined address
+// never appears in the HTML source; it's decoded and assembled into a mailto: at runtime.
+interface EmailParts {
+  u: string;
+  d: string;
+  t: string;
+}
+
 interface ContactItem {
   label: string;
   value?: string;
   url?: string;
   display?: string;
+  email?: EmailParts;
   subs?: SubLink[];
 }
 
@@ -36,7 +46,12 @@ const contacts = contactsData as ContactItem[];
         <li>
           <strong>{item.label}</strong>
           <div class="value-cell">
-            {item.url
+            {item.email
+              ? <>
+                  <a class="js-email" data-u={item.email.u} data-d={item.email.d} data-t={item.email.t} aria-label="Email address (revealed by JavaScript)">email me</a>
+                  <noscript><span class="value-note"> — enable JavaScript to reveal</span></noscript>
+                </>
+              : item.url
               ? <a href={item.url} target="_blank" rel="noopener noreferrer">{item.display}</a>
               : <span>{item.value}</span>}
             {subs.length > 0 && (
@@ -58,6 +73,25 @@ const contacts = contactsData as ContactItem[];
     })}
   </ul>
 </BaseLayout>
+
+<script>
+  // Reassemble the address at runtime from split, doubly-encoded fragments.
+  // Mirrors the build-time encoder: each fragment is base64(rot12(piece)), so
+  // decoding is atob() then a -12 Caesar shift. Nothing joinable is in the HTML.
+  const rot = (s: string, n: number): string =>
+    s.replace(/[a-zA-Z]/g, (c) => {
+      const base = c <= 'Z' ? 65 : 97;
+      return String.fromCharCode(((c.charCodeAt(0) - base + n) % 26 + 26) % 26 + base);
+    });
+  const dec = (s: string): string => rot(atob(s), -12);
+  document.querySelectorAll<HTMLAnchorElement>('a.js-email').forEach((a) => {
+    const { u, d, t } = a.dataset;
+    if (!u || !d || !t) return;
+    const [lu, ld, lt] = [dec(u), dec(d), dec(t)];
+    a.href = `mailto:${lu}@${ld}.${lt}`;               // working link (real address)
+    a.textContent = `${lu} [at] ${ld} [dot] ${lt}`;    // shown obfuscated to the reader
+  });
+</script>
 
 <style>
   /* Single grid shared across all rows so the label column auto-sizes
@@ -91,6 +125,11 @@ const contacts = contactsData as ContactItem[];
   .contact-list > li:last-child > strong,
   .contact-list > li:last-child > .value-cell {
     border-bottom: none;
+  }
+
+  .value-note {
+    color: var(--text-muted);
+    font-size: 0.85rem;
   }
 
   .sub-links {
