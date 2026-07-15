@@ -4,6 +4,11 @@
     "email": { "u": "bmdsbA==", "d": "cWpteWJ4cQ==", "t": "b2F5" }
   },
   {
+    "label": "Book a Call",
+    "url": "https://cal.com/buzz",
+    "display": "cal.com/buzz"
+  },
+  {
     "label": "LinkedIn",
     "url": "https://linkedin.com",
     "display": "linkedin.com/in/buzz"

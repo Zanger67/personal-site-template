@@ -31,6 +31,10 @@ interface ContactItem {
 }
 
 const contacts = contactsData as ContactItem[];
+
+// Booking link surfaced inline in the intro as "Schedule a chat"; omitted when
+// no such entry exists (keeps the layout byte-identical when a repo has none).
+const scheduleCall = contacts.find(item => item.label === 'Book a Call' && item.url);
 ---
 
 <BaseLayout title="Contact" description={profile.pageMeta.contact}>
@@ -38,6 +42,11 @@ const contacts = contactsData as ContactItem[];
   <p>
     {profile.contactIntro}
   </p>
+  {scheduleCall && (
+    <p class="schedule-line">
+      Schedule a <a href={scheduleCall.url} target="_blank" rel="noopener noreferrer">chat</a>.
+    </p>
+  )}
 
   <ul class="contact-list">
     {contacts.map(item => {
@@ -125,6 +134,10 @@ const contacts = contactsData as ContactItem[];
   .contact-list > li:last-child > strong,
   .contact-list > li:last-child > .value-cell {
     border-bottom: none;
+  }
+
+  .schedule-line {
+    margin-top: 0.5rem;
   }
 
   .value-note {
