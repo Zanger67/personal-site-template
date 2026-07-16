@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NorthAmericaMap from '../components/NorthAmericaMap.astro';
-import { showHomeSection, isRouteEnabled } from '@config/site';
+import { showHomeSection, isRouteEnabled, friendsFirstNameOnly } from '@config/site';
 import { getCollection, getEntry, render } from 'astro:content';
 import { resolvePeople } from '../utils/collaborators';
 import { withIncoming } from '../utils/incoming';
@@ -153,13 +153,16 @@ const { Content: Intro } = await render(introEntry);
                   (src/data/collaborators.json) — same source projects/publications
                   resolve names from. A registered name with a `url` links out;
                   an unknown name (or one without a url) renders as plain text. */}
-              {resolvePeople(profile.friends).map(friend => (
-                <li>
-                  {friend.url
-                    ? <a href={friend.url} target="_blank" rel="noopener noreferrer">{friend.name}</a>
-                    : <span>{friend.name}</span>}
-                </li>
-              ))}
+              {resolvePeople(profile.friends).map(friend => {
+                const label = friendsFirstNameOnly() ? friend.name.split(' ')[0] : friend.name;
+                return (
+                  <li>
+                    {friend.url
+                      ? <a href={friend.url} target="_blank" rel="noopener noreferrer">{label}</a>
+                      : <span>{label}</span>}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </section>
