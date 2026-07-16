@@ -1751,11 +1751,21 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     const cfg = JSON.parse(cfgEl.textContent || '{}');
     const byId: Record<number, Item> = {};
     for (const it of items) byId[it.id] = it;
-    // Recency order (newest first): newest end, then newest start; same-span
-    // items fall back to alphabetical (organisation, then title). Shared by the
-    // drawer's "Related" list and arrow-key navigation.
+    // Current month as an exclusive end column (first of next month, absolute
+    // month index matching item.*MonthNum). Present items fill THROUGH it, and it
+    // anchors their recency sort key below.
+    const nd = new Date();
+    const nowMonthNum = nd.getFullYear() * 12 + nd.getMonth() + 1;
+    // Recency order (newest first): compare by end MONTH. A "present" (open-ended)
+    // role has no end month, so it sorts as the current month plus a half-month
+    // nudge — landing it AHEAD of anything that merely ended this month, yet BEHIND
+    // any future/incoming role, whose end month is genuinely later. (Present used to
+    // key as MAX_SAFE_INTEGER, a finite value that still beat real future dates and
+    // so buried incoming roles beneath ongoing ones.) Ties fall back to newest
+    // start, then alphabetical (organisation, then title). Shared by the drawer's
+    // "Related" list and arrow-key navigation.
     const byRecency = (a: Item, b: Item) => {
-      const ka = a.end ?? Number.MAX_SAFE_INTEGER, kb = b.end ?? Number.MAX_SAFE_INTEGER;
+      const ka = a.endMonthNum ?? nowMonthNum + 0.5, kb = b.endMonthNum ?? nowMonthNum + 0.5;
       return kb - ka || b.start - a.start
         || a.entity.localeCompare(b.entity) || a.title.localeCompare(b.title);
     };
@@ -1791,10 +1801,8 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       return names.length ? ` (${names.join(', ')})` : '';
     };
     const order: Record<string, number> = cfg.typeOrder;
-    // Present items fill THROUGH the current month, so their exclusive end column
-    // is the first of next month (absolute month index, matching item.*MonthNum).
-    const nd = new Date();
-    const nowMonthNum = nd.getFullYear() * 12 + nd.getMonth() + 1;
+    // nowMonthNum (defined above) is the exclusive end column present items fill
+    // through — the first of next month, matching item.*MonthNum.
 
     // Row membership uses absolute month indices (timezone-independent integers),
     // NOT the baked-at-build `start`/`end` ms timestamps. Those instants are computed
