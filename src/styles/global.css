@@ -145,3 +145,34 @@ img {
 .prose h3 { margin-top: 1.5rem; }
 .prose a { text-decoration: underline; text-underline-offset: 2px; }
 .prose a:hover { color: var(--accent-hover); }
+
+/* ---- Page transitions --------------------------------------------------
+   Content fades up from slightly below on load; on an internal-link click a
+   small script (BaseLayout) adds `is-leaving` to fade the page out before it
+   navigates — a quick, symmetric fade across page loads. Pure-CSS fade-in is
+   the progressive-enhancement baseline; the fade-out needs the script.
+   `animation-fill-mode: backwards` (NOT forwards/both) is deliberate: it lets
+   `main` revert to `transform: none` once the animation ends, so it never
+   leaves a lingering transform — a retained transform would turn `main` into
+   the containing block for its `position: fixed` descendants (e.g. the
+   experience-page drawer/overlay) and mislocate them. */
+:root {
+  --page-enter-duration: 0.36s;
+  --page-leave-duration: 0.2s;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  main {
+    animation: page-enter var(--page-enter-duration) cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  html.is-leaving body {
+    opacity: 0;
+    transition: opacity var(--page-leave-duration) ease;
+  }
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

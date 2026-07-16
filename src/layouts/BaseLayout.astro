@@ -64,5 +64,49 @@ const fullTitle = rawTitle ? title : `${title} — ${profile.name}`;
     </main>
     <Footer />
     <MapleLeaf />
+    <script is:inline>
+      // Page transitions (exit half). The fade-IN on load is pure CSS
+      // (global.css: `main` runs the `page-enter` animation). Here we handle
+      // the fade-OUT: intercept clicks on internal links, add `is-leaving` to
+      // fade the page down, then navigate. Progressive enhancement — with JS
+      // off, links just navigate and only the CSS fade-in runs.
+      (function () {
+        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+        var LEAVE_MS = 200; // keep in sync with --page-leave-duration
+        var leaving = false;
+
+        // A page restored from the back/forward cache must not stay faded out.
+        window.addEventListener('pageshow', function () {
+          leaving = false;
+          document.documentElement.classList.remove('is-leaving');
+        });
+
+        document.addEventListener('click', function (e) {
+          if (leaving || e.defaultPrevented) return;
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          if (reduce.matches) return;
+
+          var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+          if (!a) return;
+          if (a.target && a.target !== '_self') return; // opens in a new tab/window
+          if (a.hasAttribute('download')) return;
+
+          var raw = a.getAttribute('href');
+          if (!raw || raw.charAt(0) === '#') return; // in-page anchor
+
+          var url;
+          try { url = new URL(a.href, location.href); } catch (_) { return; }
+          if (url.origin !== location.origin) return; // external / mailto: / tel:
+          // Same document (only a hash/query-less change) — let the browser handle it,
+          // so in-page anchors (e.g. experience #sel=, works #tab) don't fade the page.
+          if (url.pathname === location.pathname && url.search === location.search) return;
+
+          e.preventDefault();
+          leaving = true;
+          document.documentElement.classList.add('is-leaving');
+          setTimeout(function () { location.href = a.href; }, LEAVE_MS);
+        }, false);
+      })();
+    </script>
   </body>
 </html>
