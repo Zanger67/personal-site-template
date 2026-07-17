@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NorthAmericaMap from '../components/NorthAmericaMap.astro';
-import { showHomeSection, isRouteEnabled, friendsFirstNameOnly } from '@config/site';
+import { showHomeSection, isRouteEnabled, friendsFirstNameOnly, enabledFooterLinks } from '@config/site';
 import { getCollection, getEntry, render } from 'astro:content';
 import { resolvePeople } from '../utils/collaborators';
 import { withIncoming } from '../utils/incoming';
@@ -10,6 +10,9 @@ import affiliations from '../data/affiliations.json';
 import publications from '../data/publications.json';
 import education from '../data/education.json';
 import languages from '../data/languages.json';
+import organizations from '../data/organizations.json';
+import awards from '../data/awards.json';
+import { buildPersonGraph } from '../utils/structuredData';
 
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 const profileShape = profile.profileShape as 'circle' | 'rectangle';
@@ -69,9 +72,26 @@ const projects = [
 
 const introEntry = await getEntry('sections', 'intro');
 const { Content: Intro } = await render(introEntry);
+
+// schema.org JSON-LD identity graph (Person + work/education history, projects,
+// publications) — machine-readable context for search engines and LLMs, emitted
+// invisibly in the page. Data-driven from the same sources the page renders.
+const siteUrl = (Astro.site?.href ?? '').replace(/\/+$/, '') + base;
+const personGraph = buildPersonGraph({
+  siteUrl,
+  profile,
+  affiliations,
+  organizations,
+  education,
+  awards,
+  publications,
+  projects: allProjects.filter(p => !p.data.draft),
+  socials: enabledFooterLinks.filter(l => l.external).map(l => l.href),
+});
 ---
 
 <BaseLayout title={profile.homeTitle} rawTitle>
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(personGraph).replace(/</g, '\\u003c')} />
   <div class="home-layout">
     <aside class="sidebar">
       <img
