@@ -73,6 +73,77 @@ const { Content: Intro } = await render(introEntry);
 
 <BaseLayout title={profile.homeTitle} rawTitle>
   <div class="home-layout">
+    <aside class="sidebar">
+      <img
+        src={`${base}${profile.profileImage}`}
+        alt="Profile photo"
+        class:list={['profile-img', { 'profile-rect': profileShape === 'rectangle' }]}
+        width="150"
+        height="150"
+      />
+
+      {showHomeSection('education') && education.length > 0 && (
+        <div class="sidebar-section">
+          <h3>Education</h3>
+          <div class="edu-list">
+            {education.map(ed => (
+              <div class="edu-item">
+                <div class="edu-degree">{ed.degree}</div>
+                <div class="edu-school">
+                  {ed.url
+                    ? <a href={ed.url} target="_blank" rel="noopener noreferrer">{ed.institutionShort ?? ed.institution}</a>
+                    : ed.institutionShort ?? ed.institution}
+                </div>
+                {ed.honors && <div class="edu-honors">{ed.honors}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showHomeSection('affiliations') && currentGroups.length > 0 && (
+        <div class="sidebar-section">
+          <h3>Affiliations (current)</h3>
+          <div class="aff-groups">
+            {currentGroups.map(group => (
+              <div class="aff-group">
+                <div class="aff-entity">
+                  {group.url
+                    ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
+                    : group.entity}
+                </div>
+                {group.roles.map((role, i) => {
+                  const isLast = i === group.roles.length - 1;
+                  const glyph = isLast ? '└' : '├';
+                  return (
+                    <div class="aff-role-row">
+                      <span class="bracket">{glyph}</span>
+                      <span class="aff-role">{role}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          {isRouteEnabled('experience') && <a href={`${base}/experience`} class="view-all">All experience &rarr;</a>}
+        </div>
+      )}
+
+      {showHomeSection('languages') && languages.length > 0 && (
+        <div class="sidebar-section">
+          <h3>Languages</h3>
+          <div class="lang-list">
+            {languages.map(lang => (
+              <div class="lang-item">
+                <span class="lang-name">{lang.language}</span>
+                <span class="lang-fluency">{lang.fluency}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </aside>
+
     <div class="main-col">
       <h1>{profile.greeting}</h1>
       <p class="subtitle">{profile.subtitle}</p>
@@ -172,77 +243,6 @@ const { Content: Intro } = await render(introEntry);
         <p class="llm-note"><em>{profile.llmNote}</em></p>
       )}
     </div>
-
-    <aside class="sidebar">
-      <img
-        src={`${base}${profile.profileImage}`}
-        alt="Profile photo"
-        class:list={['profile-img', { 'profile-rect': profileShape === 'rectangle' }]}
-        width="150"
-        height="150"
-      />
-
-      {showHomeSection('education') && education.length > 0 && (
-        <div class="sidebar-section">
-          <h3>Education</h3>
-          <div class="edu-list">
-            {education.map(ed => (
-              <div class="edu-item">
-                <div class="edu-degree">{ed.degree}</div>
-                <div class="edu-school">
-                  {ed.url
-                    ? <a href={ed.url} target="_blank" rel="noopener noreferrer">{ed.institutionShort ?? ed.institution}</a>
-                    : ed.institutionShort ?? ed.institution}
-                </div>
-                {ed.honors && <div class="edu-honors">{ed.honors}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {showHomeSection('affiliations') && currentGroups.length > 0 && (
-        <div class="sidebar-section">
-          <h3>Affiliations (current)</h3>
-          <div class="aff-groups">
-            {currentGroups.map(group => (
-              <div class="aff-group">
-                <div class="aff-entity">
-                  {group.url
-                    ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
-                    : group.entity}
-                </div>
-                {group.roles.map((role, i) => {
-                  const isLast = i === group.roles.length - 1;
-                  const glyph = isLast ? '└' : '├';
-                  return (
-                    <div class="aff-role-row">
-                      <span class="bracket">{glyph}</span>
-                      <span class="aff-role">{role}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-          {isRouteEnabled('experience') && <a href={`${base}/experience`} class="view-all">All experience &rarr;</a>}
-        </div>
-      )}
-
-      {showHomeSection('languages') && languages.length > 0 && (
-        <div class="sidebar-section">
-          <h3>Languages</h3>
-          <div class="lang-list">
-            {languages.map(lang => (
-              <div class="lang-item">
-                <span class="lang-name">{lang.language}</span>
-                <span class="lang-fluency">{lang.fluency}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </aside>
   </div>
 </BaseLayout>
 
@@ -259,6 +259,7 @@ const { Content: Intro } = await render(introEntry);
   .main-col {
     flex: 1;
     min-width: 0;
+    order: 1;
   }
 
   .main-col h1 {
@@ -289,6 +290,7 @@ const { Content: Intro } = await render(introEntry);
     width: 230px;
     flex-shrink: 0;
     padding-top: 0.25rem;
+    order: 2;
   }
 
   .profile-img {
@@ -477,8 +479,16 @@ const { Content: Intro } = await render(introEntry);
 
   @media (max-width: 640px) {
     .home-layout {
-      flex-direction: column-reverse;
+      flex-direction: column;
       gap: 1.5rem;
+    }
+
+    .main-col {
+      order: 2;
+    }
+
+    .sidebar {
+      order: 1;
     }
 
     :global(main:has(.home-layout)) {
