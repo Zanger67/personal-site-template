@@ -1,20 +1,18 @@
 ---
-import { regions, alaskaInset, alaskaSimple, hawaiiInset, greatLakes, dcAreaHiRes } from '../data/map-paths';
-import mapConfig from '../data/map-config.json';
-
+// The map paths are ~160KB. Rather than server-render them into every page's
+// HTML (which buried later content and bloated the document), this component
+// renders only the chrome + an aspect-ratio-reserved canvas, then lazily
+// client-renders the interactive SVG on scroll-into-view: the heavy path data
+// is dynamic-imported (a separate, cached code-split chunk) and handed to
+// buildMapSvg() (src/utils/mapSvg.ts). Same component on / and /map.
 interface Props {
   class?: string;
 }
 
 const { class: className } = Astro.props;
-const visitedSet = new Set(mapConfig.visited);
-const activeSet = new Set(mapConfig.activeCities);
-const continentalRegions = [...regions.filter(r => r.id !== 'US-HI' && r.id !== 'US-AK'), alaskaSimple];
-const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
-// Use high-res 10m data for DC inset instead of the 50m continental paths
 ---
 
-<div class:list={['map-container', className]}>
+<div class:list={['map-container', className]} data-map>
   <div class="map-header">
     <span class="map-prompt">$</span> cat places.map --visited
   </div>
@@ -23,136 +21,9 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
       <span class="tooltip-abbr" id="tooltip-abbr"></span>
       <span class="tooltip-name" id="tooltip-name"></span>
     </div>
-    <svg
-      viewBox="372 222 561 351"
-      xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label="Map of visited places in North America"
-    >
-      <g class="regions">
-        {continentalRegions.map((r) => (
-          <path
-            id={r.id}
-            d={r.d}
-            fill-rule={r.fillRule || undefined}
-            class:list={['region', { visited: visitedSet.has(r.id) }]}
-            data-abbr={r.abbr}
-            data-name={r.name}
-            data-region={r.id}
-          />
-        ))}
-      </g>
-
-      <g class="lakes">
-        {greatLakes.map((lake) => (
-          <path
-            d={lake.d}
-            fill-rule={lake.fillRule || undefined}
-            class="lake"
-          />
-        ))}
-      </g>
-
-      {/* Alaska inset — bottom-left */}
-      <g class="inset-group">
-        <rect x="383" y="497" width="88" height="66" class="inset-border" rx="2" />
-        <text x="387" y="507" class="inset-label">AK</text>
-        <g transform="translate(383, 497) scale(0.73)">
-          <path
-            id={alaskaInset.id}
-            d={alaskaInset.d}
-            fill-rule={alaskaInset.fillRule || undefined}
-            class:list={['region', { visited: visitedSet.has(alaskaInset.id) }]}
-            data-abbr={alaskaInset.abbr}
-            data-name={alaskaInset.name}
-            data-region={alaskaInset.id}
-          />
-        </g>
-      </g>
-
-      {/* Hawaii inset — next to Alaska */}
-      <g class="inset-group">
-        <rect x="475" y="521" width="65" height="42" class="inset-border" rx="2" />
-        <text x="479" y="531" class="inset-label">HI</text>
-        <g class="hi-inset-regions" transform="translate(361, 460) scale(2.8)">
-          <path
-            id={hawaiiInset.id}
-            d={hawaiiInset.d}
-            fill-rule={hawaiiInset.fillRule || undefined}
-            class:list={['region', { visited: visitedSet.has(hawaiiInset.id) }]}
-            data-abbr={hawaiiInset.abbr}
-            data-name={hawaiiInset.name}
-            data-region={hawaiiInset.id}
-          />
-        </g>
-      </g>
-
-      {/* DC area inset — bottom-right */}
-      <g class="inset-group">
-        <defs>
-          <clipPath id="dc-clip">
-            <rect x="858" y="502" width="72" height="60" />
-          </clipPath>
-        </defs>
-        <rect x="858" y="502" width="72" height="60" class="inset-border" rx="2" />
-        <g clip-path="url(#dc-clip)">
-          <g class="dc-inset-regions" transform="translate(-15911, -8730) scale(21)">
-            {dcAreaHiRes.map((r) => (
-              <path
-                d={r.d}
-                fill-rule={r.fillRule || undefined}
-                class:list={['region', { visited: visitedSet.has(r.id) }]}
-                data-abbr={r.abbr}
-                data-name={r.name}
-                data-region={r.id}
-              />
-            ))}
-          </g>
-        </g>
-        <text x="862" y="512" class="inset-label">DC</text>
-        {/* Leader lines from DC on main map to inset */}
-        <line x1="800" y1="441" x2="858" y2="510" class="dc-leader" />
-        <line x1="800" y1="441" x2="858" y2="540" class="dc-leader" />
-      </g>
-
-      <g class="cities">
-        {activeCities.map((city) => (
-          <g class="city-marker">
-            <line
-              x1={city.x}
-              y1={city.y}
-              x2={city.x + city.labelOffset.dx}
-              y2={city.y + city.labelOffset.dy}
-              class="city-line"
-            />
-            {city.type === 'current' ? (
-              <polygon
-                points={`${city.x},${city.y - 3.5} ${city.x + 1.2},${city.y - 1.2} ${city.x + 3.5},${city.y - 1.2} ${city.x + 1.7},${city.y + 0.5} ${city.x + 2.3},${city.y + 3.5} ${city.x},${city.y + 1.5} ${city.x - 2.3},${city.y + 3.5} ${city.x - 1.7},${city.y + 0.5} ${city.x - 3.5},${city.y - 1.2} ${city.x - 1.2},${city.y - 1.2}`}
-                class="city-star"
-              />
-            ) : city.type === 'hometown' ? (
-              <rect
-                x={city.x - 2.5}
-                y={city.y - 2.5}
-                width="5"
-                height="5"
-                class="city-square"
-              />
-            ) : (
-              <circle cx={city.x} cy={city.y} r="2.5" class="city-dot" />
-            )}
-            <text
-              x={city.x + city.labelOffset.dx + (city.labelAnchor === 'start' ? 3 : -3)}
-              y={city.y + city.labelOffset.dy}
-              text-anchor={city.labelAnchor}
-              class="city-label"
-            >
-              {city.label}
-            </text>
-          </g>
-        ))}
-      </g>
-    </svg>
+    <div class="map-canvas" data-map-canvas>
+      <noscript><p class="map-noscript">The interactive map needs JavaScript.</p></noscript>
+    </div>
   </div>
   <div class="map-legend">
     <span class="legend-item">
@@ -216,6 +87,27 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
     padding: 0.5rem;
   }
 
+  /* Reserve the map's aspect ratio (viewBox 561x351) so the lazily injected
+     SVG doesn't cause layout shift. */
+  .map-canvas {
+    width: 100%;
+    aspect-ratio: 561 / 351;
+  }
+
+  .map-canvas :global(svg) {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .map-noscript {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 2rem 0;
+    margin: 0;
+  }
+
   .map-tooltip {
     position: absolute;
     top: 0.75rem;
@@ -249,13 +141,10 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
     line-height: 1.3;
   }
 
-  svg:not(.legend-icon) {
-    display: block;
-    width: 100%;
-    height: auto;
-  }
-
-  .region {
+  /* Map-element styles target the client-injected SVG, so they are scoped to
+     the (server-rendered) container and made :global for its injected children.
+     The --map-* custom properties above cascade in from .map-container. */
+  .map-container :global(.region) {
     fill: var(--map-land);
     stroke: var(--map-border);
     stroke-width: 0.8;
@@ -264,7 +153,7 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
     transition: fill 0.15s ease, stroke 0.15s ease;
   }
 
-  .lake {
+  .map-container :global(.lake) {
     fill: var(--map-water);
     stroke: var(--map-border);
     stroke-width: 0.4;
@@ -272,12 +161,12 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
     pointer-events: none;
   }
 
-  .region.visited {
+  .map-container :global(.region.visited) {
     fill: var(--map-visited);
   }
 
-  .region:hover,
-  .region.hovered {
+  .map-container :global(.region:hover),
+  .map-container :global(.region.hovered) {
     fill: var(--map-hover);
     fill-opacity: 0.35;
     stroke: var(--map-hover);
@@ -285,70 +174,63 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
     stroke-dasharray: none;
   }
 
-  .hi-inset-regions .region {
+  .map-container :global(.hi-inset-regions .region) {
     stroke-width: 0.22;
     stroke-dasharray: 0.8 0.6;
   }
 
-  .hi-inset-regions .region:hover {
+  .map-container :global(.hi-inset-regions .region:hover) {
     stroke-width: 0.3;
   }
 
-  .dc-inset-regions .region {
+  .map-container :global(.dc-inset-regions .region) {
     stroke-width: 0.03;
     stroke-dasharray: 0.12 0.1;
   }
 
-  .dc-inset-regions .region:hover {
+  .map-container :global(.dc-inset-regions .region:hover) {
     stroke-width: 0.05;
   }
 
-  .dc-leader {
+  .map-container :global(.dc-leader) {
     stroke: var(--border);
     stroke-width: 0.5;
     stroke-dasharray: 2 2;
   }
 
-  .region.visited:hover,
-  .region.visited.hovered {
+  .map-container :global(.region.visited:hover),
+  .map-container :global(.region.visited.hovered) {
     fill: var(--map-hover);
     fill-opacity: 0.35;
   }
 
-  .inset-border {
+  .map-container :global(.inset-border) {
     fill: var(--map-water);
     stroke: var(--map-border);
     stroke-width: 0.5;
     stroke-dasharray: 2 2;
   }
 
-  .inset-label {
+  .map-container :global(.inset-label) {
     font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
     font-size: 7px;
     fill: var(--text-muted);
     opacity: 0.6;
   }
 
-
-  .city-dot {
+  .map-container :global(.city-dot),
+  .map-container :global(.city-star),
+  .map-container :global(.city-square) {
     fill: var(--accent);
   }
 
-  .city-star {
-    fill: var(--accent);
-  }
-
-  .city-square {
-    fill: var(--accent);
-  }
-
-  .city-line {
+  .map-container :global(.city-line) {
     stroke: var(--text-muted);
     stroke-width: 0.5;
     stroke-dasharray: 2 1;
   }
 
-  .city-label {
+  .map-container :global(.city-label) {
     font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
     font-size: 8px;
     fill: var(--text-muted);
@@ -406,8 +288,8 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
   }
 
   @media (max-width: 480px) {
-    .city-label,
-    .city-line {
+    .map-container :global(.city-label),
+    .map-container :global(.city-line) {
       display: none;
     }
 
@@ -418,16 +300,13 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
 </style>
 
 <script>
-  const STORAGE_KEY = 'map-visited';
+  import { buildMapSvg } from '../utils/mapSvg';
 
-  const container = document.querySelector('.map-container');
-  const svg = container?.querySelector('svg');
-  const tooltip = document.getElementById('map-tooltip');
-  const tooltipAbbr = document.getElementById('tooltip-abbr');
-  const tooltipName = document.getElementById('tooltip-name');
-
-  if (svg && tooltip && tooltipAbbr && tooltipName) {
-    let currentRegion: Element | null = null;
+  function initInteractivity(container: Element, svg: SVGSVGElement) {
+    const tooltip = container.querySelector<HTMLElement>('.map-tooltip');
+    const tooltipAbbr = container.querySelector<HTMLElement>('.tooltip-abbr');
+    const tooltipName = container.querySelector<HTMLElement>('.tooltip-name');
+    if (!tooltip || !tooltipAbbr || !tooltipName) return;
 
     let currentRegionId: string | null = null;
 
@@ -451,25 +330,23 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
       const regionId = region.getAttribute('data-region');
       if (regionId === currentRegionId) return;
 
-      // Clear previous hover
       if (currentRegionId) {
-        svg!.querySelectorAll(`.region[data-region="${currentRegionId}"]`).forEach(el => {
+        svg.querySelectorAll(`.region[data-region="${currentRegionId}"]`).forEach((el) => {
           el.classList.remove('hovered');
         });
       }
       restoreRaised();
 
       currentRegionId = regionId;
-      tooltipAbbr.textContent = region.getAttribute('data-abbr') || '';
-      tooltipName.textContent = region.getAttribute('data-name') || '';
+      tooltipAbbr!.textContent = region.getAttribute('data-abbr') || '';
+      tooltipName!.textContent = region.getAttribute('data-name') || '';
 
-      tooltip.classList.remove('visible');
-      void tooltip.offsetWidth;
-      tooltip.classList.add('visible');
+      tooltip!.classList.remove('visible');
+      void tooltip!.offsetWidth;
+      tooltip!.classList.add('visible');
 
-      // Highlight all matching paths and raise them above their neighbours.
       if (regionId) {
-        svg!.querySelectorAll(`.region[data-region="${regionId}"]`).forEach(el => {
+        svg.querySelectorAll(`.region[data-region="${regionId}"]`).forEach((el) => {
           el.classList.add('hovered');
           const parent = el.parentNode;
           if (parent) {
@@ -482,27 +359,22 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
 
     function hideTooltip() {
       if (currentRegionId) {
-        svg!.querySelectorAll(`.region[data-region="${currentRegionId}"]`).forEach(el => {
+        svg.querySelectorAll(`.region[data-region="${currentRegionId}"]`).forEach((el) => {
           el.classList.remove('hovered');
         });
         currentRegionId = null;
       }
       restoreRaised();
-      tooltip.classList.remove('visible');
+      tooltip!.classList.remove('visible');
     }
 
     svg.addEventListener('mouseover', (e) => {
       const region = (e.target as Element).closest('.region');
-      if (region) {
-        showTooltip(region);
-      } else {
-        hideTooltip();
-      }
+      if (region) showTooltip(region);
+      else hideTooltip();
     });
 
-    svg.addEventListener('mouseleave', () => {
-      hideTooltip();
-    });
+    svg.addEventListener('mouseleave', () => hideTooltip());
 
     // Click to toggle visited — sync all paths for the same region
     svg.addEventListener('click', (e) => {
@@ -511,20 +383,59 @@ const activeCities = mapConfig.cities.filter(c => activeSet.has(c.id));
       const regionId = region.getAttribute('data-region');
       if (!regionId) return;
       const isVisited = !region.classList.contains('visited');
-      svg.querySelectorAll(`.region[data-region="${regionId}"]`).forEach(el => {
+      svg.querySelectorAll(`.region[data-region="${regionId}"]`).forEach((el) => {
         el.classList.toggle('visited', isVisited);
       });
     });
 
     // Touch support
-    svg.addEventListener('touchstart', (e) => {
-      const region = (e.target as Element).closest('.region');
-      if (region) {
-        e.preventDefault();
-        showTooltip(region);
-      } else {
-        hideTooltip();
-      }
-    }, { passive: false });
+    svg.addEventListener(
+      'touchstart',
+      (e) => {
+        const region = (e.target as Element).closest('.region');
+        if (region) {
+          e.preventDefault();
+          showTooltip(region);
+        } else {
+          hideTooltip();
+        }
+      },
+      { passive: false },
+    );
   }
+
+  function mountMap(container: Element) {
+    const canvas = container.querySelector('[data-map-canvas]');
+    if (!canvas || canvas.getAttribute('data-mounted')) return;
+    canvas.setAttribute('data-mounted', '1');
+
+    Promise.all([import('../data/map-paths'), import('../data/map-config.json')])
+      .then(([paths, cfg]) => {
+        canvas.innerHTML = buildMapSvg(paths as any, (cfg as any).default);
+        const svg = canvas.querySelector('svg');
+        if (svg) initInteractivity(container, svg as unknown as SVGSVGElement);
+      })
+      .catch(() => {
+        canvas.removeAttribute('data-mounted');
+      });
+  }
+
+  document.querySelectorAll('.map-container[data-map]').forEach((container) => {
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(
+        (entries, obs) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              obs.disconnect();
+              mountMap(container);
+            }
+          });
+        },
+        { rootMargin: '300px' },
+      );
+      io.observe(container);
+    } else {
+      mountMap(container);
+    }
+  });
 </script>
