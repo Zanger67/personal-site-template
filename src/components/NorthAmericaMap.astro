@@ -84,20 +84,26 @@ const { class: className } = Astro.props;
 
   .map-body {
     position: relative;
-    padding: 0.5rem;
+    padding: 0 0.5rem;
   }
 
   /* Reserve the map's aspect ratio (viewBox 561x351) so the lazily injected
      SVG doesn't cause layout shift. */
   .map-canvas {
+    position: relative;
     width: 100%;
     aspect-ratio: 561 / 351;
   }
 
+  /* SVG absolutely fills the reserved box so no sub-pixel gap ("lip") can show
+     between the aspect-ratio placeholder and the injected map. Box aspect ==
+     viewBox aspect, so preserveAspectRatio meet fills edge-to-edge, no letterbox. */
   .map-canvas :global(svg) {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
-    height: auto;
+    height: 100%;
   }
 
   /* The map data is fetched lazily, so the SVG lands a beat after first paint.
