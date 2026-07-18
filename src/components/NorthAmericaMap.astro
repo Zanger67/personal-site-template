@@ -100,6 +100,29 @@ const { class: className } = Astro.props;
     height: auto;
   }
 
+  /* The map data is fetched lazily, so the SVG lands a beat after first paint.
+     Fade it in mirroring the page-enter fade — same duration, easing, and
+     subtle rise — so it eases in rather than popping; it simply starts whenever
+     the chunk arrives (a slight lag behind the page fade is fine). The fixed
+     duration also floors the speed, so it never appears instantly. Applied to
+     the injected SVG (not the canvas) so the <noscript> note stays visible with
+     JS off, and skipped under reduced-motion. Fade-OUT on navigation is already
+     handled by the page-leave transition (the map lives inside <main>). */
+  @media (prefers-reduced-motion: no-preference) {
+    .map-canvas :global(svg) {
+      opacity: 0;
+      transform: translateY(10px);
+      transition:
+        opacity var(--page-enter-duration, 0.36s) cubic-bezier(0.22, 1, 0.36, 1),
+        transform var(--page-enter-duration, 0.36s) cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .map-canvas.map-loaded :global(svg) {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   .map-noscript {
     font-size: 0.8rem;
     color: var(--text-muted);
@@ -414,6 +437,8 @@ const { class: className } = Astro.props;
         canvas.innerHTML = buildMapSvg(paths as any, (cfg as any).default);
         const svg = canvas.querySelector('svg');
         if (svg) initInteractivity(container, svg as unknown as SVGSVGElement);
+        // Fade the freshly injected SVG in on the next frame (mirrors page-enter).
+        requestAnimationFrame(() => canvas.classList.add('map-loaded'));
       })
       .catch(() => {
         canvas.removeAttribute('data-mounted');
