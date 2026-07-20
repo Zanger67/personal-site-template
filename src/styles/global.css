@@ -52,6 +52,13 @@ html[data-font="inter"] {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* Palatino isn't on Google Fonts, so it isn't self-hosted — it uses the visitor's
+   local Palatino / Palatino Linotype / Book Antiqua, falling back to Georgia then
+   a generic serif. Renders as a serif everywhere; exact face varies by system. */
+html[data-font="palatino"] {
+  font-family: 'Palatino', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+}
+
 html[data-font="iosevka-charon"] {
   font-family: 'Iosevka Charon Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 }
