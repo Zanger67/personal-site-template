@@ -10,7 +10,7 @@
 //   • Every other tab omits `kind`, so "★ Featured" sits in the header row
 //     next to the title (the tab itself already says what the item is).
 import Metrics from './Metrics.astro';
-import type { Metrics as MetricsDict } from '../utils/metrics';
+import { normalizeMetrics, type Metrics as MetricsDict } from '../utils/metrics';
 
 interface WorkLink {
   label: string;
@@ -61,6 +61,7 @@ const {
 } = Astro.props;
 
 const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+const hasMetrics = normalizeMetrics(metrics).length > 0;
 ---
 
 <article class="work-card">
@@ -86,16 +87,25 @@ const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {
   {subtitle && <p class="work-subtitle">{subtitle}</p>}
   {description && <p class="work-desc">{description}</p>}
 
-  {(affiliations.length > 0 || tags.length > 0 || links.length > 0) && (
-    <div class="work-metarow">
-      {(affiliations.length > 0 || tags.length > 0) && (
-        <div class="tags">
+  {/* Four independent groups (affiliations · tags · metrics · links). Base render
+      is one wrapping row; the client script below measures each card's own content
+      and, only on overflow, progressively splits it across two lines — see the
+      <script> and the `.work-metarow` styles for the staged cascade. */}
+  {(affiliations.length > 0 || tags.length > 0 || links.length > 0 || hasMetrics) && (
+    <div class="work-metarow" data-stage="0">
+      {affiliations.length > 0 && (
+        <div class="mr-group mr-affil">
           {affiliations.map(a => <span class="affil-chip" title={`Affiliated with ${a}`}>{a}</span>)}
+        </div>
+      )}
+      {tags.length > 0 && (
+        <div class="mr-group mr-tags">
           {tags.map(tag => <span class="tag">{tag}</span>)}
         </div>
       )}
+      <Metrics metrics={metrics} class="mr-group mr-metrics" />
       {links.length > 0 && (
-        <div class="ext-links">
+        <div class="mr-group mr-links ext-links">
           {links.map(l => (
             <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
           ))}
@@ -103,9 +113,123 @@ const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {
       )}
     </div>
   )}
-
-  <Metrics metrics={metrics} class="work-metrics" />
 </article>
+
+{/* Progressive-collapse for each card's meta row. Faithful to a *content*-overflow
+    cascade (not fixed width breakpoints) so each card reacts to its OWN content:
+      stage 0   A T M L              everything on one line
+      stage 1   A / T M L            affiliations drop to their own line
+      stage 2   A M / T L            metrics move up beside the affiliations
+      stage 3   A M / T…(wrap) L     tags wrap; links tie to the bottom tag row
+    Hoisted + deduped by Astro, so this one script drives every card on the page.
+    With JS off, the base CSS leaves it as a single wrapping row. */}
+<script>
+  interface Groups {
+    affil: HTMLElement | null;
+    tags: HTMLElement | null;
+    metrics: HTMLElement | null;
+    links: HTMLElement | null;
+  }
+
+  const px = (v: string) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  // Natural single-line width of a chip group = Σ child widths + inner column-gaps.
+  // Chip widths don't depend on wrapping, so this is stable wherever the group
+  // currently sits (line 1, line 2, or already wrapped across rows).
+  const naturalWidth = (g: HTMLElement | null): number => {
+    if (!g) return 0;
+    const kids = Array.from(g.children) as HTMLElement[];
+    if (!kids.length) return 0;
+    const gap = px(getComputedStyle(g).columnGap);
+    let w = 0;
+    for (const k of kids) w += k.getBoundingClientRect().width;
+    return w + gap * (kids.length - 1);
+  };
+
+  const setup = (row: HTMLElement) => {
+    const groups: Groups = {
+      affil: row.querySelector<HTMLElement>('.mr-affil'),
+      tags: row.querySelector<HTMLElement>('.mr-tags'),
+      metrics: row.querySelector<HTMLElement>('.mr-metrics'),
+      links: row.querySelector<HTMLElement>('.mr-links'),
+    };
+
+    // Two persistent line wrappers the groups get shuffled between per stage.
+    const line1 = document.createElement('div');
+    const line2 = document.createElement('div');
+    line1.className = 'mr-line';
+    line2.className = 'mr-line';
+
+    // Do a set of groups fit on ONE line of width `W` (with the between-group
+    // gap)? Absent / empty groups are ignored.
+    const fits = (ws: number[], W: number, gap: number) => {
+      const p = ws.filter(x => x > 0);
+      if (!p.length) return true;
+      return p.reduce((s, x) => s + x, 0) + gap * (p.length - 1) <= W + 1;
+    };
+
+    // Move the given (present) groups, in order, into a line wrapper.
+    const fill = (line: HTMLElement, gs: (HTMLElement | null)[]) => {
+      for (const g of gs) if (g) line.appendChild(g);
+    };
+
+    let current = -1;
+
+    const layout = () => {
+      const W = row.clientWidth;
+      if (!W) return; // hidden tab panel — re-runs via ResizeObserver when shown.
+      const gap = px(getComputedStyle(row).columnGap);
+      const A = naturalWidth(groups.affil);
+      const T = naturalWidth(groups.tags);
+      const M = naturalWidth(groups.metrics);
+      const L = naturalWidth(groups.links);
+
+      let stage: number;
+      if (fits([A, T, M, L], W, gap)) stage = 0;
+      else if (A > 0 && fits([T, M, L], W, gap)) stage = 1;
+      else if (fits([T, L], W, gap)) stage = 2;
+      else stage = 3;
+
+      if (stage === current) return; // no change — avoid needless reflow / RO churn.
+      current = stage;
+      row.dataset.stage = String(stage);
+
+      line1.textContent = '';
+      line2.textContent = '';
+      if (stage === 0) {
+        fill(line1, [groups.affil, groups.tags, groups.metrics, groups.links]);
+      } else if (stage === 1) {
+        fill(line1, [groups.affil]);
+        fill(line2, [groups.tags, groups.metrics, groups.links]);
+      } else {
+        // Stages 2 & 3 share one arrangement; the stage-3 difference (tags wrap,
+        // links tie to the bottom tag row) falls out of line 2's flex-wrap.
+        fill(line1, [groups.affil, groups.metrics]);
+        fill(line2, [groups.tags, groups.links]);
+      }
+      row.appendChild(line1);
+      if (line2.childElementCount) row.appendChild(line2);
+      else if (line2.parentNode) line2.remove();
+    };
+
+    layout();
+    if ('ResizeObserver' in window) {
+      let raf = 0;
+      const ro = new ResizeObserver(() => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(layout);
+      });
+      ro.observe(row);
+    } else {
+      window.addEventListener('resize', layout);
+    }
+  };
+
+  document.querySelectorAll<HTMLElement>('.work-metarow').forEach(setup);
+</script>
 
 <style>
   .work-card {
@@ -208,7 +332,11 @@ const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {
     margin: 0.3rem 0 0;
   }
 
-  /* ── Tags + links row ──────────────────────────────────────────────────── */
+  /* ── Meta row: affiliations · tags · metrics · links ───────────────────────
+     Base state is a single wrapping flex row (this is also the no-JS fallback).
+     The <script> above measures each card's own content and, only on overflow,
+     reparents the groups into up to two `.mr-line` wrappers for the staged
+     cascade (see the script header); `data-stage` records the current stage. */
   .work-metarow {
     display: flex;
     flex-wrap: wrap;
@@ -217,10 +345,41 @@ const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {
     margin-top: 0.6rem;
   }
 
-  .tags {
+  /* JS-built line wrapper — full-width so the (up to two) lines stack. Global
+     because the script creates these nodes (they carry no scoped attribute). */
+  :global(.work-metarow .mr-line) {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .mr-affil,
+  .mr-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 0.4rem;
+  }
+
+  /* Links float to the right edge of whichever line they land on — in stage 3
+     that ties them to the bottom row of the wrapped tags. */
+  .mr-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+
+  /* Neutralize the <Metrics> component's own top margin inside the row (it stands
+     as its own block elsewhere — detail headers, drawer). Global + the extra
+     class for specificity: the <ul> lives in Metrics' own style scope and may be
+     reparented into a `.mr-line`. */
+  :global(.work-metarow .mr-metrics.mr-group) {
+    margin: 0;
   }
 
   .tag {
@@ -245,13 +404,6 @@ const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {
     content: '@';
     margin-right: 0.15rem;
     opacity: 0.6;
-  }
-
-  .ext-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-left: auto;
   }
 
   .ext-links a {
