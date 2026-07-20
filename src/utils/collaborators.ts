@@ -18,6 +18,14 @@ export interface CollaboratorInfo {
   'display-name'?: string | null;
   url?: string | null;
   urls?: Record<string, string> | null;
+  // Optional PROFILE fields — surfaced on the /collaborators page (see people.ts):
+  //   • affiliations — the person's institutional affiliations (a bare name, or a
+  //     { name, url } for a linked one). Shown as muted text next to their name.
+  //   • years — manual year/range specs ("2019", "2022–2024", "2024–present") that
+  //     feed the aggregated year label + sort alongside their dated works/roles.
+  //     Lets a profile-only person (no shared works) still carry a timeframe.
+  affiliations?: (string | { name: string; url?: string | null })[] | null;
+  years?: string[] | null;
 }
 export interface Person {
   name: string;                  // display name (registry `display-name`, else humanized ref)
@@ -41,7 +49,7 @@ export function slugify(name: string): string {
 
 // Fallback label for a reference with no registry entry: an already-readable name
 // (has spaces/caps/punctuation) is shown as-is; a bare slug is title-cased.
-function fallbackName(ref: string): string {
+export function fallbackName(ref: string): string {
   if (/[^a-z0-9-]/.test(ref)) return ref;
   return ref.split('-').filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 }
@@ -55,4 +63,19 @@ export function resolvePeople(refs?: string[] | null): Person[] {
       urls: (info && info.urls) || {},
     };
   });
+}
+
+// Like resolvePeople but for a single ref and it KEEPS the registry slug — the
+// stable identity the /collaborators page groups + self-matches on (a display
+// name alone can't be a grouping key). `slug` is idempotent: a ref written as a
+// name or as a slug resolves to the same entry.
+export function resolvePerson(ref: string): Person & { slug: string } {
+  const slug = slugify(ref);
+  const info = registry[slug];
+  return {
+    slug,
+    name: (info && info['display-name']) || fallbackName(ref),
+    url: (info && info.url) || null,
+    urls: (info && info.urls) || {},
+  };
 }

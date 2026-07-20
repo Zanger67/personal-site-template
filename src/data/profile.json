@@ -1,6 +1,7 @@
 {
   "name": "Buzz",
   "fullName": "Buzz the Yellow Jacket",
+  "self": "buzz",
   "description": "Buzz — Georgia Tech mascot, campus legend, and Yellow Jacket extraordinaire.",
   "homeTitle": "Buzz — Georgia Tech Mascot",
   "greeting": "Hi, I'm Buzz.",
@@ -17,6 +18,7 @@
     "publications": "Selected publications and research.",
     "contact": "Get in touch with Buzz.",
     "experience": "Current and past affiliations, shown as an interactive timeline or an organisation-grouped list.",
+    "collaborators": "People I’ve teamed up with across projects, publications, and posts — expand a name to see what we worked on together.",
     "blog": "Dispatches from the hive.",
     "favourites": "A small, growing list of corners of the web worth bookmarking.",
     "funFacts": "A small, growing collection of fun facts."

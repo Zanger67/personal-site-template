@@ -34,6 +34,7 @@
         "start": "2019-08",
         "end": "2023-05",
         "main": true,
+        "collaborators": ["w-r-eck"],
         "description": "Captained the **mascot squad** through football and basketball seasons, mentored new mascots, and choreographed *game-day* routines. Grew the roster from `12` to ~~20~~ **28** members and launched the [spirit-squad tryout program](https://example.com/yj-spirit-squad/tryouts).",
         "urls": [
           { "title": "Squad highlights", "url": "https://youtube.com/@yjspiritsquad" },

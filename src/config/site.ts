@@ -39,6 +39,7 @@ export const routes = [
   { id: 'projects',     label: 'Projects',     href: '/projects',     nav: 'none', enabled: true },
   { id: 'publications', label: 'Publications', href: '/publications', nav: 'none', enabled: true },
   { id: 'blog',         label: 'Blog',         href: '/blog',         nav: 'none', enabled: true },
+  { id: 'collaborators', label: 'Collaborators', href: '/collaborators', nav: 'misc', enabled: true },
   { id: 'map',          label: 'Map',          href: '/map',          nav: 'misc', enabled: true },
   { id: 'funFacts',     label: 'Fun Facts',    href: '/fun-facts',    nav: 'misc', enabled: true },
   { id: 'favourites',   label: 'Favourite Internet Corners', href: '/favourites', nav: 'misc', enabled: true },

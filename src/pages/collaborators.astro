@@ -1,0 +1,406 @@
+---
+// The /collaborators page — everyone who appears as a co-author / collaborator on
+// a project, publication, blog, or an attached experience role, each as a native
+// <details> dropdown listing the works (and roles/periods) we share. In every
+// author line, MY name is bolded and the row's collaborator is accent-highlighted.
+// All data + the deterministic year label come from ../utils/people (getCollaborators).
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { isRouteEnabled } from '@config/site';
+import { getCollaborators } from '../utils/people';
+import profile from '../data/profile.json';
+
+if (!isRouteEnabled('collaborators')) return Astro.rewrite('/404');
+
+const people = await getCollaborators();
+const intro = (profile as any).pageMeta?.collaborators
+  ?? 'People I’ve worked with across projects, publications, and posts.';
+---
+
+<BaseLayout title="Collaborators" description={intro}>
+  <section class="page">
+    <h1>Collaborators</h1>
+    <p class="intro">{intro}</p>
+
+    {people.length === 0 ? (
+      <p class="empty">No collaborators listed yet.</p>
+    ) : (
+      <ul class="collab-list">
+        {people.map(p => (
+          <li>
+            <details class="collab" data-slug={p.slug}>
+              <summary>
+                <span class="sum-left">
+                  <span class="chev" aria-hidden="true"></span>
+                  <span class="sum-name">{p.name}</span>
+                  {p.yearLabel && <span class="sum-years">{p.yearLabel}</span>}
+                  {p.affiliations.length > 0 && (
+                    <span class="sum-affils">
+                      {p.affiliations.map((a, i) => (
+                        <Fragment>
+                          {i > 0 && <span class="sep">·</span>}
+                          <span>{a.name}</span>
+                        </Fragment>
+                      ))}
+                    </span>
+                  )}
+                </span>
+              </summary>
+
+              <div class="collab-body">
+                {p.links.length > 0 && (
+                  <div class="link-line">
+                    {p.links.map(l => (
+                      <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a>
+                    ))}
+                  </div>
+                )}
+
+                {p.works.length > 0 && (
+                  <ul class="rows">
+                    {p.works.map(w => {
+                      const rel = w.external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+                      return (
+                        <li class="row">
+                          <div class="row-main">
+                            {w.href
+                              ? <a class="row-title" href={w.href} {...rel}>{w.title}</a>
+                              : <span class="row-title">{w.title}</span>}
+                            <div class="authors">
+                              {w.authors.map((a, i) => {
+                                const them = a.slug === p.slug;
+                                const cls = a.isSelf ? 'au au-self' : them ? 'au au-them' : 'au';
+                                // Authors are NOT clickable here — plain text, only the
+                                // self/collaborator highlighting distinguishes them.
+                                return (
+                                  <Fragment>
+                                    {i > 0 && <span class="comma">, </span>}
+                                    <span class={cls}>{a.name}</span>
+                                  </Fragment>
+                                );
+                              })}
+                            </div>
+                            {(w.meta || w.dateLabel || w.links.length > 0) && (
+                              <div class="row-bottom">
+                                {(w.meta || w.dateLabel) && (
+                                  <span class="row-venue">{[w.meta, w.dateLabel].filter(Boolean).join(' · ')}</span>
+                                )}
+                                {w.links.length > 0 && (
+                                  <span class="row-links">
+                                    {w.links.map(l => (
+                                      <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
+                                    ))}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {p.roles.length > 0 && (
+                  <div class="roles">
+                    <div class="roles-head">Roles &amp; periods</div>
+                    <ul class="rows">
+                      {p.roles.map(r => (
+                        <li class="row">
+                          <div class="row-main">
+                            <span class="row-title">{r.title}</span>
+                            {r.dateLabel && <div class="row-venue">{r.dateLabel}</div>}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </details>
+          </li>
+        ))}
+      </ul>
+    )}
+
+    <script is:inline>
+      // Restore open dropdowns + scroll when returning via a detail page's
+      // "← Back to Collaborators" button, and (before that) stash that state on
+      // click-through. is:inline + placed after the list so it runs synchronously
+      // during parse — the <details> exist and the restore lands before first paint
+      // (a deferred script would flash the collapsed list / jump the scroll).
+      (function () {
+        try {
+          var list = document.querySelector('.collab-list');
+          if (!list) return;
+
+          // (1) Returning from a detail page: reopen the saved dropdowns AND restore
+          // the saved scroll. One-shot flag.
+          if (sessionStorage.getItem('collab:restore')) {
+            sessionStorage.removeItem('collab:restore');
+            var saved = JSON.parse(sessionStorage.getItem('collab:return') || 'null');
+            sessionStorage.removeItem('collab:return');
+            if (saved) {
+              if (saved.open && saved.open.length) {
+                var want = {};
+                saved.open.forEach(function (s) { want[s] = 1; });
+                Array.prototype.forEach.call(list.querySelectorAll('details[data-slug]'), function (d) {
+                  if (want[d.getAttribute('data-slug')]) d.open = true;
+                });
+              }
+              if (typeof saved.y === 'number') {
+                // Footer/content parse AFTER this script, so scrollTo would clamp
+                // short. Reserve height to land the scroll exactly, release on load.
+                var de = document.documentElement;
+                var prev = de.style.minHeight;
+                de.style.minHeight = (saved.y + window.innerHeight) + 'px';
+                window.scrollTo(0, saved.y);
+                window.addEventListener('DOMContentLoaded', function () { de.style.minHeight = prev; }, { once: true });
+              }
+            }
+          }
+
+          // (2) Clicking through to a project/blog detail page: remember which
+          // dropdowns were open + the scroll position for "← Back to Collaborators".
+          // Internal detail links only — external ones (publication titles, ↗ chips)
+          // open a new tab.
+          list.addEventListener('click', function (event) {
+            var link = event.target.closest && event.target.closest('a.row-title');
+            if (!link || link.target === '_blank') return;
+            var open = Array.prototype.slice.call(list.querySelectorAll('details[open]'))
+              .map(function (d) { return d.getAttribute('data-slug'); })
+              .filter(Boolean);
+            sessionStorage.setItem('collab:return', JSON.stringify({ open: open, y: window.scrollY }));
+          });
+        } catch (e) { /* corrupt state — fall back to the default view */ }
+      })();
+    </script>
+  </section>
+</BaseLayout>
+
+<style>
+  /* Width is governed by `main`, which this page widens well past the site's
+     default 680px column. Page-scoped: this rule ships only with /collaborators,
+     so every other page keeps the narrow `main`. (`body main` = specificity win.) */
+  :global(body main) {
+    max-width: min(1120px, 100%);
+  }
+
+  .page {
+    padding-bottom: 2rem;
+  }
+
+  .intro {
+    color: var(--text-muted);
+    margin-bottom: 1.75rem;
+  }
+
+  .empty {
+    color: var(--text-muted);
+  }
+
+  .collab-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .collab {
+    /* no divider line between people */
+  }
+
+  /* ── Summary row (the always-visible toggle) ─────────────────────────────── */
+  .collab summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.24rem 0.15rem;       /* thin single-line row, tight spacing */
+    cursor: pointer;
+    list-style: none;               /* hide the native marker (Firefox) */
+  }
+  .collab summary::-webkit-details-marker { display: none; }
+  .collab summary:hover .sum-name { color: var(--accent); }
+
+  .sum-left {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .chev {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 1.5px solid var(--text-muted);
+    border-bottom: 1.5px solid var(--text-muted);
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+    flex: none;
+    align-self: center;
+  }
+  .collab[open] .chev { transform: rotate(45deg); }
+
+  .sum-name {
+    font-weight: 400;
+    color: var(--text);
+    white-space: nowrap;
+    flex: none;
+  }
+
+  /* Affiliations trail the name on the same line, truncating with an ellipsis
+     rather than wrapping the row to a second line. */
+  .sum-affils {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .sum-affils::before {
+    content: '·';
+    margin-right: 0.45rem;
+    opacity: 0.5;
+  }
+  .sum-affils .sep { margin: 0 0.35rem; opacity: 0.5; }
+
+  .sum-years {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex: none;
+  }
+
+  /* ── Dropdown body ───────────────────────────────────────────────────────── */
+  /* Opened-dropdown contents sit a half-tab in from the person's name row. The
+     bottom buffer is modest; each content block carries its own separating margin,
+     so the expanded whitespace scales with how much is actually inside. */
+  .collab-body {
+    padding: 0.15rem 0.15rem 0.55rem 2rem;
+  }
+
+  /* The person's OWN links (Website / LinkedIn / Scholar / …) — accent-green
+     highlighted links (the site's normal link colour), deliberately distinct from
+     the muted "Label ↗" chips used for each individual work below. */
+  .link-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.85rem;
+    margin-bottom: 0.85rem;
+  }
+  /* Links-only dropdown (no works/roles below): drop the inter-block gap so a
+     person like this reserves no extra whitespace for content that isn't there. */
+  .link-line:last-child { margin-bottom: 0; }
+  .link-line a {
+    font-size: 0.8rem;
+    color: var(--accent);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .link-line a:hover { text-decoration: underline; }
+
+  .rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+  }
+  /* Vertical spine down the left of the items (no dots). */
+  .rows::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .row {
+    padding-left: 1rem;
+    margin-bottom: 0.7rem;
+  }
+  .row:last-child { margin-bottom: 0; }
+
+  .row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .row-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+    line-height: 1.35;
+  }
+  a.row-title:hover { color: var(--accent); }
+
+  /* Venue · year — the bottom text line of each item (academic style). */
+  .row-venue {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Venue · year and the item's links share one line. */
+  .row-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.85rem;
+    margin-top: 0.1rem;
+  }
+
+  /* Per-item links — the muted "Label ↗" chips (ported from .ext-links in
+     WorkCard.astro; no change to the Works page needed). */
+  .row-links {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.7rem;
+  }
+  .row-links a {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .row-links a:hover { color: var(--accent); }
+
+  /* ── Author line + name highlighting ─────────────────────────────────────── */
+  .authors {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 0.1rem;
+  }
+  /* Me — bold, a bit whiter and slightly softened (opacity) so I read as
+     secondary to the collaborator's crisp bold white. */
+  .au-self {
+    font-weight: 700;
+    /* A bit whiter than plain muted grey — blended part-way toward the body text. */
+    color: color-mix(in srgb, var(--text-muted), var(--text) 45%);
+    opacity: 0.9;
+  }
+  /* This row's collaborator (whose list this is) — bold white, so they stand out. */
+  .au-them { font-weight: 700; color: var(--text); }
+
+  /* ── Roles / periods section ─────────────────────────────────────────────── */
+  .roles {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px dashed var(--border);
+  }
+  .roles-head {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 0.6rem;
+  }
+</style>

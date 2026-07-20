@@ -1,26 +1,50 @@
 ---
-// "← Back to Works" — sits atop the project & blog detail pages (the only
-// Works items with an internal page; publications link straight out). Returns
-// to /works and, with JS, restores the tab + scroll position the visitor left
-// from — captured in sessionStorage by the Works page when they clicked through.
-// No-JS fallback: a plain link to the default (first) Works tab.
+// "← Back" — sits atop the project & blog detail pages (the only Works items with
+// an internal page; publications link straight out). Returns to whichever listing
+// the visitor came from: /works normally, or /collaborators when they clicked
+// through from the collaborators page. That page restores what the visitor left —
+// tab + scroll (Works) or open dropdowns + scroll (Collaborators) — from state it
+// stashed in sessionStorage on click-through. No-JS fallback: a plain /works link.
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 ---
 
-<a class="back-to-works" href={`${base}/works`} data-back-to-works>
-  <span aria-hidden="true">←</span> Back to Works
+<a
+  class="back-to-works"
+  href={`${base}/works`}
+  data-back-to-works
+  data-works-url={`${base}/works`}
+  data-collab-url={`${base}/collaborators`}
+>
+  <span aria-hidden="true">←</span> <span data-back-label>Back to Works</span>
 </a>
 
 <script is:inline>
-  // Flag the arrival so the Works page restores the saved tab + scroll instead of
-  // opening its default tab at the top. is:inline + delegation so the handler is
-  // live during parse (a deferred bundle could miss a quick click). Synchronous,
-  // so it lands before the link navigates.
-  document.addEventListener('click', (e) => {
-    if (e.target.closest && e.target.closest('[data-back-to-works]')) {
-      sessionStorage.setItem('works:restore', '1');
+  // Choose the return target from the REFERRER — fresh per navigation, so a detail
+  // page opened from the homepage/timeline still reads "Back to Works"; only a
+  // same-origin referrer at /collaborators redirects Back there. Then flag the
+  // arrival so that listing restores its saved state instead of opening cold.
+  // is:inline + delegation so the flag lands synchronously before navigation.
+  (function () {
+    var a = document.querySelector('[data-back-to-works]');
+    if (!a) return;
+    var fromCollab = false;
+    try {
+      if (document.referrer) {
+        var p = new URL(document.referrer, location.href).pathname.replace(/\/+$/, '');
+        fromCollab = p === a.getAttribute('data-collab-url');
+      }
+    } catch (e) { /* unparseable referrer — keep the Works default */ }
+    if (fromCollab) {
+      a.setAttribute('href', a.getAttribute('data-collab-url'));
+      var lbl = a.querySelector('[data-back-label]');
+      if (lbl) lbl.textContent = 'Back to Collaborators';
     }
-  });
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('[data-back-to-works]')) {
+        sessionStorage.setItem(fromCollab ? 'collab:restore' : 'works:restore', '1');
+      }
+    });
+  })();
 </script>
 
 <style>

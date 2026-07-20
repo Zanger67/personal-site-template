@@ -9,13 +9,22 @@
     "url": "https://example.com/gt-ramblin",
     "urls": {
       "GitHub": "https://github.com/gt-ramblin",
-      "Website": "https://example.com/gt-ramblin"
-    }
+      "Google Scholar": "https://scholar.google.com/citations?user=gtramblin",
+      "LinkedIn": "https://linkedin.com/in/gt-ramblin"
+    },
+    "affiliations": [
+      "Georgia Institute of Technology",
+      { "name": "Buzz Robotics Society", "url": "https://example.com/buzz-robotics" }
+    ]
   },
   "w-r-eck": {
     "display-name": "W. R. Eck",
     "url": "https://example.com/wr-eck",
-    "urls": {}
+    "urls": {
+      "Google Scholar": "https://scholar.google.com/citations?user=wreck",
+      "GitHub": "https://github.com/wr-eck"
+    },
+    "affiliations": ["Yellow Jacket Spirit Squad"]
   },
   "a-t-lanta": {
     "display-name": "A. T. Lanta",
@@ -35,7 +44,11 @@
   "aubie": {
     "display-name": "Aubie",
     "url": "https://example.com/auburn-aubie",
-    "urls": {}
+    "urls": {
+      "Website": "https://example.com/auburn-aubie"
+    },
+    "affiliations": ["Auburn University"],
+    "years": ["2016", "2018–2019"]
   },
   "the-tiger": {
     "display-name": "The Tiger",
