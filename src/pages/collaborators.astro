@@ -7,11 +7,15 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { isRouteEnabled } from '@config/site';
 import { getCollaborators } from '../utils/people';
+import { marksFor } from '../utils/marks';
 import profile from '../data/profile.json';
 
 if (!isRouteEnabled('collaborators')) return Astro.rewrite('/404');
 
 const people = await getCollaborators();
+// Who has a dropdown on this page — the only names an author line can jump to.
+// Anyone else (unlisted, or referenced with no registry entry) stays plain text.
+const listedSlugs = new Set(people.map(p => p.slug));
 const intro = (profile as any).pageMeta?.collaborators
   ?? 'People I’ve worked with across projects, publications, and posts.';
 ---
@@ -27,7 +31,7 @@ const intro = (profile as any).pageMeta?.collaborators
       <ul class="collab-list">
         {people.map(p => (
           <li>
-            <details class="collab" data-slug={p.slug}>
+            <details class="collab" id={`p-${p.slug}`} data-slug={p.slug}>
               <summary>
                 <span class="sum-left">
                   <span class="chev" aria-hidden="true"></span>
@@ -69,30 +73,38 @@ const intro = (profile as any).pageMeta?.collaborators
                               {w.authors.map((a, i) => {
                                 const them = a.slug === p.slug;
                                 const cls = a.isSelf ? 'au au-self' : them ? 'au au-them' : 'au';
-                                // Authors are NOT clickable here — plain text, only the
-                                // self/collaborator highlighting distinguishes them.
+                                // Every OTHER listed person in the line is a link to their
+                                // own dropdown — the script below opens + scrolls + flashes
+                                // it in place. Me, and anyone without a dropdown, stay text.
+                                const jump = !a.isSelf && listedSlugs.has(a.slug);
                                 return (
                                   <Fragment>
                                     {i > 0 && <span class="comma">, </span>}
-                                    <span class={cls}>{a.name}</span>
+                                    {jump
+                                      ? <a class={`${cls} au-link`} href={`#p-${a.slug}`} data-jump={a.slug}>{a.name}</a>
+                                      : <span class={cls}>{a.name}</span>}
+                                    {marksFor(w.marks, a.slug).map(m => (
+                                      <sup class="cmark" title={m.note} data-tip={m.note}>{m.symbol}</sup>
+                                    ))}
                                   </Fragment>
                                 );
                               })}
                             </div>
-                            {(w.meta || w.dateLabel || w.links.length > 0) && (
-                              <div class="row-bottom">
-                                {(w.meta || w.dateLabel) && (
-                                  <span class="row-venue">{[w.meta, w.dateLabel].filter(Boolean).join(' · ')}</span>
-                                )}
-                                {w.links.length > 0 && (
-                                  <span class="row-links">
-                                    {w.links.map(l => (
-                                      <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
-                                    ))}
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                            <div class="row-bottom">
+                              {/* What KIND of thing this is — colour-keyed to the
+                                  experience timeline, same swatch the Works page uses. */}
+                              <span class="row-kind" style={`--cat: ${w.color}`}>{w.kind}</span>
+                              {(w.meta || w.dateLabel) && (
+                                <span class="row-venue">{[w.meta, w.dateLabel].filter(Boolean).join(' · ')}</span>
+                              )}
+                              {w.links.length > 0 && (
+                                <span class="row-links">
+                                  {w.links.map(l => (
+                                    <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
+                                  ))}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </li>
                       );
@@ -123,28 +135,87 @@ const intro = (profile as any).pageMeta?.collaborators
     )}
 
     <script is:inline>
-      // Restore open dropdowns + scroll when returning via a detail page's
-      // "← Back to Collaborators" button, and (before that) stash that state on
-      // click-through. is:inline + placed after the list so it runs synchronously
-      // during parse — the <details> exist and the restore lands before first paint
-      // (a deferred script would flash the collapsed list / jump the scroll).
+      // Dropdown state, deep links and in-page jumps.
+      //
+      //   • Returning from a detail page ("← Back to Collaborators") reopens the
+      //     dropdowns that were open and restores the scroll.
+      //   • Arriving at /collaborators#p-<slug> — a name clicked anywhere else on
+      //     the site — opens that person, scrolls to them and flashes a highlight.
+      //   • Clicking a name INSIDE an author line does the same with no reload,
+      //     pushing a history entry so Back returns to the exact previous scroll.
+      //
+      // Opening is always ADDITIVE — an already-open dropdown is never closed.
+      //
+      // is:inline + placed after the list so it runs during parse: the <details>
+      // exist and any restore lands before first paint (a deferred script would
+      // flash the collapsed list / jump the scroll).
       (function () {
         try {
           var list = document.querySelector('.collab-list');
           if (!list) return;
 
+          // Analytics is config-gated: BaseLayout only defines window.trackEvent
+          // when a GoatCounter endpoint is set (never in the template), so every
+          // call goes through this no-op guard.
+          function track(path, title) {
+            if (typeof window.trackEvent === 'function') window.trackEvent(path, title);
+          }
+
+          function personOf(slug) {
+            var s = window.CSS && CSS.escape ? CSS.escape(slug) : slug.replace(/"/g, '\\"');
+            return list.querySelector('details[data-slug="' + s + '"]');
+          }
+          function nameOf(d) {
+            var n = d && d.querySelector('.sum-name');
+            return n ? n.textContent.trim() : (d ? d.getAttribute('data-slug') : '');
+          }
+          function hashSlug() {
+            var m = /^#p-(.+)$/.exec(location.hash || '');
+            return m ? decodeURIComponent(m[1]) : null;
+          }
+          function mark(patch) { try { history.replaceState(patch, ''); } catch (e) {} }
+
+          // Open a dropdown programmatically. `toggle` fires ASYNCHRONOUSLY, so a
+          // plain in-scope flag would already be cleared by the time the handler
+          // runs — the attribute survives to tell the two apart.
+          function autoOpen(d) {
+            if (d && !d.open) { d.setAttribute('data-auto', '1'); d.open = true; }
+          }
+
+          // Brief highlight so it's obvious WHICH person was jumped to.
+          function flash(d) {
+            d.classList.remove('is-flash');
+            void d.offsetWidth;              // restart the animation on a repeat jump
+            d.classList.add('is-flash');
+            setTimeout(function () { d.classList.remove('is-flash'); }, 1500);
+          }
+
+          // Open (never close) + scroll + flash. Returns the element and the scroll
+          // target so the caller can record it in history.
+          function reveal(slug, smooth) {
+            var d = personOf(slug);
+            if (!d) return null;
+            autoOpen(d);
+            var y = Math.max(0, d.getBoundingClientRect().top + window.scrollY - 80);
+            window.scrollTo({ top: y, behavior: smooth ? 'smooth' : 'auto' });
+            flash(d);
+            return { el: d, y: y };
+          }
+
           // (1) Returning from a detail page: reopen the saved dropdowns AND restore
           // the saved scroll. One-shot flag.
+          var restored = false;
           if (sessionStorage.getItem('collab:restore')) {
             sessionStorage.removeItem('collab:restore');
             var saved = JSON.parse(sessionStorage.getItem('collab:return') || 'null');
             sessionStorage.removeItem('collab:return');
             if (saved) {
+              restored = true;
               if (saved.open && saved.open.length) {
                 var want = {};
                 saved.open.forEach(function (s) { want[s] = 1; });
                 Array.prototype.forEach.call(list.querySelectorAll('details[data-slug]'), function (d) {
-                  if (want[d.getAttribute('data-slug')]) d.open = true;
+                  if (want[d.getAttribute('data-slug')]) autoOpen(d);
                 });
               }
               if (typeof saved.y === 'number') {
@@ -159,10 +230,62 @@ const intro = (profile as any).pageMeta?.collaborators
             }
           }
 
-          // (2) Clicking through to a project/blog detail page: remember which
+          // (2) Deep link — /collaborators#p-<slug>, i.e. a name clicked on another
+          // page. Open it NOW (before first paint, so it never flashes collapsed)
+          // but defer the scroll to DOMContentLoaded, once the rest of the page has
+          // laid out and the target's final offset is real.
+          var deep = restored ? null : hashSlug();
+          if (deep) {
+            autoOpen(personOf(deep));
+            document.addEventListener('DOMContentLoaded', function () {
+              var r = reveal(deep, false);
+              if (!r) return;
+              mark({ y: r.y, slug: deep });
+              track('/collaborators#p-' + deep, 'Collab open: ' + nameOf(r.el));
+            }, { once: true });
+          } else {
+            mark({ y: window.scrollY, slug: null });
+          }
+
+          // (3) In-page jump: a name in an author line points at another person's
+          // dropdown. Record where we're leaving FROM so Back rescrolls there, then
+          // push the jump as its own entry.
+          list.addEventListener('click', function (event) {
+            var a = event.target.closest && event.target.closest('a[data-jump]');
+            if (!a) return;
+            event.preventDefault();
+            var slug = a.getAttribute('data-jump');
+            mark({ y: window.scrollY, slug: (history.state && history.state.slug) || null });
+            var r = reveal(slug, true);
+            if (!r) return;
+            try { history.pushState({ y: r.y, slug: slug }, '', '#p-' + slug); } catch (e) {}
+            track('/collaborators#p-' + slug, 'Collab jump: ' + nameOf(r.el));
+          });
+
+          // (4) Back/Forward — return to that entry's scroll, or re-reveal its person.
+          window.addEventListener('popstate', function (event) {
+            var st = event.state;
+            if (st && st.slug) { reveal(st.slug, false); return; }
+            if (st && typeof st.y === 'number') { window.scrollTo(0, st.y); return; }
+            var s = hashSlug();
+            if (s) reveal(s, false);
+          });
+
+          // (5) Expanding a person by hand. `toggle` doesn't bubble, so listen in the
+          // CAPTURE phase; data-auto marks the programmatic opens above, which are
+          // already reported by their own jump / deep-link event.
+          list.addEventListener('toggle', function (event) {
+            var d = event.target;
+            if (!d || !d.matches || !d.matches('details[data-slug]')) return;
+            if (d.hasAttribute('data-auto')) { d.removeAttribute('data-auto'); return; }
+            if (!d.open) return;
+            track('/collaborators#p-' + d.getAttribute('data-slug'), 'Collab expand: ' + nameOf(d));
+          }, true);
+
+          // (6) Clicking through to a project/blog detail page: remember which
           // dropdowns were open + the scroll position for "← Back to Collaborators".
           // Internal detail links only — external ones (publication titles, ↗ chips)
-          // open a new tab.
+          // open a new tab and BaseLayout already logs them as outbound.
           list.addEventListener('click', function (event) {
             var link = event.target.closest && event.target.closest('a.row-title');
             if (!link || link.target === '_blank') return;
@@ -206,6 +329,21 @@ const intro = (profile as any).pageMeta?.collaborators
 
   .collab {
     /* no divider line between people */
+    scroll-margin-top: 80px;   /* jump/deep-link target clears the header */
+    border-radius: 4px;
+  }
+
+  /* Jump target — a brief wash of accent so it's obvious which person we landed
+     on after a deep link or an in-page name click (see the script's flash()). */
+  @keyframes collab-flash {
+    from { background: var(--accent-light); }
+    to   { background: transparent; }
+  }
+  .collab.is-flash {
+    animation: collab-flash 1.5s ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .collab.is-flash { animation-duration: 1ms; }
   }
 
   /* ── Summary row (the always-visible toggle) ─────────────────────────────── */
@@ -348,13 +486,35 @@ const intro = (profile as any).pageMeta?.collaborators
     font-variant-numeric: tabular-nums;
   }
 
-  /* Venue · year and the item's links share one line. */
+  /* Type · venue · year and the item's links share one line. */
   .row-bottom {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0.2rem 0.85rem;
     margin-top: 0.1rem;
+  }
+
+  /* What KIND of item this is (Project / Publication / Blog) — colour-keyed to the
+     experience-timeline categories, mirroring WorkCard's `.work-kind` treatment. */
+  .row-kind {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cat, var(--text-muted));
+    white-space: nowrap;
+  }
+
+  .row-kind::before {
+    content: '';
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 2px;
+    background: var(--cat, var(--text-muted));
   }
 
   /* Per-item links — the muted "Label ↗" chips (ported from .ext-links in
@@ -389,6 +549,21 @@ const intro = (profile as any).pageMeta?.collaborators
   }
   /* This row's collaborator (whose list this is) — bold white, so they stand out. */
   .au-them { font-weight: 700; color: var(--text); }
+
+  /* A co-author who has their own dropdown on this page — clicking jumps to it.
+     Keeps whatever colour/weight its au-* class gave it; only the dotted underline
+     marks it as clickable, so the self/collaborator highlighting still reads. */
+  a.au-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+    cursor: pointer;
+  }
+
+  a.au-link:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
 
   /* ── Roles / periods section ─────────────────────────────────────────────── */
   .roles {
