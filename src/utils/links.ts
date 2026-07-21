@@ -40,18 +40,37 @@ const KNOWN_HOSTS: Record<string, string> = {
 // "github", "arxiv.org" → "arxiv". (A bare host with no dot, e.g. "localhost",
 // is returned whole; an unparseable value falls back to itself so a label
 // always renders.)
-export function hostLabel(raw: string): string {
+function hostParts(raw: string): string[] | null {
   try {
     const host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`)
       .hostname.replace(/^www\./, '');
     const parts = host.split('.').filter(Boolean);
-    // Registrable domain = the last two labels ("foo.substack.com" → "substack.com").
-    const base = parts.length >= 2 ? parts.slice(-2).join('.') : host;
-    if (KNOWN_HOSTS[base]) return KNOWN_HOSTS[base];
-    return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || raw);
+    return parts.length ? parts : null;
   } catch {
-    return raw;
+    return null;
   }
+}
+
+// Registrable domain = the last two labels ("foo.substack.com" → "substack.com");
+// a bare host with no dot (e.g. "localhost") is used whole.
+const registrable = (parts: string[]): string =>
+  (parts.length >= 2 ? parts.slice(-2).join('.') : parts[0]);
+
+// Branded label ONLY when the URL points at a known platform, else null — so a
+// caller can keep its own generic fallback. Used for a person's primary link,
+// which should read "Website" only when it really is one: a profile whose `url`
+// is a LinkedIn/GitHub must say so rather than be mislabelled a personal site.
+export function knownHostLabel(raw: string): string | null {
+  const parts = hostParts(raw);
+  return parts ? (KNOWN_HOSTS[registrable(parts)] ?? null) : null;
+}
+
+export function hostLabel(raw: string): string {
+  const parts = hostParts(raw);
+  if (!parts) return raw;
+  const known = KNOWN_HOSTS[registrable(parts)];
+  if (known) return known;
+  return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || raw);
 }
 
 // Turn a `urls`/`features` list into link chips: drop empties, then label each
