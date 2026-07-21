@@ -17,6 +17,10 @@
 //
 // Ordering: people WITH dates first, most-recent collaboration first (then most
 // works, then name); people with a profile but NO dates sink to the bottom (A–Z).
+// "Most recent" is keyed on each contribution's START — a date RANGE counts as its
+// earlier endpoint. So someone with items in May 2025, Dec 2025 – Mar 2026, Jul
+// 2023 and Feb 2026 is ordered on Feb 2026 (not the Mar 2026 range end), while
+// their label still spans the lot as ’23–’26.
 // Self (profile.self) is excluded from the list and flagged in each author line so
 // the page can bold my name and accent-highlight the row's collaborator.
 import { getCollection } from 'astro:content';
@@ -169,6 +173,12 @@ export interface CollaboratorEntry {
   roles: PersonRole[];
   count: number;
   lastYear: number;
+  // Sort key: the person's MOST RECENT start (ms, month-granular). Every
+  // contribution is scored by where it BEGAN — a range counts as its earlier
+  // endpoint — so an item running Dec 2025 – Mar 2026 scores Dec 2025 and loses
+  // to a Feb 2026 one. Ordering stays most-recent-first; only the display label
+  // spans the full oldest–newest range. See the header note.
+  recentStart: number;
   priority: number;           // manual tiebreak rank, LOWER first (default 0)
 }
 
@@ -397,37 +407,47 @@ function normAffils(info?: RegistryEntry): { name: string; url: string | null }[
 }
 
 export async function getCollaborators(): Promise<CollaboratorEntry[]> {
-  interface Acc { works: PersonWork[]; roles: PersonRole[]; years: number[] }
+  // `years` drives the DISPLAY label (the full oldest–newest span); `starts`
+  // drives the ORDER (each contribution scored by where it began — see below).
+  interface Acc { works: PersonWork[]; roles: PersonRole[]; years: number[]; starts: number[] }
   const acc = new Map<string, Acc>();
   const ensure = (slug: string): Acc => {
     let a = acc.get(slug);
-    if (!a) { a = { works: [], roles: [], years: [] }; acc.set(slug, a); }
+    if (!a) { a = { works: [], roles: [], years: [], starts: [] }; acc.set(slug, a); }
     return a;
   };
 
-  // Works — bucket each into every non-self author's record.
+  // Works — bucket each into every non-self author's record. `sortDate` is already
+  // the item's START (a project's startDate; a publication/post's single date).
   for (const w of await collectWorks()) {
     for (const a of w.authors) {
       if (a.isSelf) continue;
       const rec = ensure(a.slug);
       rec.works.push(w);
       rec.years.push(...w.years);
+      rec.starts.push(w.sortDate);
     }
   }
 
-  // Roles/periods.
+  // Roles/periods — `sortDate` is likewise the role's start.
   for (const { slug, role } of collectRoles()) {
     const rec = ensure(slug);
     rec.roles.push(role);
     rec.years.push(...role.years);
+    rec.starts.push(role.sortDate);
   }
 
   // Seed every registry profile (minus self) so profile-only people appear too,
-  // and fold in their manual `years`.
+  // and fold in their manual `years` (a spec's start = its earliest year).
   for (const slug of Object.keys(registry)) {
     if (isSelfSlug(slug)) continue;
     const rec = ensure(slug);
-    for (const spec of registry[slug].years ?? []) rec.years.push(...expandYearSpec(spec));
+    for (const spec of registry[slug].years ?? []) {
+      const ys = expandYearSpec(spec);
+      if (!ys.length) continue;
+      rec.years.push(...ys);
+      rec.starts.push(looseMs(String(Math.min(...ys))));
+    }
   }
 
   // Opt-in gate: only profiles explicitly flagged `listed: true` are shown. An
@@ -451,17 +471,19 @@ export async function getCollaborators(): Promise<CollaboratorEntry[]> {
       roles: a.roles.sort((x, y) => y.sortDate - x.sortDate),
       count: a.works.length + a.roles.length,
       lastYear: years.length ? years[years.length - 1] : 0,
+      recentStart: a.starts.length ? Math.max(...a.starts) : 0,
       priority: info?.priority ?? 0,
     };
   });
 
-  // Dated people first (most-recent, then priority, then most works, then name);
-  // dateless last (priority, then A–Z). `priority` is LOWER-first and only settles
-  // otherwise-equal people — it never lifts someone above a more recent collaboration.
+  // Dated people first (most-recent START, then priority, then most works, then
+  // name); dateless last (priority, then A–Z). `priority` is LOWER-first and only
+  // settles otherwise-equal people — it never lifts someone above a more recent
+  // collaboration.
   return entries.sort((a, b) => {
     if (a.hasDates !== b.hasDates) return a.hasDates ? -1 : 1;
     if (a.hasDates) {
-      return (b.lastYear - a.lastYear)
+      return (b.recentStart - a.recentStart)
         || (a.priority - b.priority)
         || (b.count - a.count)
         || a.name.localeCompare(b.name);
