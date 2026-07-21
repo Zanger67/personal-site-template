@@ -21,9 +21,9 @@
 // the page can bold my name and accent-highlight the row's collaborator.
 import { getCollection } from 'astro:content';
 import { isRouteEnabled } from '@config/site';
-import { slugify, fallbackName } from './collaborators';
+import { slugify, fallbackName, isSelfSlug } from './collaborators';
 import { KIND_CAT, fmtMonthYear, fmtFullDate, fmtPubDate, type WorkKind } from './works';
-import { extraLinks, type Link } from './links';
+import { extraLinks, knownHostLabel, type Link } from './links';
 import registryData from '../data/collaborators.json';
 import organizations from '../data/organizations.json';
 import affiliations from '../data/affiliations.json';
@@ -39,18 +39,27 @@ interface RegistryEntry {
   urls?: Record<string, string> | null;
   affiliations?: (string | { name: string; url?: string | null })[] | null;
   years?: string[] | null;
+  // Include this person on the /collaborators page. OPT-IN: defaults to false, so a
+  // profile is listed only when this is explicitly `true`. Always write it out rather
+  // than leaning on the default. Purely a listing switch — it does NOT affect how the
+  // person renders anywhere else (work cards, author lines, friends all go through
+  // resolvePeople, which ignores it).
+  listed?: boolean | null;
+  // Manual rank used to BREAK TIES in the ordering — LOWER shows first (0 before 2),
+  // default 0. It does not override the primary "most recent first" sort; it only
+  // settles people the sort would otherwise consider equal (same latest year, or the
+  // dateless group where everything ties). Always write it out rather than leaning on
+  // the default.
+  priority?: number | null;
 }
 const registry = registryData as Record<string, RegistryEntry>;
 
 // Who is "me" — excluded from the collaborators list and bolded in author lines.
 // profile.self is the canonical owner slug; the display name/full name slugify in
 // as aliases so an author written either way still resolves to self.
-const selfSlugs = new Set(
-  [(profile as any).self, (profile as any).name, (profile as any).fullName]
-    .filter(Boolean)
-    .map((s: string) => slugify(s)),
-);
-export const isSelfSlug = (slug: string): boolean => selfSlugs.has(slug);
+// (Defined in ./collaborators alongside slugify — the shared home for person-ref
+// helpers, so resolvePeople can drop me from a project's "Collaborators" line too.)
+export { isSelfSlug };
 
 // ── Year helpers ────────────────────────────────────────────────────────────
 
@@ -160,6 +169,7 @@ export interface CollaboratorEntry {
   roles: PersonRole[];
   count: number;
   lastYear: number;
+  priority: number;           // manual tiebreak rank, LOWER first (default 0)
 }
 
 // Resolve a ref (slug or name) to an author record, tagging self.
@@ -172,6 +182,18 @@ const toAuthor = (ref: string): Author => {
     url: (info && info.url) || null,
     isSelf: isSelfSlug(slug),
   };
+};
+
+// Credit line for a project / blog post. I lead by default — but if the item's own
+// `collaborators` list already names me, its ORDER is honoured verbatim, which is how
+// you credit people in a specific sequence ("W. R. Eck, A. T. Lanta, me" vs "A. T.
+// Lanta, me, Buzz Jr").
+// Publications already behave this way, since their `authors` list always includes me.
+// The detail pages pass `excludeSelf` to resolvePeople so their "Collaborators" line
+// still credits only the other people.
+const creditLine = (refs: string[] | undefined | null, selfRef: string): string[] => {
+  const list = refs ?? [];
+  return list.some(r => isSelfSlug(slugify(r))) ? list : [selfRef, ...list];
 };
 
 // Timeline category → dot colour (mirrors CATEGORIES in experience.astro / works.ts).
@@ -201,7 +223,6 @@ async function collectWorks(): Promise<PersonWork[]> {
   if (isRouteEnabled('projects')) {
     for (const e of await getCollection('projects')) {
       const d = e.data;
-      const collab = (d.collaborators ?? []).filter(r => !isSelfSlug(slugify(r)));
       out.push({
         kind: 'Project',
         title: d.title,
@@ -213,7 +234,7 @@ async function collectWorks(): Promise<PersonWork[]> {
         meta: null,             // no role ("Data Lead"/…) on the collaborators list
         color: KIND_CAT.Project,
         sortDate: d.startDate.valueOf(),
-        authors: [selfRef, ...collab].map(toAuthor),
+        authors: creditLine(d.collaborators, selfRef).map(toAuthor),
         links: dedupeLinks([
           ...(d.url ? [{ label: 'Live', url: d.url }] : []),
           ...(d.repo ? [{ label: 'Repo', url: d.repo }] : []),
@@ -249,7 +270,6 @@ async function collectWorks(): Promise<PersonWork[]> {
   if (isRouteEnabled('blog')) {
     for (const e of (await getCollection('blog')).filter(p => !p.data.draft)) {
       const d = e.data;
-      const collab = (d.collaborators ?? []).filter(r => !isSelfSlug(slugify(r)));
       out.push({
         kind: 'Blog',
         title: d.title,
@@ -259,7 +279,7 @@ async function collectWorks(): Promise<PersonWork[]> {
         meta: null,             // no role on the collaborators list
         color: KIND_CAT.Blog,
         sortDate: d.date.valueOf(),
-        authors: [selfRef, ...collab].map(toAuthor),
+        authors: creditLine(d.collaborators, selfRef).map(toAuthor),
         links: dedupeLinks([...extraLinks(d.urls), ...extraLinks(d.features)]),
         years: [d.date.getFullYear()],
       });
@@ -273,23 +293,64 @@ async function collectWorks(): Promise<PersonWork[]> {
 // A role (or an org's membership window) may carry a `collaborators` list — the
 // "attach a person to periods and roles" method. Each becomes a PersonRole on the
 // listed people, shown in a separate dropdown section and merged into their years.
+//
+// An entry is either a bare slug/name — which inherits MY role's title + dates — or
+// an object `{ slug, role?, start?, end? }` carrying THAT PERSON's own title and
+// involvement window. Reach for the object form whenever their span differs from
+// mine (a professor who taught one term of a course I TA'd for two years; a PI who
+// joined partway through). It drives both their row's label AND their year total,
+// so a role of mine that is wider than their involvement no longer inflates their
+// dates — the bare-slug form has no way to narrow them.
 
-interface Role { role?: string; roleDetail?: string; start?: string | null; end?: string | null; categories?: string[]; collaborators?: string[] }
+// A collaborator reference on a role or an org.
+type CollabRef =
+  | string
+  | { slug?: string; name?: string; role?: string; start?: string | null; end?: string | null };
+
+interface Role { role?: string; roleDetail?: string; start?: string | null; end?: string | null; categories?: string[]; collaborators?: CollabRef[] }
 interface OrgLike {
   organization: string;
   organizationShort?: string;
   categories?: string[];
-  collaborators?: string[];
+  collaborators?: CollabRef[];
   membership?: { start?: string | null; end?: string | null };
   roles?: Role[];
 }
 
+const refSlug = (c: CollabRef): string =>
+  slugify(typeof c === 'string' ? c : (c.slug ?? c.name ?? ''));
+
+// One person's row. An object entry overrides the title (via `role`) and — if it
+// specifies EITHER endpoint — the whole range. A half-given range reads as open
+// (missing end → null → "Present") rather than silently falling back to my dates,
+// so `{ start: "2026-01" }` means "from Jan 2026 onwards", not "…until my role ended".
+const mkPersonRole = (
+  c: CollabRef,
+  fallbackTitle: string,
+  short: string,
+  color: string,
+  fbStart?: string | null,
+  fbEnd?: string | null,
+): PersonRole => {
+  const o = typeof c === 'string' ? {} : c;
+  const ownRange = o.start !== undefined || o.end !== undefined;
+  const start = ownRange ? (o.start ?? null) : fbStart;
+  const end = ownRange ? (o.end ?? null) : fbEnd;
+  return {
+    title: o.role ? `${o.role} · ${short}` : fallbackTitle,
+    dateLabel: fmtRange(start, end),
+    color,
+    sortDate: looseMs(start ?? end),
+    years: rangeYears(start, end),
+  };
+};
+
 function collectRoles(): { slug: string; role: PersonRole }[] {
   const rows: { slug: string; role: PersonRole }[] = [];
-  const emit = (people: string[] | undefined, role: PersonRole) => {
-    for (const ref of people ?? []) {
-      const slug = slugify(ref);
-      if (!isSelfSlug(slug)) rows.push({ slug, role });
+  const emit = (people: CollabRef[] | undefined, mk: (c: CollabRef) => PersonRole) => {
+    for (const c of people ?? []) {
+      const slug = refSlug(c);
+      if (slug && !isSelfSlug(slug)) rows.push({ slug, role: mk(c) });
     }
   };
   const walk = (orgs: OrgLike[], defaultColor: string) => {
@@ -298,23 +359,13 @@ function collectRoles(): { slug: string; role: PersonRole }[] {
       for (const r of org.roles ?? []) {
         if (!(r.collaborators?.length)) continue;
         const color = CAT_COLOR[(r.categories ?? org.categories ?? [])[0]] ?? defaultColor;
-        emit(r.collaborators, {
-          title: `${r.roleDetail ?? r.role} · ${short}`,
-          dateLabel: fmtRange(r.start, r.end),
-          color,
-          sortDate: looseMs(r.start ?? r.end),
-          years: rangeYears(r.start, r.end),
-        });
+        emit(r.collaborators, c =>
+          mkPersonRole(c, `${r.roleDetail ?? r.role} · ${short}`, short, color, r.start, r.end));
       }
       if (org.collaborators?.length) {
         const color = CAT_COLOR[(org.categories ?? [])[0]] ?? defaultColor;
-        emit(org.collaborators, {
-          title: `${short} · Member`,
-          dateLabel: fmtRange(org.membership?.start, org.membership?.end),
-          color,
-          sortDate: looseMs(org.membership?.start),
-          years: rangeYears(org.membership?.start, org.membership?.end),
-        });
+        emit(org.collaborators, c =>
+          mkPersonRole(c, `${short} · Member`, short, color, org.membership?.start, org.membership?.end));
       }
     }
   };
@@ -333,7 +384,9 @@ function buildLinks(info?: RegistryEntry): { label: string; url: string }[] {
   const push = (label: string, url?: string | null) => {
     if (url && !seen.has(url)) { seen.add(url); links.push({ label, url }); }
   };
-  push('Website', info?.url);
+  // "Website" is only the FALLBACK label — a primary `url` pointing at a known
+  // platform is labelled with that platform instead (a LinkedIn reads "LinkedIn").
+  push(info?.url ? (knownHostLabel(info.url) ?? 'Website') : 'Website', info?.url);
   for (const [label, url] of Object.entries(info?.urls ?? {})) push(label, url);
   return links;
 }
@@ -377,7 +430,12 @@ export async function getCollaborators(): Promise<CollaboratorEntry[]> {
     for (const spec of registry[slug].years ?? []) rec.years.push(...expandYearSpec(spec));
   }
 
-  const entries: CollaboratorEntry[] = [...acc.entries()].map(([slug, a]) => {
+  // Opt-in gate: only profiles explicitly flagged `listed: true` are shown. An
+  // unflagged profile — or a name a work references with no registry entry at all —
+  // is still aggregated above, just not listed here.
+  const entries: CollaboratorEntry[] = [...acc.entries()]
+    .filter(([slug]) => registry[slug]?.listed === true)
+    .map(([slug, a]) => {
     const info = registry[slug];
     const years = [...new Set(a.years)].sort((x, y) => x - y);
     return {
@@ -393,13 +451,21 @@ export async function getCollaborators(): Promise<CollaboratorEntry[]> {
       roles: a.roles.sort((x, y) => y.sortDate - x.sortDate),
       count: a.works.length + a.roles.length,
       lastYear: years.length ? years[years.length - 1] : 0,
+      priority: info?.priority ?? 0,
     };
   });
 
-  // Dated people first (most-recent, then most works, then name); dateless last (A–Z).
+  // Dated people first (most-recent, then priority, then most works, then name);
+  // dateless last (priority, then A–Z). `priority` is LOWER-first and only settles
+  // otherwise-equal people — it never lifts someone above a more recent collaboration.
   return entries.sort((a, b) => {
     if (a.hasDates !== b.hasDates) return a.hasDates ? -1 : 1;
-    if (a.hasDates) return (b.lastYear - a.lastYear) || (b.count - a.count) || a.name.localeCompare(b.name);
-    return a.name.localeCompare(b.name);
+    if (a.hasDates) {
+      return (b.lastYear - a.lastYear)
+        || (a.priority - b.priority)
+        || (b.count - a.count)
+        || a.name.localeCompare(b.name);
+    }
+    return (a.priority - b.priority) || a.name.localeCompare(b.name);
   });
 }

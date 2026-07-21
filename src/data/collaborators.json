@@ -15,7 +15,8 @@
     "affiliations": [
       "Georgia Institute of Technology",
       { "name": "Buzz Robotics Society", "url": "https://example.com/buzz-robotics" }
-    ]
+    ],
+    "listed": true
   },
   "w-r-eck": {
     "display-name": "W. R. Eck",
@@ -24,22 +25,27 @@
       "Google Scholar": "https://scholar.google.com/citations?user=wreck",
       "GitHub": "https://github.com/wr-eck"
     },
-    "affiliations": ["Yellow Jacket Spirit Squad"]
+    "affiliations": ["Yellow Jacket Spirit Squad"],
+    "listed": true
   },
   "a-t-lanta": {
     "display-name": "A. T. Lanta",
     "url": "https://example.com/at-lanta",
-    "urls": {}
+    "urls": {},
+    "listed": true
   },
   "ramblin-wreck": {
     "display-name": "Ramblin' Wreck",
     "url": "https://example.com/ramblin-wreck",
-    "urls": {}
+    "urls": {},
+    "listed": true
   },
   "buzz-jr": {
     "display-name": "Buzz Jr",
     "url": "https://example.com/buzz-jr",
-    "urls": {}
+    "urls": {},
+    "listed": true,
+    "priority": 2
   },
   "aubie": {
     "display-name": "Aubie",
@@ -48,11 +54,13 @@
       "Website": "https://example.com/auburn-aubie"
     },
     "affiliations": ["Auburn University"],
-    "years": ["2016", "2018–2019"]
+    "years": ["2016", "2018–2019"],
+    "listed": true
   },
   "the-tiger": {
     "display-name": "The Tiger",
     "url": "https://example.com/clemson-tiger",
-    "urls": {}
+    "urls": {},
+    "listed": false
   }
 }
