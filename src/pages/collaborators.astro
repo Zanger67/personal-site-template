@@ -190,16 +190,30 @@ const intro = (profile as any).pageMeta?.collaborators
             setTimeout(function () { d.classList.remove('is-flash'); }, 1500);
           }
 
+          // Where to scroll for a dropdown — null meaning "don't move". Already
+          // fully on screen (the WHOLE dropdown, not just the name) → stay put; the
+          // flash alone shows where it is. Otherwise centre the whole dropdown in
+          // the viewport. One taller than the viewport can't be centred, so it
+          // top-aligns under the header offset instead.
+          function scrollTargetFor(d) {
+            var r = d.getBoundingClientRect();
+            var vh = window.innerHeight || document.documentElement.clientHeight;
+            var top = r.top + window.scrollY;
+            if (r.top >= 0 && r.bottom <= vh) return null;
+            if (r.height > vh - 80) return Math.max(0, top - 80);
+            return Math.max(0, top - (vh - r.height) / 2);
+          }
+
           // Open (never close) + scroll + flash. Returns the element and the scroll
-          // target so the caller can record it in history.
+          // position so the caller can record it in history.
           function reveal(slug, smooth) {
             var d = personOf(slug);
             if (!d) return null;
             autoOpen(d);
-            var y = Math.max(0, d.getBoundingClientRect().top + window.scrollY - 80);
-            window.scrollTo({ top: y, behavior: smooth ? 'smooth' : 'auto' });
+            var y = scrollTargetFor(d);
+            if (y !== null) window.scrollTo({ top: y, behavior: smooth ? 'smooth' : 'auto' });
             flash(d);
-            return { el: d, y: y };
+            return { el: d, y: y === null ? window.scrollY : y };
           }
 
           // (1) Returning from a detail page: reopen the saved dropdowns AND restore
@@ -265,7 +279,13 @@ const intro = (profile as any).pageMeta?.collaborators
           // (4) Back/Forward — return to that entry's scroll, or re-reveal its person.
           window.addEventListener('popstate', function (event) {
             var st = event.state;
-            if (st && st.slug) { reveal(st.slug, false); return; }
+            // Restore the entry's own scroll first: reveal() deliberately stays put
+            // when the dropdown is already visible, which would strand Back.
+            if (st && st.slug) {
+              if (typeof st.y === 'number') window.scrollTo(0, st.y);
+              reveal(st.slug, false);
+              return;
+            }
             if (st && typeof st.y === 'number') { window.scrollTo(0, st.y); return; }
             var s = hashSlug();
             if (s) reveal(s, false);
