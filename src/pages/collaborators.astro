@@ -190,27 +190,36 @@ const intro = (profile as any).pageMeta?.collaborators
             setTimeout(function () { d.classList.remove('is-flash'); }, 1500);
           }
 
-          // Where to scroll for a dropdown — null meaning "don't move". Already
-          // fully on screen (the WHOLE dropdown, not just the name) → stay put; the
-          // flash alone shows where it is. Otherwise centre the whole dropdown in
-          // the viewport. One taller than the viewport can't be centred, so it
-          // top-aligns under the header offset instead.
+          // How far a dropdown that's ALREADY fully on screen may drift toward
+          // centre. Deliberately subtle — just enough to read as movement in the
+          // right direction, never a jump the eye has to re-follow.
+          var NUDGE = 24;
+
+          // Where to scroll for a dropdown — null meaning "don't move". The ideal
+          // spot centres the WHOLE dropdown (not just the name) in the viewport;
+          // one taller than the viewport can't be centred, so it top-aligns under
+          // the header offset instead. Off screen even partially → go all the way
+          // there. Fully visible → only nudge NUDGE px toward it.
           function scrollTargetFor(d) {
             var r = d.getBoundingClientRect();
             var vh = window.innerHeight || document.documentElement.clientHeight;
             var top = r.top + window.scrollY;
-            if (r.top >= 0 && r.bottom <= vh) return null;
-            if (r.height > vh - 80) return Math.max(0, top - 80);
-            return Math.max(0, top - (vh - r.height) / 2);
+            var centred = Math.max(0, r.height > vh - 80 ? top - 80 : top - (vh - r.height) / 2);
+            if (r.top < 0 || r.bottom > vh) return centred;
+            var delta = centred - window.scrollY;
+            if (Math.abs(delta) < 1) return null;
+            return Math.max(0, window.scrollY + (delta > 0 ? Math.min(delta, NUDGE) : Math.max(delta, -NUDGE)));
           }
 
           // Open (never close) + scroll + flash. Returns the element and the scroll
-          // position so the caller can record it in history.
-          function reveal(slug, smooth) {
+          // position so the caller can record it in history. `keepScroll` opens and
+          // flashes without moving at all — for history restores, which have their
+          // own exact scroll to honour.
+          function reveal(slug, smooth, keepScroll) {
             var d = personOf(slug);
             if (!d) return null;
             autoOpen(d);
-            var y = scrollTargetFor(d);
+            var y = keepScroll ? null : scrollTargetFor(d);
             if (y !== null) window.scrollTo({ top: y, behavior: smooth ? 'smooth' : 'auto' });
             flash(d);
             return { el: d, y: y === null ? window.scrollY : y };
@@ -279,11 +288,12 @@ const intro = (profile as any).pageMeta?.collaborators
           // (4) Back/Forward — return to that entry's scroll, or re-reveal its person.
           window.addEventListener('popstate', function (event) {
             var st = event.state;
-            // Restore the entry's own scroll first: reveal() deliberately stays put
-            // when the dropdown is already visible, which would strand Back.
+            // An entry's own scroll wins over reveal()'s centring/nudge — Back must
+            // land exactly where it left, not a nudge off it.
             if (st && st.slug) {
-              if (typeof st.y === 'number') window.scrollTo(0, st.y);
-              reveal(st.slug, false);
+              var exact = typeof st.y === 'number';
+              if (exact) window.scrollTo(0, st.y);
+              reveal(st.slug, false, exact);
               return;
             }
             if (st && typeof st.y === 'number') { window.scrollTo(0, st.y); return; }
