@@ -32,7 +32,9 @@ interface Props {
 const { title, date, description, readingTime, role, affiliations = [], collaborators = [], urls = [], features = [], metrics = null, related = [], relatedLabel = 'Related' } = Astro.props;
 
 // Collaborators — raw names resolved to clickable links via collaborators.json.
-const people = resolvePeople(collaborators);
+// excludeSelf: the list may name me explicitly to fix the credit ORDER (see people.ts),
+// but this line credits the OTHER people, so drop me from it.
+const people = resolvePeople(collaborators, { excludeSelf: true });
 const links = [...extraLinks(urls), ...extraLinks(features)];
 const formattedDate = date.toLocaleDateString('en-US', {
   year: 'numeric',
