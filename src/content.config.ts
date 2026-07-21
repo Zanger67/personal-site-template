@@ -26,6 +26,21 @@ const metricValue = z.union([
   z.array(z.union([metricScalar, metricLink])),
 ]);
 
+// Contributor-level marks — the item's own legend for the conventional footnote
+// symbols (* † ‡ § ‖ ¶), keyed BY SYMBOL. Each entry names the people carrying
+// that mark and the `note` explaining it, which surfaces as a hover popup beside
+// the superscript. `people` are ordinary person references (slug or written name).
+//   contributions:
+//     "*": { note: "Equal contribution",   people: ["buzz", "w-r-eck"] }
+//     "†": { note: "Corresponding author", people: ["buzz"] }
+// Kept separate from `collaborators`/`authors` so those stay plain slug lists.
+// See src/utils/marks.ts.
+const contribution = z.object({
+  note: z.string().nullable().optional(),
+  people: z.array(z.string()).optional().default([]),
+});
+const contributions = z.record(z.string(), contribution).optional().default({});
+
 const blog = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/blog' }),
   schema: z.object({
@@ -49,6 +64,8 @@ const blog = defineCollection({
     // src/data/collaborators.json into clickable links on the post page (same
     // mechanism as a project's `collaborators` / a publication's `authors`).
     collaborators: z.array(z.string()).optional().default([]),
+    // Contributor-level marks for the names above (see `contribution` up top).
+    contributions,
     // Extra links rendered as buttons in the post header.
     urls: z.array(urlEntry).optional().default([]),
     // "Featured in" / press coverage — a list parallel to `urls`, same shape,
@@ -102,6 +119,8 @@ const projects = defineCollection({
     // by EXACT match in src/data/collaborators.json; a matched name carrying a
     // `url` renders as a clickable link on the detail page, others as plain text.
     collaborators: z.array(z.string()).optional().default([]),
+    // Contributor-level marks for the names above (see `contribution` up top).
+    contributions,
     // Timeline relation-groups: a shared free-form tag that groups items across
     // the whole timeline. Selecting any item highlights every item that shares
     // one of its relation-groups (independent of category/org). Many-to-many —

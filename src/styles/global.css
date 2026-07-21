@@ -183,3 +183,49 @@ img {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ---- Contributor-level marks -------------------------------------------
+   The conventional footnote symbols (* † ‡ § ‖ ¶) annotating a contributor or
+   author name. Each item supplies its OWN legend via `contributions` (see
+   src/utils/marks.ts); a symbol's note rides along in `data-tip` and surfaces
+   as a floating popup on hover, with `title` carrying the same text as the
+   accessible / no-CSS fallback. Global because marks render identically on the
+   project + blog headers, the Works cards and the collaborators page. */
+.cmark {
+  position: relative;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: help;
+}
+
+.cmark[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: max-content;
+  max-width: min(18rem, 70vw);
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.16);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.cmark[data-tip]:hover::after,
+.cmark[data-tip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}

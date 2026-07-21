@@ -28,6 +28,7 @@ import { isRouteEnabled } from '@config/site';
 import { slugify, fallbackName, isSelfSlug } from './collaborators';
 import { KIND_CAT, fmtMonthYear, fmtFullDate, fmtPubDate, type WorkKind } from './works';
 import { extraLinks, knownHostLabel, type Link } from './links';
+import { markMap, type MarkMap } from './marks';
 import registryData from '../data/collaborators.json';
 import organizations from '../data/organizations.json';
 import affiliations from '../data/affiliations.json';
@@ -152,6 +153,7 @@ export interface PersonWork {
   authors: Author[];          // full ordered line incl. self, for highlighting
   links: Link[];              // Live / Repo / … chips — same set as the Works page
   years: number[];
+  marks: MarkMap;             // this item's contributor-level marks, by slug
 }
 export interface PersonRole {
   title: string;              // "Role · OrgShort" / "OrgShort · Member"
@@ -254,6 +256,7 @@ async function collectWorks(): Promise<PersonWork[]> {
           ...extraLinks(d.features),
         ]),
         years: expandRange(d.startDate.getFullYear(), d.endDate ? d.endDate.getFullYear() : CURRENT_YEAR),
+        marks: markMap((d as any).contributions),
       });
     }
   }
@@ -273,6 +276,7 @@ async function collectWorks(): Promise<PersonWork[]> {
         authors: (pub.authors ?? []).map(toAuthor),   // authors already include self
         links: dedupeLinks([...extraLinks(pub.urls), ...extraLinks(pub.features)]),
         years: yr == null ? [] : [yr],
+        marks: markMap(pub.contributions),
       });
     }
   }
@@ -292,6 +296,7 @@ async function collectWorks(): Promise<PersonWork[]> {
         authors: creditLine(d.collaborators, selfRef).map(toAuthor),
         links: dedupeLinks([...extraLinks(d.urls), ...extraLinks(d.features)]),
         years: [d.date.getFullYear()],
+        marks: markMap((d as any).contributions),
       });
     }
   }

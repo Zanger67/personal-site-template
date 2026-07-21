@@ -4,6 +4,8 @@ description: "Tracked crowd energy levels across 24 home football games to optim
 role: "Data Lead"
 affiliations: ["Georgia Tech Athletic Association"]
 collaborators: ["g-t-ramblin", "buzz-jr"]
+contributions:
+  "*": { note: "Equal contribution", people: ["g-t-ramblin"] }
 startDate: 2025-03-01
 tags: ["Analytics", "Sports"]
 relationGroups: ["game-day"]
