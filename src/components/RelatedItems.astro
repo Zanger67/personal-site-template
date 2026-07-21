@@ -2,9 +2,11 @@
 // The "Related" section shown at the bottom of a project/blog detail page — the
 // same list that appears in the experience timeline's info-drawer (a colour-keyed
 // dot + title + date + description per item). Work rows are real links to that
-// work's page; linked ORG-ROLE rows (href null) render as static, non-clickable
-// rows — mirroring how the drawer lights up an affiliated org's roles alongside a
-// selected work, none of which have a page of their own.
+// work's page; linked ORG-ROLE rows link into the experience page's info tab for
+// that role (`/experience#sel=<ref>`, built in works.ts) — mirroring how the
+// drawer lights up an affiliated org's roles alongside a selected work. A row
+// with no destination at all (href null, e.g. /experience disabled) renders as a
+// static, non-clickable row.
 //
 // Markup + styling are ported from the drawer's `.d-related-label` / `.d-timeline`
 // / `.d-tl-*` in experience.astro so the two read identically. Descriptions render
@@ -105,8 +107,8 @@ const { label, items } = Astro.props;
     box-shadow: 0 0 0 2px var(--bg);
   }
 
-  /* The drawer's `.d-tl-link` is a <button>; here it's an <a> (work rows) or a
-     <div class="d-tl-static"> (non-clickable org-role rows). Same flex column. */
+  /* The drawer's `.d-tl-link` is a <button>; here it's an <a> (any row with a
+     destination) or a <div class="d-tl-static"> (rows without one). Same flex column. */
   .d-tl-link {
     display: flex;
     flex-direction: column;
@@ -117,7 +119,7 @@ const { label, items } = Astro.props;
     width: 100%;
   }
 
-  /* Org-role rows have no destination — read as plain text, not interactive. */
+  /* Destination-less rows read as plain text, not interactive. */
   .d-tl-static {
     cursor: default;
   }
@@ -128,7 +130,7 @@ const { label, items } = Astro.props;
     line-height: 1.3;
   }
 
-  /* Only the linked work rows highlight on hover; static role rows don't. */
+  /* Only rows that go somewhere highlight on hover; static rows don't. */
   a.d-tl-link:hover .d-tl-title {
     color: var(--accent);
   }

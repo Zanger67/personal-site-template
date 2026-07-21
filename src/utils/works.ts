@@ -13,14 +13,17 @@
 // (see inForeground() in experience.astro). Two kinds of related item surface:
 //   • other WORKS — projects/papers/posts, rendered as clickable rows;
 //   • linked ORG ROLES — a role at an org this work is affiliated with, or one
-//     sharing a relation-group. These have no detail page, so they render as
-//     NON-clickable rows (href: null), matching how the timeline drawer lights up
-//     an affiliated org's roles alongside a selected work.
+//     sharing a relation-group. A role has no page of its own, so its row links
+//     into the experience page's info tab for that role — `/experience#sel=<ref>`,
+//     a data-derived handle (see experienceRefs.ts) that opens and scrolls to the
+//     entry in whichever view is default there. With /experience disabled the row
+//     falls back to being non-clickable (href: null).
 // The works pool is every enabled works category — a category disabled in
 // src/config/site.ts drops out entirely, exactly as it does on the Works page.
 import { getCollection } from 'astro:content';
 import { isRouteEnabled } from '@config/site';
 import { resolvePeople } from './collaborators';
+import { roleRef, experienceRefHref } from './experienceRefs';
 import publications from '../data/publications.json';
 import organizations from '../data/organizations.json';
 import affiliations from '../data/affiliations.json';
@@ -210,6 +213,7 @@ const looseMs = (v?: string | null): number => {
 
 interface RoleRow {
   title: string;            // "Role · OrgShort"
+  href: string | null;      // deep link into the experience info tab (null if off)
   entity: string;           // org name — matched against a work's affiliations
   relationGroups: string[]; // the role's own tags, else the org's
   dateLabel: string;
@@ -217,6 +221,8 @@ interface RoleRow {
   color: string;
   sortDate: number;
 }
+
+const experienceEnabled = isRouteEnabled('experience');
 
 // Every dated named role across clubs + work affiliations, as candidate rows.
 function orgRoleRows(): RoleRow[] {
@@ -226,6 +232,9 @@ function orgRoleRows(): RoleRow[] {
     const short = org.organizationShort || org.organization;
     rows.push({
       title: `${r.roleDetail ?? r.role} · ${short}`,
+      // Built from the RAW `role` (not the display `roleDetail`) + org + start —
+      // exactly what experience.astro stamps on the same role's records.
+      href: experienceEnabled ? experienceRefHref(base, roleRef(org.organization, r.role, r.start)) : null,
       entity: org.organization,
       relationGroups: r.relationGroups ?? org.relationGroups ?? [],
       dateLabel: fmtRoleRange(r.start, r.end),
@@ -278,7 +287,7 @@ export async function getRelatedWorks(self: RelatedSelf): Promise<RelatedItem[]>
     .filter(r => affils.has(norm(r.entity)) || r.relationGroups.some(g => groups.has(g)))
     .filter(r => { if (seenRole.has(r.title)) return false; seenRole.add(r.title); return true; })
     .map(r => ({
-      kind: 'Role' as const, title: r.title, href: null, external: false,
+      kind: 'Role' as const, title: r.title, href: r.href, external: false,
       dateLabel: r.dateLabel, description: r.description, color: r.color, sortDate: r.sortDate,
     }));
 

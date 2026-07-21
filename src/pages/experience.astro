@@ -24,6 +24,7 @@ import { normalizeMetrics, type Metrics, type NormalizedMetric } from '../utils/
 import { resolvePeople, collaboratorHref } from '../utils/collaborators';
 
 import { withIncoming } from '../utils/incoming';
+import { roleRef } from '../utils/experienceRefs';
 
 // The drawer renders descriptions through inlineMarkdown, so a credited person who
 // has a /collaborators dropdown is emitted as a markdown link straight to it (the
@@ -185,6 +186,10 @@ interface ListDetail {
   subtitle: string | null; description: string | null;
   links: { label: string; url: string }[]; entity: string;
   relationGroups: string[]; main: boolean; metrics: NormalizedMetric[];
+  // Data-derived deep-link handle (src/utils/experienceRefs.ts), stamped on the
+  // rows another page can link to — currently org roles, whose ids differ between
+  // this dataset and the timeline's. See selectByRef in the client script.
+  ref?: string | null;
 }
 const listItems: ListDetail[] = [];
 const pushDetail = (d: Omit<ListDetail, 'id'>): number => { const id = listItems.length; listItems.push({ id, ...d }); return id; };
@@ -216,6 +221,7 @@ function buildRoleRows(org: Org, club: boolean): ListRole[] {
       links: detailLinks([{ label: 'Website', url: r.url ?? org.url }, ...extraLinks(r.urls), ...extraLinks(org.urls), ...extraLinks(r.features), ...extraLinks(org.features)]),
       entity: org.organization, relationGroups: r.relationGroups ?? org.relationGroups ?? [],
       main: r.main ?? org.main ?? false, metrics: normalizeMetrics(org.metrics),
+      ref: roleRef(org.organization, r.role, r.start),
     });
     rows.push({ id, role: withIncoming(r.roleDetail ?? r.role, r.start), start: r.start, end: r.end, url: r.url ?? null });
   }
@@ -355,6 +361,10 @@ interface Item {
   // Generic label→value stat chips (see src/utils/metrics.ts), rendered in the
   // drawer. Normalized server-side so the client just paints them.
   metrics: NormalizedMetric[];
+  // Data-derived deep-link handle (src/utils/experienceRefs.ts) for the entries
+  // another page links to — org roles today. `id` is a per-build counter and
+  // differs from the list view's, so a ref is what an outside link can name.
+  ref: string | null;
   main: boolean;           // cross-cutting "main"/highlights flag (orthogonal to type)
   cats: CatKey[];          // every category this item matches (primary `type` first).
                            // Extras let one item appear under multiple filters (e.g. a
@@ -396,7 +406,7 @@ interface ItemOpts {
   entity?: string; entityShort?: string | null; description?: string | null; subtitle?: string | null; links?: ({ label: string; url: string | null | undefined })[];
   detailUrl?: string | null;
   affiliations?: string[]; isWork?: boolean; main?: boolean; also?: CatKey[];
-  relationGroups?: string[]; tags?: string[]; metrics?: Metrics;
+  relationGroups?: string[]; tags?: string[]; metrics?: Metrics; ref?: string | null;
 }
 function mkItem(o: ItemOpts): Item | null {
   const s = parseDate(o.start);
@@ -452,6 +462,7 @@ function mkItem(o: ItemOpts): Item | null {
     relationGroups: o.relationGroups || [],
     tags: o.tags || [],
     metrics: normalizeMetrics(o.metrics),
+    ref: o.ref ?? null,
     main: !!o.main, cats,
   };
 }
@@ -567,6 +578,7 @@ const items: Item[] = [
       links: [{ label: 'Website', url: r.url ?? org.url }, ...extraLinks(r.urls), ...extraLinks(org.urls), ...extraLinks(r.features), ...extraLinks(org.features)],
       main: r.main ?? org.main,
       relationGroups: r.relationGroups ?? org.relationGroups, metrics: org.metrics,
+      ref: roleRef(org.organization, r.role, r.start),
     })),
     // Blanket `membership` carved into "Member" segments around those roles.
     ...membershipSegments(org).map(seg => mkItem({
@@ -615,6 +627,7 @@ const items: Item[] = [
       links: [{ label: 'Website', url: r.url ?? org.url }, ...extraLinks(r.urls), ...extraLinks(org.urls), ...extraLinks(r.features), ...extraLinks(org.features)],
       main: r.main ?? org.main,
       relationGroups: r.relationGroups ?? org.relationGroups, metrics: org.metrics,
+      ref: roleRef(org.organization, r.role, r.start),
     })),
     // Blanket `membership` carved into "Member" segments around those roles. The
     // literal title "Member" keeps the client's lane-chain detection working.
@@ -1735,6 +1748,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       description: string | null; subtitle: string | null; links: { label: string; url: string }[]; detailUrl: string | null;
       entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[]; isWork: boolean;
       tags: string[]; metrics: MetricRow[]; main: boolean; cats: string[]; laneKey?: string | null;
+      ref?: string | null;   // data-derived deep-link handle (see selectByRef)
     }
     // Paint a metrics list into `container` as "label value" chips — the client
     // mirror of <Metrics> (see src/components/Metrics.astro). A part with a `url`
@@ -2206,6 +2220,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     // nested scope). No-ops until then.
     let ldGetSelected: () => number | null = () => null;
     let ldSelectById: (id: number, opts?: { scroll?: boolean; history?: 'push' | 'none' }) => void = () => {};
+    // Resolve a deep-link ref (see src/utils/experienceRefs.ts) to this view's own
+    // row id — the list and the timeline number their entries independently.
+    let ldIdForRef: (ref: string) => number | null = () => null;
     const listDataEl = document.getElementById('tl-list-data');
     const listDrawer = document.querySelector<HTMLElement>('.view-list .tl-detail');
     const listDrawerBody = listDrawer?.querySelector<HTMLElement>('.tl-detail-body') ?? null;
@@ -2215,6 +2232,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         subtitle: string | null; description: string | null;
         links: { label: string; url: string }[]; entity: string;
         relationGroups: string[]; main: boolean; metrics: MetricRow[];
+        ref?: string | null;   // data-derived deep-link handle (see selectByRef)
       }
       const ldItems: LDetail[] = JSON.parse(listDataEl.textContent || '[]');
       const ldById: Record<number, LDetail> = {};
@@ -2304,6 +2322,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       // Expose the list selection to the outer history layer.
       ldGetSelected = () => ldSelected;
       ldSelectById = (id, opts) => ldSelect(id, opts);
+      ldIdForRef = (ref) => ldItems.find(d => d.ref === ref)?.id ?? null;
 
       for (const row of ldRows) {
         const id = parseInt(row.dataset.li!);
@@ -2353,15 +2372,24 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     // recognized token (an empty/garbage hash can then fall back to the narrow
     // default). Used on first load and as a popstate fallback for entries that
     // predate our state object.
-    function parseHash(hash: string): { view: string; filter: string; sel: number | null; explicit: boolean } {
+    // `sel=` carries either a numeric id (what our own history writes — id space
+    // per view) or a data-derived REF from another page's link, e.g.
+    // `#sel=r.gtmun.treasurer.2024-05` (see src/utils/experienceRefs.ts). A ref
+    // deliberately does NOT count as `explicit`: it names an entry, not a view, so
+    // the page still opens in whichever view is default here (list on narrow).
+    function parseHash(hash: string): { view: string; filter: string; sel: number | null; ref: string | null; explicit: boolean } {
       const parts = (hash || '').replace(/^#/, '').split('&').filter(Boolean);
-      let view = 'timeline', filter = 'all', sel: number | null = null, explicit = false;
+      let view = 'timeline', filter = 'all', sel: number | null = null, ref: string | null = null, explicit = false;
       for (const p of parts) {
         if (p === 'list') { view = 'list'; explicit = true; }
-        else if (p.startsWith('sel=')) { const n = parseInt(p.slice(4)); if (!isNaN(n)) { sel = n; explicit = true; } }
+        else if (p.startsWith('sel=')) {
+          const v = p.slice(4);
+          if (/^\d+$/.test(v)) { sel = parseInt(v); explicit = true; }
+          else if (v) ref = decodeURIComponent(v);
+        }
         else if (buttons.some(b => b.dataset.filter === p)) { filter = p; explicit = true; }
       }
-      return { view, filter, sel, explicit };
+      return { view, filter, sel, ref, explicit };
     }
     // Drive the UI to match a state WITHOUT recording new history (guarded by
     // `restoring`). Order: view, then filter (either may re-render), then the
@@ -2382,6 +2410,33 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       } finally {
         restoring = false;
       }
+    }
+
+    // Open the entry a deep-link ref names. Resolves against the CURRENT view; if
+    // that view doesn't carry the entry (the timeline charts only dated, shown
+    // roles — the list carries them all) it switches to the other view and opens
+    // it there, so a link never dead-ends. Selection is made without recording
+    // history; the caller pins the resulting state onto the entry it landed on.
+    function selectByRef(ref: string): boolean {
+      const openHere = (view: string): boolean => {
+        if (view === 'list') {
+          const id = ldIdForRef(ref);
+          if (id == null) return false;
+          ldSelectById(id, { scroll: true, history: 'none' });
+          return true;
+        }
+        const it = items.find(i => i.ref === ref);
+        if (!it) return false;
+        selectItem(it, { scroll: true, history: 'none' });
+        return true;
+      };
+      const from = currentView;
+      if (openHere(from)) return true;
+      const other = from === 'list' ? 'timeline' : 'list';
+      setView(other);
+      if (openHere(other)) return true;
+      setView(from);   // stale/unknown ref — leave the view as we found it
+      return false;
     }
 
     function setView(v: string) {
@@ -2539,6 +2594,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     window.addEventListener('popstate', (e) => {
       const st: any = (e.state && e.state.exp) ? e.state : parseHash(location.hash);
       applyState({ view: st.view || 'timeline', filter: st.filter || 'all', sel: st.sel ?? null });
+      // A ref-bearing entry (someone's shared link, stepped back to) has no id to
+      // replay — resolve it the same way the initial load does.
+      if (st.sel == null && st.ref) { restoring = true; try { selectByRef(st.ref); } finally { restoring = false; } }
     });
 
     // Measure the gap above the info tab at rest — i.e. the page header (title +
@@ -2582,6 +2640,12 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         if (initialView === 'list') ldSelectById(parsed.sel, { scroll: true });
         else { const it = byId[parsed.sel]; if (it) selectItem(it, { scroll: true }); }
       } finally { restoring = false; }
+    } else if (parsed.ref) {
+      // An inbound deep link — e.g. a role row in a work's "Related" list. Opens
+      // the entry in the default view and scrolls it into position; syncHistory
+      // below then rewrites the hash to this view's own `sel=<id>`.
+      restoring = true;
+      try { selectByRef(parsed.ref); } finally { restoring = false; }
     }
     syncHistory('replace');
 
