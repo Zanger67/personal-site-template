@@ -12,6 +12,7 @@
 // case/spacing/punctuation-insensitive. A matched entry renders its `display-name`
 // linked to `url`; an unmatched reference renders unlinked, its slug humanized
 // back to a readable label ("buzz-jr" → "Buzz Jr").
+import { isRouteEnabled } from '@config/site';
 import collaborators from '../data/collaborators.json';
 import profile from '../data/profile.json';
 
@@ -40,9 +41,19 @@ export interface Person {
   name: string;                  // display name (registry `display-name`, else humanized ref)
   url: string | null;            // primary/default link (null → render as plain text)
   urls: Record<string, string>;  // extra labelled links (may be empty)
+  slug: string;                  // registry key — the stable identity to link/group on
+  isSelf: boolean;               // this reference is me (rendered bold + unlinked)
+  listed: boolean;               // has a /collaborators dropdown to deep-link into
 }
 
 const registry = collaborators as Record<string, CollaboratorInfo>;
+
+const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
+
+// Deep link to a person's dropdown on /collaborators. The page reads this hash on
+// load (and intercepts same-page clicks) to open that person, scroll to them and
+// flash a highlight — see src/pages/collaborators.astro.
+export const collaboratorHref = (slug: string): string => `${base}/collaborators#p-${slug}`;
 
 // Normalize a name (or an already-slug) into a registry key: strip accents,
 // lowercase, non-alphanumeric runs → single hyphens, trimmed. Idempotent on slugs
@@ -79,21 +90,13 @@ export function resolvePeople(refs?: string[] | null, opts?: { excludeSelf?: boo
   const list = opts?.excludeSelf
     ? (refs ?? []).filter(r => !isSelfSlug(slugify(r)))
     : (refs ?? []);
-  return list.map(ref => {
-    const info = registry[slugify(ref)];
-    return {
-      name: (info && info['display-name']) || fallbackName(ref),
-      url: (info && info.url) || null,
-      urls: (info && info.urls) || {},
-    };
-  });
+  return list.map(resolvePerson);
 }
 
-// Like resolvePeople but for a single ref and it KEEPS the registry slug — the
-// stable identity the /collaborators page groups + self-matches on (a display
-// name alone can't be a grouping key). `slug` is idempotent: a ref written as a
-// name or as a slug resolves to the same entry.
-export function resolvePerson(ref: string): Person & { slug: string } {
+// Like resolvePeople but for a single ref. `slug` is idempotent: a ref written as
+// a name or as a slug resolves to the same entry — it's the stable identity the
+// /collaborators page groups + self-matches on (a display name can't be a key).
+export function resolvePerson(ref: string): Person {
   const slug = slugify(ref);
   const info = registry[slug];
   return {
@@ -101,5 +104,24 @@ export function resolvePerson(ref: string): Person & { slug: string } {
     name: (info && info['display-name']) || fallbackName(ref),
     url: (info && info.url) || null,
     urls: (info && info.urls) || {},
+    isSelf: isSelfSlug(slug),
+    // "Has a dropdown worth linking to" — which also means NOT when the whole
+    // route is switched off, so no caller can emit a link into a 404.
+    listed: info?.listed === true && isRouteEnabled('collaborators'),
   };
+}
+
+// The credit line for an item, ME INCLUDED. A work's `collaborators` list normally
+// names only the other people, so I'm prepended; but if the list already names me,
+// its order is honoured verbatim — that's how you get "Eck, me, Lanta". Publications
+// need no prepending, their `authors` already include me.
+//
+// This is what a detail page's contributor line renders: I appear in place (bold,
+// never a link — linking myself to my own site is noise), everyone else resolves
+// normally. Contrast resolvePeople(refs, { excludeSelf: true }), which drops me.
+export function resolveCredits(refs?: string[] | null): Person[] {
+  const list = refs ?? [];
+  const selfRef = (profile as any).self ?? (profile as any).name;
+  const ordered = list.some(r => isSelfSlug(slugify(r))) ? list : [selfRef, ...list];
+  return ordered.map(resolvePerson);
 }

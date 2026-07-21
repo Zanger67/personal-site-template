@@ -61,7 +61,10 @@ export function inlineMarkdown(src: string | null | undefined, opts: InlineMarkd
     if (!links) return lab;
     const url = safeUrl(rawUrl.replace(/&amp;/g, '&'));
     if (!url) return lab;
-    return stash(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${lab}</a>`);
+    // Only genuinely off-site targets open a new tab; a relative/same-document
+    // link (e.g. a drawer author pointing at /collaborators) navigates in place.
+    const away = /^(https?:|mailto:)/i.test(url) ? ' target="_blank" rel="noopener noreferrer"' : '';
+    return stash(`<a href="${escapeHtml(url)}"${away}>${lab}</a>`);
   });
   // 4. Emphasis over the rest, then hard line breaks.
   s = applyEmphasis(s).replace(/\r?\n/g, '<br>');

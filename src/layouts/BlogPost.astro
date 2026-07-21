@@ -3,10 +3,11 @@ import BaseLayout from './BaseLayout.astro';
 import BackToWorks from '../components/BackToWorks.astro';
 import Metrics from '../components/Metrics.astro';
 import RelatedItems from '../components/RelatedItems.astro';
+import Contributors from '../components/Contributors.astro';
 import { extraLinks, type UrlEntry } from '../utils/links';
 import type { Metrics as MetricsDict } from '../utils/metrics';
 import type { RelatedItem } from '../utils/works';
-import { resolvePeople } from '../utils/collaborators';
+import type { Contributions } from '../utils/marks';
 
 // The "urls"/"features" listed formats (same as the timeline's info-tab buttons):
 // each entry renders as a labelled link in the post header. A button shows its
@@ -20,6 +21,8 @@ interface Props {
   role?: string | null;
   affiliations?: string[];
   collaborators?: string[];
+  // Contributor-level marks for the names above (see src/utils/marks.ts).
+  contributions?: Contributions | null;
   urls?: UrlEntry[];
   features?: UrlEntry[];
   metrics?: MetricsDict | null;
@@ -29,12 +32,7 @@ interface Props {
   relatedLabel?: string;
 }
 
-const { title, date, description, readingTime, role, affiliations = [], collaborators = [], urls = [], features = [], metrics = null, related = [], relatedLabel = 'Related' } = Astro.props;
-
-// Collaborators — raw names resolved to clickable links via collaborators.json.
-// excludeSelf: the list may name me explicitly to fix the credit ORDER (see people.ts),
-// but this line credits the OTHER people, so drop me from it.
-const people = resolvePeople(collaborators, { excludeSelf: true });
+const { title, date, description, readingTime, role, affiliations = [], collaborators = [], contributions = null, urls = [], features = [], metrics = null, related = [], relatedLabel = 'Related' } = Astro.props;
 const links = [...extraLinks(urls), ...extraLinks(features)];
 const formattedDate = date.toLocaleDateString('en-US', {
   year: 'numeric',
@@ -54,19 +52,7 @@ const formattedDate = date.toLocaleDateString('en-US', {
           {affiliations.map(a => <span class="affil-chip" title={`Affiliated with ${a}`}>{a}</span>)}
         </div>
       )}
-      {people.length > 0 && (
-        <p class="post-people">
-          <span class="post-people-label">Collaborators:</span>{' '}
-          {people.map((p, i) => (
-            <Fragment>
-              {i > 0 && ', '}
-              {p.url
-                ? <a href={p.url} target="_blank" rel="noopener noreferrer">{p.name}</a>
-                : <span>{p.name}</span>}
-            </Fragment>
-          ))}
-        </p>
-      )}
+      <Contributors label="Collaborators" collaborators={collaborators} contributions={contributions} />
       <span class="post-meta">
         <time datetime={date.toISOString()}>{formattedDate}</time> – {readingTime}
       </span>
@@ -116,26 +102,7 @@ const formattedDate = date.toLocaleDateString('en-US', {
     opacity: 0.6;
   }
 
-  /* Collaborators / co-authors — inline list; names with a collaborators.json
-     `url` render as links, the rest as plain muted text. */
-  .post-people {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    margin: 0.1rem 0 0.5rem;
-  }
-
-  .post-people-label {
-    font-weight: 600;
-  }
-
-  .post-people a {
-    color: var(--accent);
-    text-decoration: none;
-  }
-
-  .post-people a:hover {
-    text-decoration: underline;
-  }
+  /* The collaborator line's styles live with it, in <Contributors>. */
 
   .post-meta {
     color: var(--text-muted);

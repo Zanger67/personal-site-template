@@ -5,7 +5,8 @@ import { isRouteEnabled } from '@config/site';
 import { getCollection } from 'astro:content';
 import { getReadingTime } from '../utils/reading-time';
 import { extraLinks, type UrlEntry, type Link as WorkLink } from '../utils/links';
-import { resolvePeople } from '../utils/collaborators';
+import { resolvePeople, collaboratorHref } from '../utils/collaborators';
+import { markMap, marksFor, type Contributions } from '../utils/marks';
 import type { Metrics } from '../utils/metrics';
 import { KIND_CAT, fmtMonthYear, fmtFullDate, fmtPubDate } from '../utils/works';
 import profile from '../data/profile.json';
@@ -49,6 +50,15 @@ interface WorkItem {
   dateLabel: string;
   description?: string;
   subtitle?: string | null;
+  // Credited names (publications only) — pre-resolved into linkable chips so the
+  // card can render each one individually instead of a flat joined string.
+  authors?: {
+    name: string;
+    href: string | null;
+    external: boolean;
+    self: boolean;
+    marks: { symbol: string; note: string | null }[];
+  }[];
   affiliations: string[];
   tags: string[];
   metrics: Metrics;
@@ -70,6 +80,8 @@ interface Publication {
   tags?: string[];
   metrics?: Metrics;
   main?: boolean;
+  // Contributor-level marks for `authors` (see src/utils/marks.ts).
+  contributions?: Contributions;
 }
 const pubData = publications as Publication[];
 
@@ -113,8 +125,19 @@ const pubItems: WorkItem[] = (isRouteEnabled('publications') ? pubData : [])
     href: pub.url || null,
     external: true,
     dateLabel: fmtPubDate(String(pub.date)),
-    // `authors` are people-registry refs (slugs) — resolve to display names.
-    description: resolvePeople(pub.authors).map(a => a.name).join(', '),
+    // `authors` are people-registry refs (slugs). Each resolves to a display name
+    // that links to their /collaborators dropdown when they have one (falling back
+    // to their own site), carrying any contributor-level marks this paper defines.
+    authors: (() => {
+      const marks = markMap(pub.contributions);
+      return resolvePeople(pub.authors).map(a => ({
+        name: a.name,
+        href: a.isSelf ? null : a.listed ? collaboratorHref(a.slug) : a.url,
+        external: !a.isSelf && !a.listed && !!a.url,
+        self: a.isSelf,
+        marks: marksFor(marks, a.slug),
+      }));
+    })(),
     // Authorship role leads the venue when present ("Lead author · Venue").
     subtitle: pub.role ? `${pub.role} · ${pub.venue}` : pub.venue,
     affiliations: pub.affiliations ?? [],
@@ -190,6 +213,7 @@ const activeId = tabs[0]?.id ?? null;
               dateLabel={item.dateLabel}
               description={item.description}
               subtitle={item.subtitle}
+              authors={item.authors}
               affiliations={item.affiliations}
               tags={item.tags}
               metrics={item.metrics}
@@ -213,6 +237,7 @@ const activeId = tabs[0]?.id ?? null;
               dateLabel={item.dateLabel}
               description={item.description}
               subtitle={item.subtitle}
+              authors={item.authors}
               affiliations={item.affiliations}
               tags={item.tags}
               metrics={item.metrics}
@@ -234,6 +259,7 @@ const activeId = tabs[0]?.id ?? null;
               dateLabel={item.dateLabel}
               description={item.description}
               subtitle={item.subtitle}
+              authors={item.authors}
               affiliations={item.affiliations}
               tags={item.tags}
               metrics={item.metrics}
@@ -255,6 +281,7 @@ const activeId = tabs[0]?.id ?? null;
               dateLabel={item.dateLabel}
               description={item.description}
               subtitle={item.subtitle}
+              authors={item.authors}
               affiliations={item.affiliations}
               tags={item.tags}
               metrics={item.metrics}

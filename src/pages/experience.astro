@@ -21,8 +21,19 @@ import relationLabels from '../data/relationLabels.json';
 import relationGroupLabels from '../data/relationGroupLabels.json';
 import { hostLabel, extraLinks, type UrlEntry } from '../utils/links';
 import { normalizeMetrics, type Metrics, type NormalizedMetric } from '../utils/metrics';
-import { resolvePeople } from '../utils/collaborators';
+import { resolvePeople, collaboratorHref } from '../utils/collaborators';
+
 import { withIncoming } from '../utils/incoming';
+
+// The drawer renders descriptions through inlineMarkdown, so a credited person who
+// has a /collaborators dropdown is emitted as a markdown link straight to it (the
+// page opens + scrolls to them on arrival). Contributor-level marks are deliberately
+// LEFT OFF here: inlineMarkdown's emphasis pass would read a pair of bare "*"s
+// across two names as italics, and it has no superscript to render them properly.
+const pubAuthorLine = (authors: string[]): string =>
+  resolvePeople(authors)
+    .map(a => (a.listed && !a.isSelf ? `[${a.name}](${collaboratorHref(a.slug)})` : a.name))
+    .join(', ');
 
 if (!isRouteEnabled('experience')) return Astro.rewrite('/404');
 
@@ -573,7 +584,7 @@ const items: Item[] = [
     title: p.title, type: 'awards', start: p.date, point: true, entity: p.title, isWork: true,
     // Authorship role (e.g. "Lead author") reads as the drawer subtitle.
     subtitle: p.role ?? null,
-    description: [(p.authors && p.authors.length) ? resolvePeople(p.authors).map(a => a.name).join(', ') : null, p.venue].filter(Boolean).join(' — '),
+    description: [(p.authors && p.authors.length) ? pubAuthorLine(p.authors) : null, p.venue].filter(Boolean).join(' — '),
     // Partner labs/orgs — cross-link the paper to that org on the timeline, same as projects.
     affiliations: p.affiliations || [],
     links: [{ label: 'Read', url: p.url }, ...extraLinks(p.urls), ...extraLinks(p.features)], main: p.main,

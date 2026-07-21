@@ -1,0 +1,79 @@
+---
+// The contributor / author credit line on a work's detail page (project, blog).
+//
+// Everyone the item credits is listed IN ORDER, me included — I render bold and
+// UNLINKED (pointing myself at my own site is noise), while every other person
+// links to their /collaborators dropdown when they have one, falling back to
+// their own site, then to plain text. Contributor-level marks (* † ‡ § ‖ ¶)
+// follow each name and carry the item's own legend as a hover popup; see
+// src/utils/marks.ts for the `contributions` shape.
+//
+// The line still only appears when the item credits SOMEONE ELSE — a solo work
+// would otherwise render a "Contributors: <me>" line that says nothing.
+import { resolveCredits, collaboratorHref } from '../utils/collaborators';
+import { markMap, marksFor, type Contributions } from '../utils/marks';
+
+interface Props {
+  /** Heading word — "Contributors" on projects, "Collaborators" on posts. */
+  label?: string;
+  collaborators?: string[];
+  contributions?: Contributions | null;
+}
+const { label = 'Collaborators', collaborators = [], contributions = null } = Astro.props;
+
+const people = resolveCredits(collaborators);
+const marks = markMap(contributions);
+const hasOthers = people.some(p => !p.isSelf);
+---
+
+{hasOthers && (
+  <p class="post-people">
+    <span class="post-people-label">{label}:</span>{' '}
+    {people.map((p, i) => {
+      // My own entry never links. Everyone else prefers their collaborators
+      // dropdown (an internal deep link) over their external site.
+      const href = p.isSelf ? null : p.listed ? collaboratorHref(p.slug) : p.url;
+      const external = !p.isSelf && !p.listed && !!p.url;
+      return (
+        <Fragment>
+          {i > 0 && ', '}
+          {p.isSelf
+            ? <strong class="me">{p.name}</strong>
+            : href
+              ? <a href={href} {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{p.name}</a>
+              : <span>{p.name}</span>}
+          {marksFor(marks, p.slug).map(m => (
+            <sup class="cmark" title={m.note} data-tip={m.note}>{m.symbol}</sup>
+          ))}
+        </Fragment>
+      );
+    })}
+  </p>
+)}
+
+<style>
+  .post-people {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 0.1rem 0 0.5rem;
+  }
+
+  .post-people-label {
+    font-weight: 600;
+  }
+
+  /* Me — bold and a shade brighter than the muted line, but never a link. */
+  .post-people .me {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .post-people a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .post-people a:hover {
+    text-decoration: underline;
+  }
+</style>

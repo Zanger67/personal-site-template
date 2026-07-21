@@ -27,6 +27,6 @@ const related = await getRelatedWorks({
 });
 ---
 
-<BlogPost title={post.data.title} date={post.data.date} description={post.data.description} readingTime={readingTime} role={post.data.role} affiliations={post.data.affiliations} collaborators={post.data.collaborators} urls={post.data.urls} features={post.data.features} metrics={post.data.metrics} related={related}>
+<BlogPost title={post.data.title} date={post.data.date} description={post.data.description} readingTime={readingTime} role={post.data.role} affiliations={post.data.affiliations} collaborators={post.data.collaborators} contributions={post.data.contributions} urls={post.data.urls} features={post.data.features} metrics={post.data.metrics} related={related}>
   <Content />
 </BlogPost>

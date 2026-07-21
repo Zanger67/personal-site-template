@@ -17,6 +17,19 @@ interface WorkLink {
   url: string;
 }
 
+// One credited name on a card (publications). Pre-resolved by the caller so this
+// component stays a dumb renderer: `href` already points wherever the name should
+// go (a /collaborators dropdown, or the person's own site when `external`), and
+// `marks` carries the item's contributor-level symbols + legend text.
+interface AuthorChip {
+  name: string;
+  href?: string | null;
+  external?: boolean;
+  /** Me — rendered bold and never linked. */
+  self?: boolean;
+  marks?: { symbol: string; note: string | null }[];
+}
+
 interface Props {
   title: string;
   /** Title link. Internal URLs are already base-prefixed; external ones open in a new tab. */
@@ -29,6 +42,8 @@ interface Props {
   description?: string | null;
   /** Optional italic line between header and description (e.g. a publication venue). */
   subtitle?: string | null;
+  /** Credited names (publications) — rendered as their own line, each linked. */
+  authors?: AuthorChip[];
   /** Affiliated orgs/labs — rendered as distinct outlined chips before the tags. */
   affiliations?: string[];
   tags?: string[];
@@ -51,6 +66,7 @@ const {
   dateLabel = null,
   description = null,
   subtitle = null,
+  authors = [],
   affiliations = [],
   tags = [],
   metrics = null,
@@ -85,6 +101,23 @@ const hasMetrics = normalizeMetrics(metrics).length > 0;
   </div>
 
   {subtitle && <p class="work-subtitle">{subtitle}</p>}
+  {authors.length > 0 && (
+    <p class="work-authors">
+      {authors.map((a, i) => (
+        <Fragment>
+          {i > 0 && ', '}
+          {a.self
+            ? <strong class="me">{a.name}</strong>
+            : a.href
+              ? <a href={a.href} {...(a.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{a.name}</a>
+              : <span>{a.name}</span>}
+          {(a.marks ?? []).map(m => (
+            <sup class="cmark" title={m.note} data-tip={m.note}>{m.symbol}</sup>
+          ))}
+        </Fragment>
+      ))}
+    </p>
+  )}
   {description && <p class="work-desc">{description}</p>}
 
   {/* Four independent groups (affiliations · tags · metrics · links). Base render
@@ -330,6 +363,31 @@ const hasMetrics = normalizeMetrics(metrics).length > 0;
     color: var(--text-muted);
     font-size: 0.92rem;
     margin: 0.3rem 0 0;
+  }
+
+  /* Credited names (publications) — same muted weight as the blurb it replaced,
+     with each name linking to that person's collaborators dropdown. */
+  .work-authors {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin: 0.3rem 0 0;
+  }
+
+  /* Me — bold, never a link. */
+  .work-authors .me {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .work-authors a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--border);
+  }
+
+  .work-authors a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
   }
 
   /* ── Meta row: affiliations · tags · metrics · links ───────────────────────
