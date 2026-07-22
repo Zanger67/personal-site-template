@@ -15,6 +15,12 @@
 //   • manual `years` on their profile (collaborators.json) — free specs that let a
 //                     profile-only person (no shared works) still carry a timeframe.
 //
+// Grouping: the page splits the list in two on `hasWorks` — anyone with at least
+// one shared work (project / publication / blog) leads, and people known only
+// through an attached role/period — or through their profile alone — follow under
+// their own subheading. The sort below is group-agnostic; splitting a sorted list
+// keeps each group internally ordered.
+//
 // Ordering: people WITH dates first, most-recent collaboration first (then most
 // works, then name); people with a profile but NO dates sink to the bottom (A–Z).
 // "Most recent" is keyed on each contribution's START — a date RANGE counts as its
@@ -173,6 +179,10 @@ export interface CollaboratorEntry {
   hasDates: boolean;
   works: PersonWork[];
   roles: PersonRole[];
+  // Which of the page's two groups this person belongs to: true = we share at
+  // least one work, false = role-attached only, or profile-only with nothing
+  // attached at all (the default bucket).
+  hasWorks: boolean;
   count: number;
   lastYear: number;
   // Sort key: the person's MOST RECENT start (ms, month-granular). Every
@@ -474,6 +484,7 @@ export async function getCollaborators(): Promise<CollaboratorEntry[]> {
       hasDates: years.length > 0,
       works: a.works.sort((x, y) => y.sortDate - x.sortDate),
       roles: a.roles.sort((x, y) => y.sortDate - x.sortDate),
+      hasWorks: a.works.length > 0,
       count: a.works.length + a.roles.length,
       lastYear: years.length ? years[years.length - 1] : 0,
       recentStart: a.starts.length ? Math.max(...a.starts) : 0,

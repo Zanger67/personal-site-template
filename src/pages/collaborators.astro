@@ -15,7 +15,17 @@ if (!isRouteEnabled('collaborators')) return Astro.rewrite('/404');
 const people = await getCollaborators();
 // Who has a dropdown on this page — the only names an author line can jump to.
 // Anyone else (unlisted, or referenced with no registry entry) stays plain text.
+// Built from the WHOLE list, so a jump crosses the two groups below freely.
 const listedSlugs = new Set(people.map(p => p.slug));
+
+// Two groups: people I share actual work with lead the page; people known only
+// through an attached role/period — and profile-only people with nothing attached
+// — follow under their own subheading. `people` is already sorted, and splitting a
+// sorted list keeps each group internally ordered. An empty group is dropped.
+const groups = [
+  { heading: 'Shared work', people: people.filter(p => p.hasWorks) },
+  { heading: 'Roles & affiliations', people: people.filter(p => !p.hasWorks) },
+].filter(g => g.people.length > 0);
 const intro = (profile as any).pageMeta?.collaborators
   ?? 'People I’ve worked with across projects, publications, and posts.';
 ---
@@ -28,110 +38,119 @@ const intro = (profile as any).pageMeta?.collaborators
     {people.length === 0 ? (
       <p class="empty">No collaborators listed yet.</p>
     ) : (
-      <ul class="collab-list">
-        {people.map(p => (
-          <li>
-            <details class="collab" id={`p-${p.slug}`} data-slug={p.slug}>
-              <summary>
-                <span class="sum-left">
-                  <span class="chev" aria-hidden="true"></span>
-                  <span class="sum-name">{p.name}</span>
-                  {p.yearLabel && <span class="sum-years">{p.yearLabel}</span>}
-                  {p.affiliations.length > 0 && (
-                    <span class="sum-affils">
-                      {p.affiliations.map((a, i) => (
-                        <Fragment>
-                          {i > 0 && <span class="sep">·</span>}
-                          <span>{a.name}</span>
-                        </Fragment>
-                      ))}
+      <div class="collab-groups">
+        {groups.map(g => (
+          <section class="collab-group">
+            {/* With only one non-empty group the split says nothing — drop the
+                heading rather than label a list that has no counterpart. */}
+            {groups.length > 1 && <h2 class="group-head">{g.heading}</h2>}
+            <ul class="collab-list">
+              {g.people.map(p => (
+              <li>
+                <details class="collab" id={`p-${p.slug}`} data-slug={p.slug}>
+                  <summary>
+                    <span class="sum-left">
+                      <span class="chev" aria-hidden="true"></span>
+                      <span class="sum-name">{p.name}</span>
+                      {p.yearLabel && <span class="sum-years">{p.yearLabel}</span>}
+                      {p.affiliations.length > 0 && (
+                        <span class="sum-affils">
+                          {p.affiliations.map((a, i) => (
+                            <Fragment>
+                              {i > 0 && <span class="sep">·</span>}
+                              <span>{a.name}</span>
+                            </Fragment>
+                          ))}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-              </summary>
+                  </summary>
 
-              <div class="collab-body">
-                {p.links.length > 0 && (
-                  <div class="link-line">
-                    {p.links.map(l => (
-                      <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a>
-                    ))}
+                  <div class="collab-body">
+                    {p.links.length > 0 && (
+                      <div class="link-line">
+                        {p.links.map(l => (
+                          <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a>
+                        ))}
+                      </div>
+                    )}
+
+                    {p.works.length > 0 && (
+                      <ul class="rows">
+                        {p.works.map(w => {
+                          const rel = w.external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+                          return (
+                            <li class="row">
+                              <div class="row-main">
+                                {w.href
+                                  ? <a class="row-title" href={w.href} {...rel}>{w.title}</a>
+                                  : <span class="row-title">{w.title}</span>}
+                                <div class="authors">
+                                  {w.authors.map((a, i) => {
+                                    const them = a.slug === p.slug;
+                                    const cls = a.isSelf ? 'au au-self' : them ? 'au au-them' : 'au';
+                                    // Every OTHER listed person in the line is a link to their
+                                    // own dropdown — the script below opens + scrolls + flashes
+                                    // it in place. Me, and anyone without a dropdown, stay text.
+                                    const jump = !a.isSelf && listedSlugs.has(a.slug);
+                                    return (
+                                      <Fragment>
+                                        {i > 0 && <span class="comma">, </span>}
+                                        {jump
+                                          ? <a class={`${cls} au-link`} href={`#p-${a.slug}`} data-jump={a.slug}>{a.name}</a>
+                                          : <span class={cls}>{a.name}</span>}
+                                        {marksFor(w.marks, a.slug).map(m => (
+                                          <sup class="cmark" title={m.note} data-tip={m.note}>{m.symbol}</sup>
+                                        ))}
+                                      </Fragment>
+                                    );
+                                  })}
+                                </div>
+                                <div class="row-bottom">
+                                  {/* What KIND of thing this is — colour-keyed to the
+                                      experience timeline, same swatch the Works page uses. */}
+                                  <span class="row-kind" style={`--cat: ${w.color}`}>{w.kind}</span>
+                                  {(w.meta || w.dateLabel) && (
+                                    <span class="row-venue">{[w.meta, w.dateLabel].filter(Boolean).join(' · ')}</span>
+                                  )}
+                                  {w.links.length > 0 && (
+                                    <span class="row-links">
+                                      {w.links.map(l => (
+                                        <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
+                                      ))}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+
+                    {p.roles.length > 0 && (
+                      <div class="roles">
+                        <div class="roles-head">Roles &amp; periods</div>
+                        <ul class="rows">
+                          {p.roles.map(r => (
+                            <li class="row">
+                              <div class="row-main">
+                                <span class="row-title">{r.title}</span>
+                                {r.dateLabel && <div class="row-venue">{r.dateLabel}</div>}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                )}
-
-                {p.works.length > 0 && (
-                  <ul class="rows">
-                    {p.works.map(w => {
-                      const rel = w.external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
-                      return (
-                        <li class="row">
-                          <div class="row-main">
-                            {w.href
-                              ? <a class="row-title" href={w.href} {...rel}>{w.title}</a>
-                              : <span class="row-title">{w.title}</span>}
-                            <div class="authors">
-                              {w.authors.map((a, i) => {
-                                const them = a.slug === p.slug;
-                                const cls = a.isSelf ? 'au au-self' : them ? 'au au-them' : 'au';
-                                // Every OTHER listed person in the line is a link to their
-                                // own dropdown — the script below opens + scrolls + flashes
-                                // it in place. Me, and anyone without a dropdown, stay text.
-                                const jump = !a.isSelf && listedSlugs.has(a.slug);
-                                return (
-                                  <Fragment>
-                                    {i > 0 && <span class="comma">, </span>}
-                                    {jump
-                                      ? <a class={`${cls} au-link`} href={`#p-${a.slug}`} data-jump={a.slug}>{a.name}</a>
-                                      : <span class={cls}>{a.name}</span>}
-                                    {marksFor(w.marks, a.slug).map(m => (
-                                      <sup class="cmark" title={m.note} data-tip={m.note}>{m.symbol}</sup>
-                                    ))}
-                                  </Fragment>
-                                );
-                              })}
-                            </div>
-                            <div class="row-bottom">
-                              {/* What KIND of thing this is — colour-keyed to the
-                                  experience timeline, same swatch the Works page uses. */}
-                              <span class="row-kind" style={`--cat: ${w.color}`}>{w.kind}</span>
-                              {(w.meta || w.dateLabel) && (
-                                <span class="row-venue">{[w.meta, w.dateLabel].filter(Boolean).join(' · ')}</span>
-                              )}
-                              {w.links.length > 0 && (
-                                <span class="row-links">
-                                  {w.links.map(l => (
-                                    <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a>
-                                  ))}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-
-                {p.roles.length > 0 && (
-                  <div class="roles">
-                    <div class="roles-head">Roles &amp; periods</div>
-                    <ul class="rows">
-                      {p.roles.map(r => (
-                        <li class="row">
-                          <div class="row-main">
-                            <span class="row-title">{r.title}</span>
-                            {r.dateLabel && <div class="row-venue">{r.dateLabel}</div>}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </details>
-          </li>
+                </details>
+              </li>
+              ))}
+            </ul>
+          </section>
         ))}
-      </ul>
+      </div>
     )}
 
     <script is:inline>
@@ -151,7 +170,9 @@ const intro = (profile as any).pageMeta?.collaborators
       // flash the collapsed list / jump the scroll).
       (function () {
         try {
-          var list = document.querySelector('.collab-list');
+          // The wrapper around BOTH group lists — every lookup, listener and
+          // restore below spans the two groups as one set of dropdowns.
+          var list = document.querySelector('.collab-groups');
           if (!list) return;
 
           // Analytics is config-gated: BaseLayout only defines window.trackEvent
@@ -355,6 +376,25 @@ const intro = (profile as any).pageMeta?.collaborators
     list-style: none;
     margin: 0;
     padding: 0;
+  }
+
+  /* ── Group split (shared work / roles only) ──────────────────────────────── */
+  /* Quiet subheadings: same uppercase micro-label as the in-dropdown "Roles &
+     periods" head, so the split reads as structure rather than as a new heading
+     level competing with the page title. */
+  .collab-group + .collab-group {
+    margin-top: 1.9rem;
+  }
+
+  .group-head {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 0 0 0.55rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--border);
   }
 
   .collab {
