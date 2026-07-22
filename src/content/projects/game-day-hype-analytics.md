@@ -5,7 +5,7 @@ role: "Data Lead"
 affiliations: ["Georgia Tech Athletic Association"]
 collaborators: ["g-t-ramblin", "buzz-jr"]
 contributions:
-  "*": { note: "Equal contribution", people: ["g-t-ramblin"] }
+  "†": { people: ["g-t-ramblin"] }
 startDate: 2025-03-01
 tags: ["Analytics", "Sports"]
 relationGroups: ["game-day"]
