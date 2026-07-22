@@ -1,0 +1,45 @@
+---
+// A credited name plus the contributor-level marks it carries (* † ‡ § ‖ ¶).
+//
+// The NAME itself is the slot, so every credit line keeps its own markup (a
+// /collaborators deep link on a detail page, a jump link on the collaborators
+// page, bold-unlinked me) and only borrows the superscripts + the hover legend.
+//
+// Hovering the name — or its symbols — opens the item's WHOLE legend, with this
+// person's own rows highlighted and the rest dimmed for context, so a reader
+// never has to hunt down the other symbol's meaning. Wordings are site-wide
+// (src/data/contributionMarks.json); see src/utils/marks.ts.
+//
+// A person carrying no marks renders as the bare slot: no wrapper, no popup.
+import type { MarkInfo } from '../utils/marks';
+
+interface Props {
+  /** The marks THIS person carries (marksFor(map, slug)). */
+  marks?: MarkInfo[];
+  /** The whole item's legend (legendFromMap(map) / legendOf(...)). */
+  legend?: MarkInfo[];
+}
+const { marks = [], legend = [] } = Astro.props;
+
+const rows = legend.filter(l => l.note);
+const own = new Set(marks.map(m => m.symbol));
+// Read out inline for screen readers — the popup is decoration they can't hover.
+const spoken = marks.map(m => m.note || m.symbol).join('; ');
+---
+
+{marks.length === 0 ? <slot /> : (
+  <span class="cperson">
+    <slot />
+    {marks.map(m => <sup class="cmark">{m.symbol}</sup>)}
+    {spoken && <span class="sr-only"> ({spoken})</span>}
+    {rows.length > 0 && (
+      <span class="ctip" aria-hidden="true">
+        {rows.map(l => (
+          <span class:list={['ctip-row', own.has(l.symbol) && 'is-own']}>
+            <span class="ctip-sym">{l.symbol}</span>{l.note}
+          </span>
+        ))}
+      </span>
+    )}
+  </span>
+)}

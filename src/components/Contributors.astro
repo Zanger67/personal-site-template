@@ -11,7 +11,8 @@
 // The line still only appears when the item credits SOMEONE ELSE — a solo work
 // would otherwise render a "Contributors: <me>" line that says nothing.
 import { resolveCredits, collaboratorHref } from '../utils/collaborators';
-import { markMap, marksFor, type Contributions } from '../utils/marks';
+import { markMap, marksFor, legendFromMap, type Contributions } from '../utils/marks';
+import CreditMarks from './CreditMarks.astro';
 
 interface Props {
   /** Heading word — "Contributors" on projects, "Collaborators" on posts. */
@@ -23,6 +24,8 @@ const { label = 'Collaborators', collaborators = [], contributions = null } = As
 
 const people = resolveCredits(collaborators);
 const marks = markMap(contributions);
+// One legend for the whole line — every name's popup shows all of it.
+const legend = legendFromMap(marks);
 const hasOthers = people.some(p => !p.isSelf);
 ---
 
@@ -37,15 +40,12 @@ const hasOthers = people.some(p => !p.isSelf);
       return (
         <Fragment>
           {i > 0 && ', '}
-          {p.isSelf
-            ? <strong class="me">{p.name}</strong>
-            : href
-              ? <a href={href} {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{p.name}</a>
-              : <span>{p.name}</span>}
-          {marksFor(marks, p.slug).map(m => (
-            <sup class="cmark" title={m.note} data-tip={m.note}>{m.symbol}</sup>
-          ))}
-        </Fragment>
+          <CreditMarks marks={marksFor(marks, p.slug)} legend={legend}>
+            {p.isSelf
+              ? <strong class="me">{p.name}</strong>
+              : href
+                ? <a href={href} {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{p.name}</a>
+                : <span>{p.name}</span>}</CreditMarks></Fragment>
       );
     })}
   </p>

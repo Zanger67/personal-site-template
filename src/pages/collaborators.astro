@@ -7,7 +7,8 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { isRouteEnabled } from '@config/site';
 import { getCollaborators } from '../utils/people';
-import { marksFor } from '../utils/marks';
+import { marksFor, legendFromMap } from '../utils/marks';
+import CreditMarks from '../components/CreditMarks.astro';
 import profile from '../data/profile.json';
 
 if (!isRouteEnabled('collaborators')) return Astro.rewrite('/404');
@@ -96,13 +97,10 @@ const intro = (profile as any).pageMeta?.collaborators
                                     return (
                                       <Fragment>
                                         {i > 0 && <span class="comma">, </span>}
-                                        {jump
-                                          ? <a class={`${cls} au-link`} href={`#p-${a.slug}`} data-jump={a.slug}>{a.name}</a>
-                                          : <span class={cls}>{a.name}</span>}
-                                        {marksFor(w.marks, a.slug).map(m => (
-                                          <sup class="cmark" title={m.note} data-tip={m.note}>{m.symbol}</sup>
-                                        ))}
-                                      </Fragment>
+                                        <CreditMarks marks={marksFor(w.marks, a.slug)} legend={legendFromMap(w.marks)}>
+                                          {jump
+                                            ? <a class={`${cls} au-link`} href={`#p-${a.slug}`} data-jump={a.slug}>{a.name}</a>
+                                            : <span class={cls}>{a.name}</span>}</CreditMarks></Fragment>
                                     );
                                   })}
                                 </div>

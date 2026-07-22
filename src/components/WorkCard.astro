@@ -10,6 +10,8 @@
 //   • Every other tab omits `kind`, so "★ Featured" sits in the header row
 //     next to the title (the tab itself already says what the item is).
 import Metrics from './Metrics.astro';
+import CreditMarks from './CreditMarks.astro';
+import { legendOf } from '../utils/marks';
 import { normalizeMetrics, type Metrics as MetricsDict } from '../utils/metrics';
 
 interface WorkLink {
@@ -78,6 +80,9 @@ const {
 
 const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
 const hasMetrics = normalizeMetrics(metrics).length > 0;
+// The item's whole contributor legend, read straight off the credited names —
+// every name's hover popup shows all of it, its own rows highlighted.
+const authorLegend = legendOf(authors.map(a => a.marks));
 ---
 
 <article class="work-card">
@@ -106,15 +111,12 @@ const hasMetrics = normalizeMetrics(metrics).length > 0;
       {authors.map((a, i) => (
         <Fragment>
           {i > 0 && ', '}
-          {a.self
-            ? <strong class="me">{a.name}</strong>
-            : a.href
-              ? <a href={a.href} {...(a.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{a.name}</a>
-              : <span>{a.name}</span>}
-          {(a.marks ?? []).map(m => (
-            <sup class="cmark" title={m.note} data-tip={m.note}>{m.symbol}</sup>
-          ))}
-        </Fragment>
+          <CreditMarks marks={a.marks ?? []} legend={authorLegend}>
+            {a.self
+              ? <strong class="me">{a.name}</strong>
+              : a.href
+                ? <a href={a.href} {...(a.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{a.name}</a>
+                : <span>{a.name}</span>}</CreditMarks></Fragment>
       ))}
     </p>
   )}
