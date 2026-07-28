@@ -22,11 +22,11 @@
   },
   {
     "title": "Crowd Engagement Dynamics at College Football Games: A Longitudinal Study",
-    "authors": ["buzz", "w-r-eck", "a-t-lanta"],
-    "contributions": {
-      "†": { "people": ["buzz", "w-r-eck"] },
-      "*": { "people": ["buzz"] }
-    },
+    "authors": [
+      { "buzz": ["equal-first", "corresponding"] },
+      { "w-r-eck": ["equal-first"] },
+      { "a-t-lanta": ["advisor"] }
+    ],
     "venue": "Proceedings of the International Mascot Conference",
     "date": "2023",
     "role": "Co-author",
