@@ -22,6 +22,7 @@ import relationGroupLabels from '../data/relationGroupLabels.json';
 import { hostLabel, extraLinks, type UrlEntry } from '../utils/links';
 import { normalizeMetrics, type Metrics, type NormalizedMetric } from '../utils/metrics';
 import { resolvePeople, collaboratorHref } from '../utils/collaborators';
+import { peopleRefs, type PersonEntry } from '../utils/marks';
 
 import { withIncoming } from '../utils/incoming';
 import { roleRef } from '../utils/experienceRefs';
@@ -31,8 +32,10 @@ import { roleRef } from '../utils/experienceRefs';
 // page opens + scrolls to them on arrival). Contributor-level marks are deliberately
 // LEFT OFF here: inlineMarkdown's emphasis pass would read a pair of bare "*"s
 // across two names as italics, and it has no superscript to render them properly.
-const pubAuthorLine = (authors: string[]): string =>
-  resolvePeople(authors)
+// Takes the raw `authors` list, whose entries may carry marks inline — peopleRefs
+// drops back to plain references, which is all this line needs.
+const pubAuthorLine = (authors: PersonEntry[]): string =>
+  resolvePeople(peopleRefs(authors))
     .map(a => (a.listed && !a.isSelf ? `[${a.name}](${collaboratorHref(a.slug)})` : a.name))
     .join(', ');
 

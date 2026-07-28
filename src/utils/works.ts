@@ -23,6 +23,7 @@
 import { getCollection } from 'astro:content';
 import { isRouteEnabled } from '@config/site';
 import { resolvePeople } from './collaborators';
+import { peopleRefs, type PersonEntry } from './marks';
 import { roleRef, experienceRefHref } from './experienceRefs';
 import publications from '../data/publications.json';
 import organizations from '../data/organizations.json';
@@ -86,7 +87,9 @@ interface PooledWork extends RelatedItem {
 
 interface Publication {
   title: string;
-  authors: string[];
+  // Plain refs, or { ref: [level, …] } pairs carrying marks — peopleRefs() below
+  // reads either (this list only needs the names).
+  authors: PersonEntry[];
   venue: string;
   date: string;
   role?: string;
@@ -131,7 +134,7 @@ async function allWorks(): Promise<PooledWork[]> {
       dateLabel: fmtPubDate(String(pub.date)),
       // `authors` are people-registry refs (slugs) — resolve to display names,
       // mirroring the Works card's publication description.
-      description: resolvePeople(pub.authors).map(a => a.name).join(', ') || null,
+      description: resolvePeople(peopleRefs(pub.authors)).map(a => a.name).join(', ') || null,
       color: KIND_CAT.Publication,
       sortDate: new Date(pub.date).valueOf(),
       relationGroups: pub.relationGroups ?? [],

@@ -10,6 +10,7 @@
 // memberOf — around the actual Organization), so each role keeps its dates.
 
 import { resolvePeople } from './collaborators';
+import { peopleRefs } from './marks';
 
 interface ProjectLike {
   id: string;
@@ -139,7 +140,7 @@ export function buildPersonGraph(input: GraphInput): object {
   });
 
   const pubNodes = publications.map((pub: any) => {
-    const people = resolvePeople(pub.authors);
+    const people = resolvePeople(peopleRefs(pub.authors));
     const authorValue = people.length
       ? people.map((a) => ({ '@type': 'Person', name: a.name, ...(a.url ? { url: a.url } : {}) }))
       : author;

@@ -27,14 +27,17 @@ const metricValue = z.union([
 ]);
 
 // Contributor-level marks — the item's own legend for the conventional footnote
-// symbols (* † ‡ § ‖ ¶), keyed BY SYMBOL. Each entry names the people carrying
-// that mark and the `note` explaining it, which surfaces as a hover popup beside
-// the superscript. `people` are ordinary person references (slug or written name).
+// symbols († ‡ § †† ‡‡ §§ * ¶), keyed BY LEVEL SLUG. The slug picks its symbol and
+// wording out of src/data/contributionMarks.json, so an entry only names the people
+// carrying that level; `note` optionally overrides the standard wording, and both
+// surface as a hover popup beside the superscript. `people` are ordinary person
+// references (slug or written name).
 //   contributions:
-//     "*": { note: "Equal contribution",   people: ["buzz", "w-r-eck"] }
-//     "†": { note: "Corresponding author", people: ["buzz"] }
-// Kept separate from `collaborators`/`authors` so those stay plain slug lists.
-// See src/utils/marks.ts.
+//     equal-first:   { note: null, people: ["buzz", "w-r-eck"] }
+//     corresponding: { note: null, people: ["buzz"] }
+// Kept separate from `collaborators` so that list stays a plain slug array. (A
+// publication's `authors` may instead write the same marks INLINE on a name, as a
+// { ref: [level, …] } entry — the two forms merge. See src/utils/marks.ts.)
 const contribution = z.object({
   note: z.string().nullable().optional(),
   people: z.array(z.string()).optional().default([]),

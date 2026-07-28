@@ -6,7 +6,7 @@ import { getCollection } from 'astro:content';
 import { getReadingTime } from '../utils/reading-time';
 import { extraLinks, type UrlEntry, type Link as WorkLink } from '../utils/links';
 import { resolvePeople, collaboratorHref } from '../utils/collaborators';
-import { markMap, marksFor, type Contributions } from '../utils/marks';
+import { peopleMarks, marksFor, type Contributions, type PersonEntry } from '../utils/marks';
 import type { Metrics } from '../utils/metrics';
 import { KIND_CAT, fmtMonthYear, fmtFullDate, fmtPubDate } from '../utils/works';
 import profile from '../data/profile.json';
@@ -67,7 +67,9 @@ interface WorkItem {
 
 interface Publication {
   title: string;
-  authors: string[];
+  // Author refs, each optionally carrying its marks inline as a
+  // { ref: [level, …] } pair — see PersonEntry in src/utils/marks.ts.
+  authors: PersonEntry[];
   venue: string;
   date: string;
   // Authorship/contributor role (e.g. "Lead author") — folds into the subtitle.
@@ -80,7 +82,8 @@ interface Publication {
   tags?: string[];
   metrics?: Metrics;
   main?: boolean;
-  // Contributor-level marks for `authors` (see src/utils/marks.ts).
+  // Contributor-level marks for `authors`, as a standalone legend — the
+  // alternative to writing them inline on the names (see src/utils/marks.ts).
   contributions?: Contributions;
 }
 const pubData = publications as Publication[];
@@ -129,8 +132,8 @@ const pubItems: WorkItem[] = (isRouteEnabled('publications') ? pubData : [])
     // that links to their /collaborators dropdown when they have one (falling back
     // to their own site), carrying any contributor-level marks this paper defines.
     authors: (() => {
-      const marks = markMap(pub.contributions);
-      return resolvePeople(pub.authors).map(a => ({
+      const { refs, marks } = peopleMarks(pub.authors, pub.contributions);
+      return resolvePeople(refs).map(a => ({
         name: a.name,
         href: a.isSelf ? null : a.listed ? collaboratorHref(a.slug) : a.url,
         external: !a.isSelf && !a.listed && !!a.url,

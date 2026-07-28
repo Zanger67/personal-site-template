@@ -1,10 +1,10 @@
 {
-  "†": "Equal contribution (first)",
-  "‡": "Equal contribution (second)",
-  "§": "Equal contribution (third)",
-  "††": "Equal contribution (fourth)",
-  "‡‡": "Equal contribution (fifth)",
-  "§§": "Equal contribution (sixth)",
-  "*": "Corresponding author",
-  "¶": "Advisor"
+  "equal-first": { "symbol": "†", "note": "Equal contribution (first)" },
+  "equal-second": { "symbol": "‡", "note": "Equal contribution (second)" },
+  "equal-third": { "symbol": "§", "note": "Equal contribution (third)" },
+  "equal-fourth": { "symbol": "††", "note": "Equal contribution (fourth)" },
+  "equal-fifth": { "symbol": "‡‡", "note": "Equal contribution (fifth)" },
+  "equal-sixth": { "symbol": "§§", "note": "Equal contribution (sixth)" },
+  "corresponding": { "symbol": "*", "note": "Corresponding author" },
+  "advisor": { "symbol": "¶", "note": "Advisor" }
 }

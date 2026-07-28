@@ -34,7 +34,7 @@ import { isRouteEnabled } from '@config/site';
 import { slugify, fallbackName, isSelfSlug } from './collaborators';
 import { KIND_CAT, fmtMonthYear, fmtFullDate, fmtPubDate, type WorkKind } from './works';
 import { extraLinks, knownHostLabel, type Link } from './links';
-import { markMap, type MarkMap } from './marks';
+import { markMap, peopleMarks, type MarkMap } from './marks';
 import registryData from '../data/collaborators.json';
 import organizations from '../data/organizations.json';
 import affiliations from '../data/affiliations.json';
@@ -274,6 +274,9 @@ async function collectWorks(): Promise<PersonWork[]> {
   if (isRouteEnabled('publications')) {
     for (const pub of publications as any[]) {
       const yr = yearOf(String(pub.date));
+      // `authors` may write a name's marks inline ({ ref: [level, …] }) — take the
+      // plain refs out, and read the legend from BOTH there and `contributions`.
+      const { refs: authorRefs, marks } = peopleMarks(pub.authors, pub.contributions);
       out.push({
         kind: 'Publication',
         title: pub.title,
@@ -283,10 +286,10 @@ async function collectWorks(): Promise<PersonWork[]> {
         meta: pub.venue ?? null,   // venue only — no authorship role ("Lead author"/…)
         color: KIND_CAT.Publication,
         sortDate: new Date(pub.date).valueOf(),
-        authors: (pub.authors ?? []).map(toAuthor),   // authors already include self
+        authors: authorRefs.map(toAuthor),            // authors already include self
         links: dedupeLinks([...extraLinks(pub.urls), ...extraLinks(pub.features)]),
         years: yr == null ? [] : [yr],
-        marks: markMap(pub.contributions),
+        marks,
       });
     }
   }
