@@ -5,6 +5,7 @@ import { showHomeSection, isRouteEnabled, friendsFirstNameOnly, enabledFooterLin
 import { getCollection, getEntry, render } from 'astro:content';
 import { resolvePeople, collaboratorHref } from '../utils/collaborators';
 import { withIncoming } from '../utils/incoming';
+import { fmtFullDate } from '../utils/works';
 import profile from '../data/profile.json';
 import affiliations from '../data/affiliations.json';
 import publications from '../data/publications.json';
@@ -225,7 +226,7 @@ const personGraph = buildPersonGraph({
             {posts.map(post => (
               <li>
                 <a href={`${base}/blog/${post.id}`}>{post.data.title}</a>
-                <span class="muted"> &mdash; {post.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                <span class="muted"> &mdash; {fmtFullDate(post.data.date)}</span>
               </li>
             ))}
           </ul>

@@ -34,10 +34,13 @@ interface Props {
 
 const { title, date, description, readingTime, role, affiliations = [], collaborators = [], contributions = null, urls = [], features = [], metrics = null, related = [], relatedLabel = 'Related' } = Astro.props;
 const links = [...extraLinks(urls), ...extraLinks(features)];
+// UTC-anchored for the same reason as the utils/works formatters — a UTC-midnight
+// content date would otherwise render a day early on a build machine behind UTC.
 const formattedDate = date.toLocaleDateString('en-US', {
   year: 'numeric',
   month: 'long',
   day: 'numeric',
+  timeZone: 'UTC',
 });
 ---
 

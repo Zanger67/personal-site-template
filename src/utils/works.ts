@@ -41,17 +41,25 @@ export const KIND_CAT: Record<WorkKind, string> = {
   Blog: '#3aa6ad',        // timeline 'misc'
 };
 
+// Every formatter here is UTC-ANCHORED. Content-collection dates (z.coerce.date)
+// arrive as UTC-midnight Date objects, so formatting them in the build machine's
+// local zone rolls them back a day — and, for the `YYYY-MM-01` values these items
+// use, a whole MONTH — anywhere behind UTC: a July-only project reads "Jun 2024",
+// a Feb-only one "Jan 2024 – Feb 2024". Pinning timeZone to UTC reads back exactly
+// the parts that were authored, whatever zone the build runs in. (experience.astro
+// solves the same pitfall the other way, rebuilding UTC parts into a local Date in
+// parseDate, because its dates come from JSON strings too.)
 export const fmtMonthYear = (d: Date) =>
-  d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 export const fmtFullDate = (d: Date) =>
-  d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 // Publication dates are loose strings — "YYYY", "YYYY-MM", or "YYYY-MM-DD".
 // Year-only passes through as-is; anything month-precise renders "Mon YYYY". Parts
-// build a LOCAL Date so a "2025-06" value can't roll back to May in timezones
-// behind UTC (the pitfall parseDate warns about in experience.astro).
+// build a UTC Date to match the formatters above, so a "2025-06" value can neither
+// roll back to May (zones behind UTC) nor forward to July (zones ahead).
 export const fmtPubDate = (v: string): string => {
   const [y, m] = String(v).split('-');
-  return m ? fmtMonthYear(new Date(parseInt(y), parseInt(m) - 1)) : y;
+  return m ? fmtMonthYear(new Date(Date.UTC(parseInt(y), parseInt(m) - 1))) : y;
 };
 
 // Same helper the timeline drawer uses for its "Related (…)" header: map the
