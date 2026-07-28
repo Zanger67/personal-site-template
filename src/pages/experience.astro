@@ -26,6 +26,7 @@ import { peopleRefs, type PersonEntry } from '../utils/marks';
 
 import { withIncoming } from '../utils/incoming';
 import { roleRef } from '../utils/experienceRefs';
+import { joinRange, fmtMonthRange } from '../utils/works';
 
 // The drawer renders descriptions through inlineMarkdown, so a credited person who
 // has a /collaborators dropdown is emitted as a markdown link straight to it (the
@@ -69,7 +70,8 @@ function dateRange(start: string | null, end: string | null): string | null {
   if (!start && !end) return null;
   if (start && !end) return `${formatDate(start)} – Present`;
   if (!start && end) return `... – ${formatDate(end)}`;
-  return `${formatDate(start)} – ${formatDate(end)}`;
+  // joinRange collapses a same-month span to the single month (see utils/works).
+  return joinRange(formatDate(start), formatDate(end));
 }
 
 // "urls" / "features" — the listed extra-links formats. ANY timeline entry
@@ -432,7 +434,7 @@ function mkItem(o: ItemOpts): Item | null {
     // Inclusive end: the bar covers through the named end month (see exclusiveEnd).
     end = ex ? ex.getTime() : null;
     endMonthNum = ex ? monthNum(ex) : null;
-    dateLabel = e ? `${fmtMonth(s)} – ${fmtMonth(e)}` : `${fmtMonth(s)} – Present`;
+    dateLabel = e ? joinRange(fmtMonth(s), fmtMonth(e)) : `${fmtMonth(s)} – Present`;
   }
   // Incoming entries collapse to a single column at their start month. A known end
   // date still reads in the drawer (a planned span stays informative), but an
@@ -680,15 +682,11 @@ const items: Item[] = [
 // (the same destination as the Works page), so projects stay a single source of
 // truth. Sorted present-first, then newest end, then newest start (the site-wide
 // project order). Falls back to the external URL if project pages are disabled.
-const projDate = (d: Date | null): string | null =>
-  d ? d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
 const projectListItems = projects
   .map(p => ({
     title: p.data.title,
     href: projectsEnabled ? `${base}/projects/${p.id}` : (p.data.url ?? p.data.repo ?? null),
-    dateLabel: p.data.endDate
-      ? `${projDate(p.data.startDate)} – ${projDate(p.data.endDate)}`
-      : `${projDate(p.data.startDate)} – Present`,
+    dateLabel: fmtMonthRange(p.data.startDate, p.data.endDate),
     endSort: p.data.endDate ? p.data.endDate.valueOf() : Number.MAX_SAFE_INTEGER,
     startSort: p.data.startDate.valueOf(),
   }))

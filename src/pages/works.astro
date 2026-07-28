@@ -8,7 +8,7 @@ import { extraLinks, type UrlEntry, type Link as WorkLink } from '../utils/links
 import { resolvePeople, collaboratorHref } from '../utils/collaborators';
 import { peopleMarks, marksFor, type Contributions, type PersonEntry } from '../utils/marks';
 import type { Metrics } from '../utils/metrics';
-import { KIND_CAT, fmtMonthYear, fmtFullDate, fmtPubDate } from '../utils/works';
+import { KIND_CAT, fmtMonthRange, fmtFullDate, fmtPubDate } from '../utils/works';
 import profile from '../data/profile.json';
 import publications from '../data/publications.json';
 
@@ -24,7 +24,7 @@ const byMainThenDate = (
   b: { main: boolean; sortDate: number },
 ) => (Number(b.main) - Number(a.main)) || (b.sortDate - a.sortDate);
 
-// Date formatters (fmtMonthYear/fmtFullDate/fmtPubDate) and the kind→colour map
+// Date formatters (fmtMonthRange/fmtFullDate/fmtPubDate) and the kind→colour map
 // (KIND_CAT) are shared with the detail-page "Related" section — see ../utils/works.
 
 // The "urls"/"features" listed-links formats and their label logic are shared
@@ -99,9 +99,7 @@ const projectItems: WorkItem[] = (isRouteEnabled('projects') ? await getCollecti
     title: entry.data.title,
     href: `${base}/projects/${entry.id}`,
     external: false,
-    dateLabel: entry.data.endDate
-      ? `${fmtMonthYear(entry.data.startDate)} – ${fmtMonthYear(entry.data.endDate)}`
-      : `${fmtMonthYear(entry.data.startDate)} – Present`,
+    dateLabel: fmtMonthRange(entry.data.startDate, entry.data.endDate),
     description: entry.data.description,
     subtitle: entry.data.role,
     affiliations: entry.data.affiliations,

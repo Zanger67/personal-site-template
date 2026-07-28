@@ -62,6 +62,20 @@ export const fmtPubDate = (v: string): string => {
   return m ? fmtMonthYear(new Date(Date.UTC(parseInt(y), parseInt(m) - 1))) : y;
 };
 
+// Join two already-formatted endpoints into a display range, COLLAPSING a range
+// whose endpoints render identically to the single label: something that started
+// and finished inside one month reads "Jul 2024", not "Jul 2024 – Jul 2024".
+// Purely a display rule — the underlying dates are untouched, so sorting and the
+// timeline bars still see the real span. Shared by every range on the site (see
+// fmtMonthRange below, fmtRoleRange, people.ts fmtRange, experience.astro).
+export const joinRange = (startLabel: string, endLabel: string): string =>
+  startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`;
+
+// Date pair → display range for the month-granular items (projects). A missing
+// end reads "– Present"; equal endpoints collapse via joinRange.
+export const fmtMonthRange = (start: Date, end?: Date | null): string =>
+  end ? joinRange(fmtMonthYear(start), fmtMonthYear(end)) : `${fmtMonthYear(start)} – Present`;
+
 // Same helper the timeline drawer uses for its "Related (…)" header: map the
 // current item's relation-group slugs through relationGroupLabels.json into a
 // parenthetical suffix (e.g. ["game-day"] → " (Game Day)"). Empty → "".
@@ -120,9 +134,7 @@ async function allWorks(): Promise<PooledWork[]> {
       title: entry.data.title,
       href: `${base}/projects/${entry.id}`,
       external: false,
-      dateLabel: entry.data.endDate
-        ? `${fmtMonthYear(entry.data.startDate)} – ${fmtMonthYear(entry.data.endDate)}`
-        : `${fmtMonthYear(entry.data.startDate)} – Present`,
+      dateLabel: fmtMonthRange(entry.data.startDate, entry.data.endDate),
       description: entry.data.description,
       color: KIND_CAT.Project,
       sortDate: entry.data.startDate.valueOf(),
@@ -212,7 +224,7 @@ const fmtRoleRange = (start?: string | null, end?: string | null): string => {
   if (!start && !end) return '';
   if (start && !end) return `${fmtPubDate(start)} – Present`;
   if (!start && end) return fmtPubDate(end);
-  return `${fmtPubDate(start!)} – ${fmtPubDate(end!)}`;
+  return joinRange(fmtPubDate(start!), fmtPubDate(end!));
 };
 // Loose date → ms, for sorting roles into the same chronology as works (which sort
 // on a JS Date valueOf). Year-only lands on January; missing → epoch (sorts last).

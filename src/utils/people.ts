@@ -32,7 +32,7 @@
 import { getCollection } from 'astro:content';
 import { isRouteEnabled } from '@config/site';
 import { slugify, fallbackName, isSelfSlug } from './collaborators';
-import { KIND_CAT, fmtMonthYear, fmtFullDate, fmtPubDate, type WorkKind } from './works';
+import { KIND_CAT, fmtFullDate, fmtPubDate, fmtMonthRange, joinRange, type WorkKind } from './works';
 import { extraLinks, knownHostLabel, type Link } from './links';
 import { markMap, peopleMarks, type MarkMap } from './marks';
 import registryData from '../data/collaborators.json';
@@ -136,7 +136,7 @@ const fmtRange = (start?: string | null, end?: string | null): string => {
   if (!start && !end) return '';
   if (start && !end) return `${fmtPubDate(start)} – Present`;
   if (!start && end) return fmtPubDate(end);
-  return `${fmtPubDate(start!)} – ${fmtPubDate(end!)}`;
+  return joinRange(fmtPubDate(start!), fmtPubDate(end!));
 };
 
 // ── Display shapes ──────────────────────────────────────────────────────────
@@ -250,9 +250,7 @@ async function collectWorks(): Promise<PersonWork[]> {
         title: d.title,
         href: `${base}/projects/${e.id}`,
         external: false,
-        dateLabel: d.endDate
-          ? `${fmtMonthYear(d.startDate)} – ${fmtMonthYear(d.endDate)}`
-          : `${fmtMonthYear(d.startDate)} – Present`,
+        dateLabel: fmtMonthRange(d.startDate, d.endDate),
         meta: null,             // no role ("Data Lead"/…) on the collaborators list
         color: KIND_CAT.Project,
         sortDate: d.startDate.valueOf(),
