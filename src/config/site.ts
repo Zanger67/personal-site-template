@@ -111,6 +111,20 @@ export function friendsFirstNameOnly(): boolean {
   return friends.firstNameOnly;
 }
 
+// Homepage sidebar "Affiliations" block display options.
+export const affiliationsBlock = {
+  // Split the opted-in rows by whether they have ended: still-running rows
+  // lead as "Affiliations (current)", finished ones follow in a separate
+  // "Affiliations (past)" block. Flip off to keep every opted-in row — ended
+  // or not — in the single "Affiliations (current)" list.
+  splitPast: true,
+} as const;
+
+/** Should ended homepage affiliation rows split into their own "past" block? */
+export function splitPastAffiliations(): boolean {
+  return affiliationsBlock.splitPast;
+}
+
 // Experience-page timeline behaviour.
 export const timeline = {
   // Future-dated entries — whose start MONTH is later than the current month —

@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NorthAmericaMap from '../components/NorthAmericaMap.astro';
 import AffiliationGroups from '../components/AffiliationGroups.astro';
-import { showHomeSection, isRouteEnabled, friendsFirstNameOnly, enabledFooterLinks } from '@config/site';
+import { showHomeSection, isRouteEnabled, friendsFirstNameOnly, splitPastAffiliations, enabledFooterLinks } from '@config/site';
 import { getCollection, getEntry, render } from 'astro:content';
 import { resolvePeople, collaboratorHref, personWebsite, personLinkedIn } from '../utils/collaborators';
 import { withIncoming } from '../utils/incoming';
@@ -32,8 +32,10 @@ const profileShape = profile.profileShape as 'circle' | 'rectangle';
 // helper — so a homepage-featured role that hasn't begun reads the same way.
 // The opted-in rows then split into two blocks by whether they have FINISHED:
 // still-running rows head the sidebar as "Affiliations (current)", ended ones
-// fall into the "Affiliations (past)" disclosure below, closed by default. The
-// opt-in is the same either way — `homepage: false` keeps a row off both.
+// follow under a plain "Affiliations (past)" heading — always visible, no
+// disclosure. The split itself is a config switch (`splitPastAffiliations`);
+// with it off every opted-in row stays in the "current" list. The opt-in is
+// the same either way — `homepage: false` keeps a row off both.
 interface AffilRole { role: string; roleDetail?: string; start?: string | null; end?: string | null; homepage?: boolean; homepage_org_name?: string; }
 interface AffilOrg {
   organization: string;
@@ -53,8 +55,10 @@ function monthIdx(d?: string | null): number {
 }
 const nowMonthIdx = new Date().getFullYear() * 12 + new Date().getMonth();
 // Past = ended before this month. An open-ended row, or one ending in the
-// current month, is still current.
-const hasEnded = (end?: string | null): boolean => monthIdx(end) > 0 && monthIdx(end) < nowMonthIdx;
+// current month, is still current. With the splitPast switch off, nothing
+// classifies as past — every opted-in row stays in the "current" block.
+const hasEnded = (end?: string | null): boolean =>
+  splitPastAffiliations() && monthIdx(end) > 0 && monthIdx(end) < nowMonthIdx;
 
 // Every org contributing at least one homepage row of the requested kind, with
 // just those rows. An org with both a running and a finished homepage row is
@@ -164,15 +168,10 @@ const personGraph = buildPersonGraph({
             </Fragment>
           )}
           {pastGroups.length > 0 && (
-            <details class="aff-past">
-              <summary>
-                <span class="aff-past-label">Affiliations (past)</span>
-                <span class="chev" aria-hidden="true"></span>
-              </summary>
-              <div class="aff-past-body">
-                <AffiliationGroups groups={pastGroups} />
-              </div>
-            </details>
+            <Fragment>
+              <h3 class="aff-past-heading">Affiliations (past)</h3>
+              <AffiliationGroups groups={pastGroups} />
+            </Fragment>
           )}
           {isRouteEnabled('experience') && <a href={`${base}/experience`} class="view-all">All experience &rarr;</a>}
         </div>
@@ -377,54 +376,10 @@ const personGraph = buildPersonGraph({
     margin-bottom: 0.5rem;
   }
 
-  /* Past affiliations: the same tree, folded behind a disclosure so the sidebar
-     leads with what's current. Closed by default; the rows sit in the markup
-     either way, so crawlers and Ctrl-F still see them. */
-  .aff-past {
+  /* Past affiliations: the same tree under its own heading, spaced off the
+     current block so the sidebar still leads with what's current. */
+  .aff-past-heading {
     margin-top: 0.9rem;
-  }
-
-  .aff-past summary {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    width: fit-content;
-    cursor: pointer;
-    list-style: none;               /* hide the native marker (Firefox) */
-  }
-
-  .aff-past summary::-webkit-details-marker { display: none; }
-
-  /* Reads as a sibling of the section's h3 without being a second heading. */
-  .aff-past-label {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-muted);
-  }
-
-  .aff-past summary:hover .aff-past-label,
-  .aff-past summary:hover .chev {
-    color: var(--text);
-    border-color: var(--text);
-  }
-
-  .chev {
-    width: 0.4rem;
-    height: 0.4rem;
-    border-right: 1.5px solid var(--text-muted);
-    border-bottom: 1.5px solid var(--text-muted);
-    transform: rotate(-45deg);
-    transition: transform 0.15s ease;
-    flex: none;
-  }
-
-  .aff-past[open] .chev {
-    transform: rotate(45deg);
-  }
-
-  .aff-past-body {
-    margin-top: 0.5rem;
   }
 
   .view-all {
