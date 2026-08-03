@@ -15,6 +15,7 @@
 import { isRouteEnabled } from '@config/site';
 import collaborators from '../data/collaborators.json';
 import profile from '../data/profile.json';
+import { knownHostLabel } from './links';
 
 export interface CollaboratorInfo {
   'display-name'?: string | null;
@@ -109,6 +110,28 @@ export function resolvePerson(ref: string): Person {
     // route is switched off, so no caller can emit a link into a 404.
     listed: info?.listed === true && isRouteEnabled('collaborators'),
   };
+}
+
+// Outward-link picks — used where a name should link OUT to the person's own
+// presence rather than to their /collaborators dropdown (the homepage friends
+// line). Both lean on knownHostLabel so the `urls` label spelling never matters.
+//
+// A person's own WEBSITE: their primary `url` when it isn't a known platform
+// (a LinkedIn/GitHub primary is not a personal site), else a `urls` entry
+// explicitly labelled "Website".
+export function personWebsite(p: Person): string | null {
+  if (p.url && !knownHostLabel(p.url)) return p.url;
+  const site = Object.entries(p.urls).find(
+    ([label, url]) => !!url && label.trim().toLowerCase() === 'website',
+  );
+  return site ? site[1] : null;
+}
+
+// A person's LINKEDIN: the primary `url` or any `urls` entry pointing at
+// linkedin.com — matched by host, not by the entry's label.
+export function personLinkedIn(p: Person): string | null {
+  if (p.url && knownHostLabel(p.url) === 'LinkedIn') return p.url;
+  return Object.values(p.urls).find(url => !!url && knownHostLabel(url) === 'LinkedIn') ?? null;
 }
 
 // The credit line for an item, ME INCLUDED. A work's `collaborators` list normally

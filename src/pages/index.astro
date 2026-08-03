@@ -4,7 +4,7 @@ import NorthAmericaMap from '../components/NorthAmericaMap.astro';
 import AffiliationGroups from '../components/AffiliationGroups.astro';
 import { showHomeSection, isRouteEnabled, friendsFirstNameOnly, enabledFooterLinks } from '@config/site';
 import { getCollection, getEntry, render } from 'astro:content';
-import { resolvePeople, collaboratorHref } from '../utils/collaborators';
+import { resolvePeople, collaboratorHref, personWebsite, personLinkedIn } from '../utils/collaborators';
 import { withIncoming } from '../utils/incoming';
 import { fmtFullDate } from '../utils/works';
 import profile from '../data/profile.json';
@@ -271,15 +271,16 @@ const personGraph = buildPersonGraph({
             <ul class="inline-list">
               {/* Friends are name references into the shared people registry
                   (src/data/collaborators.json) — same source projects/publications
-                  resolve names from. A registered name with a `url` links out;
-                  an unknown name (or one without a url) renders as plain text. */}
+                  resolve names from. A friend links OUT by preference: their own
+                  website first, else their LinkedIn. Only someone with neither
+                  falls back to their /collaborators dropdown (which opens them,
+                  scrolls and flashes on arrival), then to any other primary
+                  `url`; an unknown name renders as plain text. */}
               {resolvePeople(profile.friends).map(friend => {
                 const label = friendsFirstNameOnly() ? friend.name.split(' ')[0] : friend.name;
-                // A friend who has a /collaborators dropdown links THERE — the page
-                // opens them, scrolls to them and flashes a highlight on arrival.
-                // Everyone else keeps linking straight out to their own site.
-                const href = friend.listed ? collaboratorHref(friend.slug) : friend.url;
-                const external = !friend.listed && !!friend.url;
+                const out = personWebsite(friend) ?? personLinkedIn(friend);
+                const href = out ?? (friend.listed ? collaboratorHref(friend.slug) : friend.url);
+                const external = !!out || (!friend.listed && !!friend.url);
                 return (
                   <li>
                     {href
