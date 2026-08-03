@@ -27,8 +27,8 @@
     "location": null,
     "membership": { "start": "2018-01", "end": null },
     "roles": [
-      { "role": "Chair", "start": "2021-01", "end": "2023-05" },
-      { "role": "Representative", "start": "2018-01", "end": "2020-12" }
+      { "role": "Chair", "start": "2021-01", "end": "2023-05", "homepage": true, "homepage_org_name": "ACC Mascot Council" },
+      { "role": "Representative", "start": "2018-01", "end": "2020-12", "homepage": true }
     ]
   },
   {
@@ -57,7 +57,7 @@
     "location": null,
     "membership": { "start": "2010-03", "end": null },
     "roles": [
-      { "role": "Brand Mascot Partner", "start": "2010-03", "end": "2015-12" }
+      { "role": "Brand Mascot Partner", "start": "2010-03", "end": "2015-12", "homepage": true }
     ]
   }
 ]

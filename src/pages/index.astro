@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NorthAmericaMap from '../components/NorthAmericaMap.astro';
+import AffiliationGroups from '../components/AffiliationGroups.astro';
 import { showHomeSection, isRouteEnabled, friendsFirstNameOnly, enabledFooterLinks } from '@config/site';
 import { getCollection, getEntry, render } from 'astro:content';
 import { resolvePeople, collaboratorHref } from '../utils/collaborators';
@@ -29,28 +30,60 @@ const profileShape = profile.profileShape as 'circle' | 'rectangle';
 // A future-dated role/membership (start month later than now) is tagged
 // "(incoming)" here just as on the experience page, via the shared withIncoming
 // helper — so a homepage-featured role that hasn't begun reads the same way.
-interface AffilRole { role: string; roleDetail?: string; start?: string | null; homepage?: boolean; homepage_org_name?: string; }
+// The opted-in rows then split into two blocks by whether they have FINISHED:
+// still-running rows head the sidebar as "Affiliations (current)", ended ones
+// fall into the "Affiliations (past)" disclosure below, closed by default. The
+// opt-in is the same either way — `homepage: false` keeps a row off both.
+interface AffilRole { role: string; roleDetail?: string; start?: string | null; end?: string | null; homepage?: boolean; homepage_org_name?: string; }
 interface AffilOrg {
   organization: string;
   url?: string | null;
-  membership?: { start?: string | null; homepage?: boolean };
+  membership?: { start?: string | null; end?: string | null; homepage?: boolean };
   roles?: AffilRole[];
 }
 const affilOrgs = affiliations as AffilOrg[];
-const currentGroups = affilOrgs
-  .map(o => {
-    const homepageRoles = (o.roles ?? []).filter(r => r.homepage);
-    const homepageOrgName = homepageRoles.find(r => r.homepage_org_name)?.homepage_org_name;
-    return {
-      entity: homepageOrgName ?? o.organization,
-      url: o.url ?? null,
-      roles: [
-        ...homepageRoles.map(r => withIncoming(r.roleDetail ?? r.role, r.start)),
-        ...(o.membership?.homepage ? [withIncoming('Member', o.membership.start)] : []),
-      ],
-    };
-  })
-  .filter(g => g.roles.length > 0);
+
+// Month-granular comparison on the raw YYYY-MM / YYYY strings (as in
+// utils/incoming.ts), so no Date parsing of the source data is needed. 0 stands
+// for "no end", which sorts last and never reads as past.
+function monthIdx(d?: string | null): number {
+  if (!d) return 0;
+  const [y, m] = d.split('-').map(Number);
+  return Number.isFinite(y) ? y * 12 + (Number.isFinite(m) ? m - 1 : 0) : 0;
+}
+const nowMonthIdx = new Date().getFullYear() * 12 + new Date().getMonth();
+// Past = ended before this month. An open-ended row, or one ending in the
+// current month, is still current.
+const hasEnded = (end?: string | null): boolean => monthIdx(end) > 0 && monthIdx(end) < nowMonthIdx;
+
+// Every org contributing at least one homepage row of the requested kind, with
+// just those rows. An org with both a running and a finished homepage row is
+// listed in both blocks, each showing only its own rows.
+function homepageGroups(want: 'current' | 'past') {
+  return affilOrgs
+    .map(o => {
+      const homepageRoles = (o.roles ?? []).filter(r => r.homepage);
+      const homepageOrgName = homepageRoles.find(r => r.homepage_org_name)?.homepage_org_name;
+      const rows = [
+        ...homepageRoles
+          .filter(r => hasEnded(r.end) === (want === 'past'))
+          .map(r => ({ label: withIncoming(r.roleDetail ?? r.role, r.start), end: r.end })),
+        ...(o.membership?.homepage && hasEnded(o.membership.end) === (want === 'past')
+          ? [{ label: withIncoming('Member', o.membership.start), end: o.membership.end }]
+          : []),
+      ];
+      return {
+        entity: homepageOrgName ?? o.organization,
+        url: o.url ?? null,
+        roles: rows.map(r => r.label),
+        latestEnd: Math.max(0, ...rows.map(r => monthIdx(r.end))),
+      };
+    })
+    .filter(g => g.roles.length > 0);
+}
+// Current keeps the data's own order; past reads most-recently-ended first.
+const currentGroups = homepageGroups('current');
+const pastGroups = homepageGroups('past').sort((a, b) => b.latestEnd - a.latestEnd);
 
 const posts = (await getCollection('blog'))
   .filter(post => !post.data.draft)
@@ -122,30 +155,25 @@ const personGraph = buildPersonGraph({
         </div>
       )}
 
-      {showHomeSection('affiliations') && currentGroups.length > 0 && (
+      {showHomeSection('affiliations') && (currentGroups.length > 0 || pastGroups.length > 0) && (
         <div class="sidebar-section">
-          <h3>Affiliations (current)</h3>
-          <div class="aff-groups">
-            {currentGroups.map(group => (
-              <div class="aff-group">
-                <div class="aff-entity">
-                  {group.url
-                    ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
-                    : group.entity}
-                </div>
-                {group.roles.map((role, i) => {
-                  const isLast = i === group.roles.length - 1;
-                  const glyph = isLast ? '└' : '├';
-                  return (
-                    <div class="aff-role-row">
-                      <span class="bracket">{glyph}</span>
-                      <span class="aff-role">{role}</span>
-                    </div>
-                  );
-                })}
+          {currentGroups.length > 0 && (
+            <Fragment>
+              <h3>Affiliations (current)</h3>
+              <AffiliationGroups groups={currentGroups} />
+            </Fragment>
+          )}
+          {pastGroups.length > 0 && (
+            <details class="aff-past">
+              <summary>
+                <span class="aff-past-label">Affiliations (past)</span>
+                <span class="chev" aria-hidden="true"></span>
+              </summary>
+              <div class="aff-past-body">
+                <AffiliationGroups groups={pastGroups} />
               </div>
-            ))}
-          </div>
+            </details>
+          )}
           {isRouteEnabled('experience') && <a href={`${base}/experience`} class="view-all">All experience &rarr;</a>}
         </div>
       )}
@@ -348,37 +376,54 @@ const personGraph = buildPersonGraph({
     margin-bottom: 0.5rem;
   }
 
-  .aff-groups {
+  /* Past affiliations: the same tree, folded behind a disclosure so the sidebar
+     leads with what's current. Closed by default; the rows sit in the markup
+     either way, so crawlers and Ctrl-F still see them. */
+  .aff-past {
+    margin-top: 0.9rem;
+  }
+
+  .aff-past summary {
     display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    align-items: center;
+    gap: 0.35rem;
+    width: fit-content;
+    cursor: pointer;
+    list-style: none;               /* hide the native marker (Firefox) */
   }
 
-  .aff-entity {
-    font-size: 0.82rem;
-    font-weight: 500;
-    line-height: 1.4;
-  }
+  .aff-past summary::-webkit-details-marker { display: none; }
 
-  .aff-role-row {
-    display: flex;
-    align-items: baseline;
-    padding: 0.05rem 0;
-  }
-
-
-  .bracket {
-    font-family: monospace;
-    color: var(--text-muted);
-    width: 1rem;
-    flex-shrink: 0;
-    user-select: none;
+  /* Reads as a sibling of the section's h3 without being a second heading. */
+  .aff-past-label {
     font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
   }
 
-  .aff-role {
-    font-size: 0.78rem;
-    color: var(--text-muted);
+  .aff-past summary:hover .aff-past-label,
+  .aff-past summary:hover .chev {
+    color: var(--text);
+    border-color: var(--text);
+  }
+
+  .chev {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 1.5px solid var(--text-muted);
+    border-bottom: 1.5px solid var(--text-muted);
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+    flex: none;
+  }
+
+  .aff-past[open] .chev {
+    transform: rotate(45deg);
+  }
+
+  .aff-past-body {
+    margin-top: 0.5rem;
   }
 
   .view-all {

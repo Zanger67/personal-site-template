@@ -1,0 +1,71 @@
+---
+// The homepage sidebar's little affiliation tree: each organisation (linked when
+// it carries a url) with its opted-in rows hanging off it. Shared by the two
+// homepage blocks — "current" and the collapsed "past" — which differ only in
+// which rows they collect; see the homepageGroups builder in index.astro.
+interface Group {
+  entity: string;
+  url: string | null;
+  roles: string[];
+}
+interface Props {
+  groups: Group[];
+}
+const { groups } = Astro.props;
+---
+
+<div class="aff-groups">
+  {groups.map(group => (
+    <div class="aff-group">
+      <div class="aff-entity">
+        {group.url
+          ? <a href={group.url} target="_blank" rel="noopener noreferrer">{group.entity}</a>
+          : group.entity}
+      </div>
+      {group.roles.map((role, i) => {
+        const isLast = i === group.roles.length - 1;
+        const glyph = isLast ? '└' : '├';
+        return (
+          <div class="aff-role-row">
+            <span class="bracket">{glyph}</span>
+            <span class="aff-role">{role}</span>
+          </div>
+        );
+      })}
+    </div>
+  ))}
+</div>
+
+<style>
+  .aff-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .aff-entity {
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .aff-role-row {
+    display: flex;
+    align-items: baseline;
+    padding: 0.05rem 0;
+  }
+
+  .bracket {
+    font-family: monospace;
+    color: var(--text-muted);
+    width: 1rem;
+    flex-shrink: 0;
+    user-select: none;
+    font-size: 0.8rem;
+  }
+
+  .aff-role {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+</style>
