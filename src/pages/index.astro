@@ -2,11 +2,12 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NorthAmericaMap from '../components/NorthAmericaMap.astro';
 import AffiliationGroups from '../components/AffiliationGroups.astro';
+import WorkCard from '../components/WorkCard.astro';
 import { showHomeSection, isRouteEnabled, friendsFirstNameOnly, splitPastAffiliations, enabledFooterLinks } from '@config/site';
 import { getCollection, getEntry, render } from 'astro:content';
 import { resolvePeople, collaboratorHref, personWebsite, personLinkedIn } from '../utils/collaborators';
 import { withIncoming } from '../utils/incoming';
-import { fmtFullDate } from '../utils/works';
+import { fmtFullDate, getWorkItems, byStartDate, KIND_CAT } from '../utils/works';
 import profile from '../data/profile.json';
 import affiliations from '../data/affiliations.json';
 import publications from '../data/publications.json';
@@ -103,10 +104,16 @@ function projectSort(a: ProjectEntry, b: ProjectEntry): number {
   return b.data.startDate.valueOf() - a.data.startDate.valueOf();
 }
 const allProjects = (await getCollection('projects')).sort(projectSort);
-const projects = [
-  ...allProjects.filter(p => p.data.pinned),
-  ...allProjects.filter(p => !p.data.pinned),
-].slice(0, 3);
+
+// "Works" — one merged highlights feed standing in for the old separate
+// Projects and Publications blocks. It draws from the SAME normalized pool the
+// /works page renders (getWorkItems in utils/works), so a card reads identically
+// in both places, and shows every `main`-flagged item of any kind — projects,
+// papers and posts alike. The featured flag IS the curation here, so there is no
+// slice(): flag one more thing and it appears. Ordering is byStartDate — purely
+// by start, newest first, with an open-ended range NOT jumping the queue for
+// still being open (see the comparator).
+const featuredWorks = (await getWorkItems()).filter(w => w.main).sort(byStartDate);
 
 const introEntry = await getEntry('sections', 'intro');
 const { Content: Intro } = await render(introEntry);
@@ -207,39 +214,33 @@ const personGraph = buildPersonGraph({
         </section>
       )}
 
-      {showHomeSection('projects') && isRouteEnabled('projects') && projects.length > 0 && (
+      {showHomeSection('works') && featuredWorks.length > 0 && (
         <section>
           <div class="section-header">
-            <h2>Projects</h2>
-            <a href={`${base}/works#projects`}>View all &rarr;</a>
+            <h2>Works</h2>
+            {isRouteEnabled('works') && <a href={`${base}/works`}>View all &rarr;</a>}
           </div>
-          <ul class="link-list">
-            {projects.map(project => (
-              <li>
-                <a href={`${base}/projects/${project.id}`}>{project.data.title}</a>
-                <span class="muted"> &mdash; {project.data.description}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {showHomeSection('publications') && isRouteEnabled('publications') && publications.length > 0 && (
-        <section>
-          <div class="section-header">
-            <h2>Publications</h2>
-            <a href={`${base}/works#publications`}>View all &rarr;</a>
-          </div>
-          <ul class="link-list">
-            {publications.slice(0, 3).map(pub => (
-              <li>
-                {pub.url
-                  ? <a href={pub.url} target="_blank" rel="noopener noreferrer">{pub.title}</a>
-                  : <span class="pub-title">{pub.title}</span>}
-                <span class="muted"> &mdash; {pub.venue}, {pub.date}</span>
-              </li>
-            ))}
-          </ul>
+          {/* The real <WorkCard>, so a highlight looks the same here as on the
+              Works page — but deliberately fed less: no author list and no tags.
+              What carries a card here is its title, its venue/role subtitle and
+              the org it was done with, so the section reads at a glance. The
+              "★ Featured" tag is dropped too (every card in this section has it);
+              `kind` stays, since this feed mixes projects, papers and posts. */}
+          {featuredWorks.map(item => (
+            <WorkCard
+              title={item.title}
+              href={item.href}
+              external={item.external}
+              dateLabel={item.dateLabel}
+              description={item.description}
+              subtitle={item.subtitle}
+              affiliations={item.affiliations}
+              metrics={item.metrics}
+              links={item.links}
+              kind={item.kind}
+              kindColor={KIND_CAT[item.kind]}
+            />
+          ))}
         </section>
       )}
 
@@ -461,10 +462,6 @@ const personGraph = buildPersonGraph({
     padding: 0.4rem 0;
     font-size: 0.95rem;
     line-height: 1.5;
-  }
-
-  .pub-title {
-    font-size: 0.95rem;
   }
 
   .muted {

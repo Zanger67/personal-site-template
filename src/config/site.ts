@@ -83,8 +83,11 @@ export const enabledFooterLinks: FooterLink[] = footerLinks.filter(l => l.enable
 // flag off here force-hides the block regardless of data.
 export const homeSections = {
   places: true,
-  projects: true,
-  publications: true,
+  // The merged highlights feed: every `main`-flagged project / paper / post,
+  // rendered with the same card the /works page uses. Replaces the separate
+  // Projects and Publications blocks; each category still needs its own route
+  // enabled above to contribute anything.
+  works: true,
   recentPosts: true,
   friends: true,      // the "Misc." research-friends block
   education: true,    // sidebar
