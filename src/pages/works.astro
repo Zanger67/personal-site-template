@@ -2,172 +2,25 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import WorkCard from '../components/WorkCard.astro';
 import { isRouteEnabled } from '@config/site';
-import { getCollection } from 'astro:content';
-import { getReadingTime } from '../utils/reading-time';
-import { extraLinks, type UrlEntry, type Link as WorkLink } from '../utils/links';
-import { resolvePeople, collaboratorHref } from '../utils/collaborators';
-import { peopleMarks, marksFor, type Contributions, type PersonEntry } from '../utils/marks';
-import type { Metrics } from '../utils/metrics';
-import { KIND_CAT, fmtMonthRange, fmtFullDate, fmtPubDate } from '../utils/works';
+import { KIND_CAT, getWorkItems, byMainThenDate } from '../utils/works';
 import profile from '../data/profile.json';
-import publications from '../data/publications.json';
 
 if (!isRouteEnabled('works')) return Astro.rewrite('/404');
 
-const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
+// Every item — from any category — is normalized to one <WorkCard> shape by
+// getWorkItems(), which the homepage's featured "Works" section builds from too
+// (see ../utils/works, which also owns the date formatters, the kind→colour map
+// KIND_CAT, and the byMainThenDate ordering used across these tabs).
 
-// Unified ordering for EVERY tab (including the merged "Recent activity" feed):
-//   1. `main`-flagged items first  2. then by start date, newest first.
-// For ranges / multi-date items the START date is the sort key.
-const byMainThenDate = (
-  a: { main: boolean; sortDate: number },
-  b: { main: boolean; sortDate: number },
-) => (Number(b.main) - Number(a.main)) || (b.sortDate - a.sortDate);
-
-// Date formatters (fmtMonthRange/fmtFullDate/fmtPubDate) and the kind→colour map
-// (KIND_CAT) are shared with the detail-page "Related" section — see ../utils/works.
-
-// The "urls"/"features" listed-links formats and their label logic are shared
-// by every entity — see ../utils/links (hostLabel, extraLinks, UrlEntry).
-
-// De-dupe chips by URL (keep the first) so an explicit Live/Repo link isn't
-// repeated by a `urls` entry pointing at the same place.
-function dedupeLinks(links: WorkLink[]): WorkLink[] {
-  const seen = new Set<string>();
-  return links.filter(l => (seen.has(l.url) ? false : (seen.add(l.url), true)));
-}
-
-// Every Works item — from any category — is normalized to this one shape, so
-// each tab feeds identical data into <WorkCard>. Only `kind` (Recent activity)
-// toggles the featured-tag placement.
-interface WorkItem {
-  kind: 'Project' | 'Publication' | 'Blog';
-  main: boolean;
-  sortDate: number;
-  title: string;
-  href: string | null;
-  external: boolean;
-  dateLabel: string;
-  description?: string;
-  subtitle?: string | null;
-  // Credited names (publications only) — pre-resolved into linkable chips so the
-  // card can render each one individually instead of a flat joined string.
-  authors?: {
-    name: string;
-    href: string | null;
-    external: boolean;
-    self: boolean;
-    marks: { symbol: string; note: string | null }[];
-  }[];
-  affiliations: string[];
-  tags: string[];
-  metrics: Metrics;
-  links: WorkLink[];
-}
-
-interface Publication {
-  title: string;
-  // Author refs, each optionally carrying its marks inline as a
-  // { ref: [level, …] } pair — see PersonEntry in src/utils/marks.ts.
-  authors: PersonEntry[];
-  venue: string;
-  date: string;
-  // Authorship/contributor role (e.g. "Lead author") — folds into the subtitle.
-  role?: string;
-  // Orgs/labs this paper is affiliated with (partner labs, sponsoring orgs).
-  affiliations?: string[];
-  url?: string | null;
-  urls?: UrlEntry[];
-  features?: UrlEntry[];
-  tags?: string[];
-  metrics?: Metrics;
-  main?: boolean;
-  // Contributor-level marks for `authors`, as a standalone legend — the
-  // alternative to writing them inline on the names (see src/utils/marks.ts).
-  contributions?: Contributions;
-}
-const pubData = publications as Publication[];
-
-// Each category is gathered only when its route is enabled, normalized to a
-// WorkItem, then sorted with the shared comparator. An empty list (disabled OR
-// no items) hides its tab.
-const projectItems: WorkItem[] = (isRouteEnabled('projects') ? await getCollection('projects') : [])
-  .map(entry => ({
-    kind: 'Project' as const,
-    main: entry.data.main,
-    sortDate: entry.data.startDate.valueOf(),
-    title: entry.data.title,
-    href: `${base}/projects/${entry.id}`,
-    external: false,
-    dateLabel: fmtMonthRange(entry.data.startDate, entry.data.endDate),
-    description: entry.data.description,
-    subtitle: entry.data.role,
-    affiliations: entry.data.affiliations,
-    tags: entry.data.tags,
-    metrics: entry.data.metrics,
-    links: dedupeLinks([
-      ...(entry.data.url ? [{ label: 'Live', url: entry.data.url }] : []),
-      ...(entry.data.repo ? [{ label: 'Repo', url: entry.data.repo }] : []),
-      ...(entry.data.template ? [{ label: 'Template', url: entry.data.template }] : []),
-      ...(entry.data.sample ? [{ label: 'Sample', url: entry.data.sample }] : []),
-      ...extraLinks(entry.data.urls),
-      ...extraLinks(entry.data.features),
-    ]),
-  }))
-  .sort(byMainThenDate);
-
-const pubItems: WorkItem[] = (isRouteEnabled('publications') ? pubData : [])
-  .map(pub => ({
-    kind: 'Publication' as const,
-    main: pub.main === true,
-    sortDate: new Date(pub.date).valueOf(),
-    title: pub.title,
-    // The paper link is the title's href; the extra `urls`/`features` become chips.
-    href: pub.url || null,
-    external: true,
-    dateLabel: fmtPubDate(String(pub.date)),
-    // `authors` are people-registry refs (slugs). Each resolves to a display name
-    // that links to their /collaborators dropdown when they have one (falling back
-    // to their own site), carrying any contributor-level marks this paper defines.
-    authors: (() => {
-      const { refs, marks } = peopleMarks(pub.authors, pub.contributions);
-      return resolvePeople(refs).map(a => ({
-        name: a.name,
-        href: a.isSelf ? null : a.listed ? collaboratorHref(a.slug) : a.url,
-        external: !a.isSelf && !a.listed && !!a.url,
-        self: a.isSelf,
-        marks: marksFor(marks, a.slug),
-      }));
-    })(),
-    // Authorship role leads the venue when present ("Lead author · Venue").
-    subtitle: pub.role ? `${pub.role} · ${pub.venue}` : pub.venue,
-    affiliations: pub.affiliations ?? [],
-    tags: pub.tags ?? [],
-    metrics: pub.metrics ?? {},
-    links: dedupeLinks([...extraLinks(pub.urls), ...extraLinks(pub.features)]),
-  }))
-  .sort(byMainThenDate);
-
-const postItems: WorkItem[] = (isRouteEnabled('blog') ? (await getCollection('blog')).filter(p => !p.data.draft) : [])
-  .map(entry => ({
-    kind: 'Blog' as const,
-    main: entry.data.main,
-    sortDate: entry.data.date.valueOf(),
-    title: entry.data.title,
-    href: `${base}/blog/${entry.id}`,
-    external: false,
-    dateLabel: `${fmtFullDate(entry.data.date)} · ${getReadingTime(entry.body!)}`,
-    description: entry.data.description,
-    subtitle: entry.data.role,
-    affiliations: entry.data.affiliations,
-    tags: entry.data.tags ?? [],
-    metrics: entry.data.metrics,
-    links: dedupeLinks([...extraLinks(entry.data.urls), ...extraLinks(entry.data.features)]),
-  }))
-  .sort(byMainThenDate);
+// Each category is pulled out of the shared pool and ordered with the shared
+// comparator. An empty list (route disabled OR no items) hides its tab.
+const items = await getWorkItems();
+const projectItems = items.filter(i => i.kind === 'Project').sort(byMainThenDate);
+const pubItems = items.filter(i => i.kind === 'Publication').sort(byMainThenDate);
+const postItems = items.filter(i => i.kind === 'Blog').sort(byMainThenDate);
 
 // "Recent activity" — every enabled category merged into one feed, same sort.
-const activity: WorkItem[] = [...projectItems, ...pubItems, ...postItems].sort(byMainThenDate);
+const activity = [...projectItems, ...pubItems, ...postItems].sort(byMainThenDate);
 
 // Tab order: Recent activity, Publications, Projects, Blog posts. A tab is
 // listed only when it has something to show.

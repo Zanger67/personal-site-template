@@ -1,12 +1,15 @@
 // Shared "works" model — the single home for normalizing projects, publications
 // and blog posts into one list, plus the colour/date helpers they all share.
 //
-// Two consumers today:
-//   • src/pages/works.astro    — the tabbed Works listing (imports the colour map
-//                                 + date formatters from here).
-//   • getRelatedWorks(...)      — the "Related" section shown at the bottom of the
-//                                 project/blog detail pages (mirrors the timeline
-//                                 info-drawer's Related list, but as real links).
+// The same three sources are projected two ways:
+//   • the CARD model (getWorkItems / WorkItem, at the bottom of this file) — the
+//     full <WorkCard> shape, used by src/pages/works.astro for its tabs and by
+//     the homepage for its featured "Works" section;
+//   • the RELATED-ROW model (allWorks / PooledWork) — a lighter display shape for
+//     the "Related" list at the bottom of the project/blog detail pages (mirrors
+//     the timeline info-drawer's Related list, but as real links). It differs on
+//     purpose: a paper with no link still needs a row href, a post's date drops
+//     its reading time, and an author list stands in for the description.
 //
 // "Relatedness" mirrors the experience timeline's drawer: another item is related
 // when it shares a `relationGroups` tag OR an `affiliation` with the current one
@@ -22,9 +25,12 @@
 // src/config/site.ts drops out entirely, exactly as it does on the Works page.
 import { getCollection } from 'astro:content';
 import { isRouteEnabled } from '@config/site';
-import { resolvePeople } from './collaborators';
-import { peopleRefs, type PersonEntry } from './marks';
+import { resolvePeople, collaboratorHref } from './collaborators';
+import { peopleRefs, peopleMarks, marksFor, type Contributions, type PersonEntry } from './marks';
 import { roleRef, experienceRefHref } from './experienceRefs';
+import { getReadingTime } from './reading-time';
+import { extraLinks, type UrlEntry, type Link as WorkLink } from './links';
+import type { Metrics } from './metrics';
 import publications from '../data/publications.json';
 import organizations from '../data/organizations.json';
 import affiliations from '../data/affiliations.json';
@@ -109,14 +115,24 @@ interface PooledWork extends RelatedItem {
 
 interface Publication {
   title: string;
-  // Plain refs, or { ref: [level, …] } pairs carrying marks — peopleRefs() below
-  // reads either (this list only needs the names).
+  // Plain refs, or { ref: [level, …] } pairs carrying marks — peopleRefs() /
+  // peopleMarks() read either (the related-row model only needs the names).
   authors: PersonEntry[];
   venue: string;
   date: string;
+  // Authorship/contributor role (e.g. "Lead author") — folds into the subtitle.
   role?: string;
+  // Orgs/labs this paper is affiliated with (partner labs, sponsoring orgs).
   affiliations?: string[];
   url?: string | null;
+  urls?: UrlEntry[];
+  features?: UrlEntry[];
+  tags?: string[];
+  metrics?: Metrics;
+  main?: boolean;
+  // Contributor-level marks for `authors`, as a standalone legend — the
+  // alternative to writing them inline on the names (see src/utils/marks.ts).
+  contributions?: Contributions;
   relationGroups?: string[];
 }
 
@@ -317,4 +333,147 @@ export async function getRelatedWorks(self: RelatedSelf): Promise<RelatedItem[]>
   return [...workRows, ...roleRows]
     .sort((a, b) => b.sortDate - a.sortDate || a.title.localeCompare(b.title))
     .map(({ sortDate, ...row }) => row);
+}
+
+// --- Card model -------------------------------------------------------------
+// The full <WorkCard> shape. Both Works views build from getWorkItems(), so an
+// item reads identically wherever it appears: the tabbed /works page renders
+// every item (grouped per tab), the homepage renders only the `main`-flagged
+// ones. A caller decides which fields it passes on — the homepage, for one,
+// drops the author list and tags to keep its cards to title · venue · org.
+
+// Every Works item — from any category — is normalized to this one shape.
+export interface WorkItem {
+  kind: WorkKind;
+  main: boolean;
+  /** START date (ms) — the sort key everywhere, including for ranges. */
+  sortDate: number;
+  /** END date (ms), or ONGOING for something still running. Sort tiebreaker. */
+  endSort: number;
+  title: string;
+  href: string | null;
+  external: boolean;
+  dateLabel: string;
+  description?: string;
+  subtitle?: string | null;
+  // Credited names (publications only) — pre-resolved into linkable chips so the
+  // card can render each one individually instead of a flat joined string.
+  authors?: {
+    name: string;
+    href: string | null;
+    external: boolean;
+    self: boolean;
+    marks: { symbol: string; note: string | null }[];
+  }[];
+  affiliations: string[];
+  tags: string[];
+  metrics: Metrics;
+  links: WorkLink[];
+}
+
+/** `endSort` for an item that hasn't ended. Finite, so ongoing-vs-ongoing is a tie. */
+export const ONGOING = Number.MAX_SAFE_INTEGER;
+
+// Ordering for the /works tabs (including the merged "Recent activity" feed):
+//   1. `main`-flagged items first  2. then by start date, newest first.
+export const byMainThenDate = (a: WorkItem, b: WorkItem): number =>
+  (Number(b.main) - Number(a.main)) || (b.sortDate - a.sortDate);
+
+// Ordering for the homepage's featured list, where the `main` flag is the filter
+// rather than a rank: purely by START date, newest first. A range does NOT get
+// pulled forward for still being open — of two things begun in June, one that ran
+// June–August outranks one running June–Present, because ties break on the EARLIER
+// end. Point events (papers, posts) end the day they land, so they precede any
+// open range sharing their start. Equal on both, titles decide.
+export const byStartDate = (a: WorkItem, b: WorkItem): number =>
+  (b.sortDate - a.sortDate) || (a.endSort - b.endSort) || a.title.localeCompare(b.title);
+
+// De-dupe chips by URL (keep the first) so an explicit Live/Repo link isn't
+// repeated by a `urls` entry pointing at the same place.
+function dedupeLinks(links: WorkLink[]): WorkLink[] {
+  const seen = new Set<string>();
+  return links.filter(l => (seen.has(l.url) ? false : (seen.add(l.url), true)));
+}
+
+// Every enabled work, normalized. A category whose route is disabled contributes
+// nothing (that's what empties — and so hides — its Works tab). Source order is
+// projects → publications → posts; callers sort.
+export async function getWorkItems(): Promise<WorkItem[]> {
+  const projects: WorkItem[] = (isRouteEnabled('projects') ? await getCollection('projects') : [])
+    .map(entry => ({
+      kind: 'Project' as const,
+      main: entry.data.main,
+      sortDate: entry.data.startDate.valueOf(),
+      endSort: entry.data.endDate?.valueOf() ?? ONGOING,
+      title: entry.data.title,
+      href: `${base}/projects/${entry.id}`,
+      external: false,
+      dateLabel: fmtMonthRange(entry.data.startDate, entry.data.endDate),
+      description: entry.data.description,
+      subtitle: entry.data.role,
+      affiliations: entry.data.affiliations,
+      tags: entry.data.tags,
+      metrics: entry.data.metrics,
+      links: dedupeLinks([
+        ...(entry.data.url ? [{ label: 'Live', url: entry.data.url }] : []),
+        ...(entry.data.repo ? [{ label: 'Repo', url: entry.data.repo }] : []),
+        ...(entry.data.template ? [{ label: 'Template', url: entry.data.template }] : []),
+        ...(entry.data.sample ? [{ label: 'Sample', url: entry.data.sample }] : []),
+        ...extraLinks(entry.data.urls),
+        ...extraLinks(entry.data.features),
+      ]),
+    }));
+
+  const pubs: WorkItem[] = (isRouteEnabled('publications') ? (publications as Publication[]) : [])
+    .map(pub => ({
+      kind: 'Publication' as const,
+      main: pub.main === true,
+      sortDate: new Date(pub.date).valueOf(),
+      // A paper is a point event — it "ends" when it lands.
+      endSort: new Date(pub.date).valueOf(),
+      title: pub.title,
+      // The paper link is the title's href; the extra `urls`/`features` become chips.
+      href: pub.url || null,
+      external: true,
+      dateLabel: fmtPubDate(String(pub.date)),
+      // `authors` are people-registry refs (slugs). Each resolves to a display name
+      // that links to their /collaborators dropdown when they have one (falling back
+      // to their own site), carrying any contributor-level marks this paper defines.
+      authors: (() => {
+        const { refs, marks } = peopleMarks(pub.authors, pub.contributions);
+        return resolvePeople(refs).map(a => ({
+          name: a.name,
+          href: a.isSelf ? null : a.listed ? collaboratorHref(a.slug) : a.url,
+          external: !a.isSelf && !a.listed && !!a.url,
+          self: a.isSelf,
+          marks: marksFor(marks, a.slug),
+        }));
+      })(),
+      // Authorship role leads the venue when present ("Lead author · Venue").
+      subtitle: pub.role ? `${pub.role} · ${pub.venue}` : pub.venue,
+      affiliations: pub.affiliations ?? [],
+      tags: pub.tags ?? [],
+      metrics: pub.metrics ?? {},
+      links: dedupeLinks([...extraLinks(pub.urls), ...extraLinks(pub.features)]),
+    }));
+
+  const posts: WorkItem[] = (isRouteEnabled('blog') ? (await getCollection('blog')).filter(p => !p.data.draft) : [])
+    .map(entry => ({
+      kind: 'Blog' as const,
+      main: entry.data.main,
+      sortDate: entry.data.date.valueOf(),
+      endSort: entry.data.date.valueOf(),   // point event, like a paper
+      title: entry.data.title,
+      href: `${base}/blog/${entry.id}`,
+      external: false,
+      dateLabel: `${fmtFullDate(entry.data.date)} · ${getReadingTime(entry.body!)}`,
+      description: entry.data.description,
+      subtitle: entry.data.role,
+      affiliations: entry.data.affiliations,
+      tags: entry.data.tags ?? [],
+      metrics: entry.data.metrics,
+      links: dedupeLinks([...extraLinks(entry.data.urls), ...extraLinks(entry.data.features)]),
+    }));
+
+  return [...projects, ...pubs, ...posts];
 }
