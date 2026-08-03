@@ -15,6 +15,10 @@
 // is the rank order too: a name's symbols and the legend's rows both follow it.
 // Adding a classification = adding an entry there, not inventing one per item.
 //
+// That standard wording adapts to the item: an equal-contribution tier only says
+// "equal" when it actually has more than one holder, so a level carrying one name
+// reads "First author" rather than "Equal first author" (see StandardMark.solo).
+//
 // `note` is an optional per-item OVERRIDE of the standard wording — normally null,
 // so the wording stays consistent across the site. `people` entries are ordinary
 // person references — a registry slug or a written name, both slugified before
@@ -41,6 +45,11 @@ export interface StandardMark {
   symbol: string;
   /** The site-wide wording shown in the legend. */
   note: string;
+  /** The wording when only ONE person on the item carries this level — "equal"
+   *  is a claim about sharing, so a tier of one reads "First author", not "Equal
+   *  first author". Omitted by a level whose wording never varies (a role mark
+   *  like corresponding / advisor is the same however many people hold it). */
+  solo?: string;
 }
 
 /** Site-wide level slug → { symbol, meaning }. The single source for both. */
@@ -92,16 +101,20 @@ export interface MarkInfo {
 /** slug → every mark that person carries on ONE item (usually just one). */
 export type MarkMap = Record<string, MarkInfo[]>;
 
-/** One `contributions` key (+ its optional per-item note) as a renderable mark. */
-export function resolveMark(key: string, note?: string | null): MarkInfo {
+/** One `contributions` key (+ its optional per-item note) as a renderable mark.
+ *  `holders` is how many people carry this level ON THIS ITEM — a level worded
+ *  as shared ("Equal first author") falls back to its `solo` wording when only
+ *  one person turns out to hold it. */
+export function resolveMark(key: string, note?: string | null, holders = 0): MarkInfo {
   const level = markLevel(key);
   const std = level ? STANDARD_MARKS[level] : null;
+  const standard = std ? (holders === 1 && std.solo ? std.solo : std.note) : null;
   return {
     level: level ?? key,
     // An unrecognised key still renders — it's taken as a literal symbol, which
     // makes a typo'd level visible, and only the item's own `note` explains it.
     symbol: std ? std.symbol : key,
-    note: (note ?? null) || (std ? std.note : null),
+    note: (note ?? null) || standard,
   };
 }
 
@@ -109,9 +122,24 @@ export function resolveMark(key: string, note?: string | null): MarkInfo {
 // ordered by contributionMarks.json rather than by however the keys happened to be
 // written, so someone carrying two marks always reads "†*", never "*†".
 export function markMap(contributions?: Contributions | null): MarkMap {
+  const entries = Object.entries(contributions ?? {}).sort(([a], [b]) => rank(a) - rank(b));
+  // How many DISTINCT people hold each level, tallied before anything resolves:
+  // it decides whether the level reads as shared ("Equal first author") or solo
+  // ("First author"). Counted per level, not per key, so two keys naming the same
+  // level (its slug and its symbol) are one tier, and a person named twice is one
+  // holder — the same de-duping the render pass below does.
+  const holders: Record<string, Set<string>> = {};
+  for (const [key, c] of entries) {
+    const level = markLevel(key) ?? key;
+    const set = holders[level] ?? (holders[level] = new Set());
+    for (const ref of c?.people ?? []) {
+      const slug = slugify(ref);
+      if (slug) set.add(slug);
+    }
+  }
   const out: MarkMap = {};
-  for (const [key, c] of Object.entries(contributions ?? {}).sort(([a], [b]) => rank(a) - rank(b))) {
-    const mark = resolveMark(key, c?.note);
+  for (const [key, c] of entries) {
+    const mark = resolveMark(key, c?.note, holders[markLevel(key) ?? key]?.size ?? 0);
     for (const ref of c?.people ?? []) {
       const slug = slugify(ref);
       if (!slug) continue;
