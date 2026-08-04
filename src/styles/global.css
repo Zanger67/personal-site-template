@@ -255,13 +255,15 @@ img {
   margin-left: 0.35em;
 }
 
-/* An institution's mark is normally its emoji, which turns to a speck at the
-   default superscript size — so it keeps closer to the text size and takes a
-   smaller lift, with the line box left alone so a tall glyph can't open up the
-   spacing between lines. */
+/* An institution's mark is normally its emoji, which fills its own em box — so
+   at anything near the text size it reads as body text rather than a footnote.
+   It is set smaller and lifted to sit alongside the contributor symbols next to
+   it (an emoji has no cap height to align on, so the lift is given explicitly
+   rather than as `super`), with the line box left alone so a tall glyph can't
+   open up the spacing between lines. */
 .cmark-org {
-  font-size: 0.95em;
-  vertical-align: 0.2em;
+  font-size: 0.72em;
+  vertical-align: 0.35em;
   line-height: 0;
 }
 
