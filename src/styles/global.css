@@ -184,6 +184,37 @@ img {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ---- Tab-panel transitions ---------------------------------------------
+   The same fade, scaled down to a panel: switching tabs fades the outgoing
+   panel out and the incoming one up from slightly below. Quicker than a page
+   swap and with a smaller lift — a panel is a smaller unit, and the tab bar
+   updates instantly so the click still lands immediately.
+   Both halves need a script (there is no CSS hook for "the panel that just
+   left"), so the timing lives in src/utils/panelFade.ts, shared by every tab
+   group: the /works tabs and the experience drawer's related tabs. With JS off
+   nothing here runs — /works simply stacks every panel (its <noscript> block).
+   `backwards` fill (as with `page-enter`) so no transform lingers afterwards. */
+:root {
+  --panel-leave-duration: 0.13s;
+  --panel-enter-duration: 0.26s;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel-entering {
+    animation: panel-enter var(--panel-enter-duration) cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  .panel-leaving {
+    opacity: 0;
+    transition: opacity var(--panel-leave-duration) ease;
+  }
+}
+
+@keyframes panel-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ---- Credit marks ------------------------------------------------------
    The superscripts annotating a contributor or author name — the conventional
    footnote symbols (* † ‡ § ‖ ¶) for contributor LEVELS, and numbers (1, 2, 3)
@@ -196,6 +227,17 @@ img {
    symbols never need hunting down. Markup comes from CreditMarks.astro; the
    styles are global because marks render identically on the project + blog
    headers, the Works cards and the collaborators page. */
+/* Both ways of showing a legend — the floating popup below and the margin column
+   in WorkCard.astro (`.work-aside`) — fade at this one speed. It is a hair slower
+   than a hover tooltip usually is: the legend is prose to be read, and reading one
+   name after another shouldn't strobe. Still quick enough not to lag the pointer.
+   Transitioning `visibility` alongside `opacity` is what buys the fade OUT — on its
+   own it flips instantly and cuts the fade off; in a transition it holds `visible`
+   for the duration, then flips at the end. */
+:root {
+  --legend-fade-duration: 0.26s;
+}
+
 .cperson {
   position: relative;
 }
@@ -251,7 +293,15 @@ img {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.12s ease;
+  transition:
+    opacity var(--legend-fade-duration) ease,
+    visibility var(--legend-fade-duration);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctip {
+    transition: none;
+  }
 }
 
 .cperson:hover > .ctip,

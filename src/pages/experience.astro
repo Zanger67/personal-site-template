@@ -1811,6 +1811,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
 
 <script>
   import { inlineMarkdown } from '../utils/markdown';
+  import { createPanelFader } from '../utils/panelFade';
 
   const dataEl = document.getElementById('tl-data');
   const cfgEl = document.getElementById('tl-cfg');
@@ -2198,14 +2199,24 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         let active = preferTab && tabs.some(t => t.key === preferTab) ? preferTab : 'works';
         const tablist = document.createElement('div'); tablist.className = 'd-tabs'; tablist.setAttribute('role', 'tablist');
         const panels = document.createElement('div'); panels.className = 'd-tabpanels';
+        // These panels cross-fade on a switch exactly as the /works tabs do — same
+        // helper, same timing (see ../utils/panelFade). A fader per drawer build,
+        // so its tab group keeps its own timer.
+        const fadePanels = createPanelFader();
         for (const t of tabs) {
           const tb = document.createElement('button'); tb.type = 'button'; tb.className = 'd-tab';
           tb.dataset.tab = t.key; tb.textContent = t.label;
           if (t.key === active) tb.classList.add('is-active');
           tb.addEventListener('click', () => {
+            if (active === t.key) return;   // already open — don't blink it
+            const current = panels.querySelector<HTMLElement>('.d-timeline:not([hidden])');
             active = t.key;
             tablist.querySelectorAll<HTMLElement>('.d-tab').forEach(el => el.classList.toggle('is-active', el.dataset.tab === active));
-            panels.querySelectorAll<HTMLElement>('.d-timeline').forEach(p => { p.hidden = p.dataset.panel !== active; });
+            fadePanels(current, () => {
+              const list = Array.from(panels.querySelectorAll<HTMLElement>('.d-timeline'));
+              list.forEach(p => { p.hidden = p.dataset.panel !== active; });
+              return list.find(p => p.dataset.panel === active) ?? null;
+            });
           });
           tablist.appendChild(tb);
           const ul = timelineUl(t.items, false);

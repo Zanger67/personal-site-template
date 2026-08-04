@@ -432,7 +432,13 @@ const asideLegend = legendMode === 'aside' ? authorLegend.filter(l => l.note) : 
     color: var(--text-muted);
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.15s ease;
+    /* Shared with the floating popup it stands in for, so the two can't fade at
+       different speeds (--legend-fade-duration, global.css). `visibility` is in
+       the transition for the fade OUT: on its own it flips instantly and the
+       column would vanish rather than fade. */
+    transition:
+      opacity var(--legend-fade-duration) ease,
+      visibility var(--legend-fade-duration);
   }
 
   .work-aside.is-open {

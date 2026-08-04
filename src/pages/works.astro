@@ -217,21 +217,36 @@ const activeId = tabs[0]?.id ?? null;
 </BaseLayout>
 
 <script>
+  import { createPanelFader } from '../utils/panelFade';
+
   const works = document.querySelector<HTMLElement>('.works');
   if (works) {
     const tabs = Array.from(works.querySelectorAll<HTMLElement>('[role="tab"]'));
     const panels = Array.from(works.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
     const ids = tabs.map(t => t.dataset.tab!);
 
-    const activate = (rawId: string, setFocus = false) => {
+    // Panels cross-fade on a switch, the way pages do (see ../utils/panelFade).
+    const fadePanels = createPanelFader();
+
+    // `animate` is off for the swaps nobody asked for — the first paint and the
+    // pre-paint restore — where there is no outgoing panel to fade anyway.
+    const activate = (rawId: string, setFocus = false, animate = true) => {
       const id = ids.includes(rawId) ? rawId : ids[0];
+      // The tab bar moves right away; only the panel below it waits for the fade.
       tabs.forEach(t => {
         const selected = t.dataset.tab === id;
         t.setAttribute('aria-selected', selected ? 'true' : 'false');
         t.tabIndex = selected ? 0 : -1;
         if (selected && setFocus) t.focus();
       });
-      panels.forEach(p => { p.hidden = p.id !== `panel-${id}`; });
+      const current = panels.find(p => !p.hidden) ?? null;
+      const swap = () => {
+        panels.forEach(p => { p.hidden = p.id !== `panel-${id}`; });
+        return panels.find(p => p.id === `panel-${id}`) ?? null;
+      };
+      // Re-selecting the open tab (a repeat click, a hashchange that changes
+      // nothing) shouldn't blink the panel it is already showing.
+      fadePanels(current, swap, { animate: animate && current?.id !== `panel-${id}` });
     };
 
     tabs.forEach(t => {
@@ -278,8 +293,10 @@ const activeId = tabs[0]?.id ?? null;
       const id = location.hash.replace(/^#/, '');
       if (ids.includes(id)) activate(id);
     });
+    // On load the right panel is already open (the is:inline script above got
+    // there before the first paint) — re-assert it without a fade.
     const initial = location.hash.replace(/^#/, '');
-    if (ids.includes(initial)) activate(initial);
+    if (ids.includes(initial)) activate(initial, false, false);
 
     // NOTE: restoring the tab + scroll when returning from a detail page is done
     // by the separate is:inline script above — it runs synchronously before the
