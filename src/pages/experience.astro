@@ -19,7 +19,7 @@ import relationLabels from '../data/relationLabels.json';
 // "Hackathons"). Any that a selected item carries are appended to the drawer's
 // "Related" header as "Related (…)". Unmapped slugs add nothing. See buildDrawer.
 import relationGroupLabels from '../data/relationGroupLabels.json';
-import { hostLabel, extraLinks, type UrlEntry } from '../utils/links';
+import { hostLabel, extraLinks, paperLink, type UrlEntry } from '../utils/links';
 import { normalizeMetrics, type Metrics, type NormalizedMetric } from '../utils/metrics';
 import { resolvePeople, collaboratorHref } from '../utils/collaborators';
 import { peopleRefs, type PersonEntry } from '../utils/marks';
@@ -604,7 +604,7 @@ const items: Item[] = [
     description: [(p.authors && p.authors.length) ? pubAuthorLine(p.authors) : null, p.venue].filter(Boolean).join(' — '),
     // Partner labs/orgs — cross-link the paper to that org on the timeline, same as projects.
     affiliations: p.affiliations || [],
-    links: [{ label: 'Read', url: p.url }, ...extraLinks(p.urls), ...extraLinks(p.features)], main: p.main,
+    links: [...paperLink(p.url), ...extraLinks(p.urls), ...extraLinks(p.features)], main: p.main,
     relationGroups: p.relationGroups, metrics: p.metrics,
   })),
   ...(awards as any[]).map(a => mkItem({

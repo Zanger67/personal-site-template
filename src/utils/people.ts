@@ -33,7 +33,7 @@ import { getCollection } from 'astro:content';
 import { isRouteEnabled } from '@config/site';
 import { slugify, fallbackName, isSelfSlug } from './collaborators';
 import { KIND_CAT, fmtFullDate, fmtPubDate, fmtMonthRange, joinRange, type WorkKind } from './works';
-import { extraLinks, knownHostLabel, type Link } from './links';
+import { extraLinks, knownHostLabel, paperLink, type Link } from './links';
 import { markMap, peopleMarks, type MarkMap } from './marks';
 import registryData from '../data/collaborators.json';
 import organizations from '../data/organizations.json';
@@ -285,7 +285,12 @@ async function collectWorks(): Promise<PersonWork[]> {
         color: KIND_CAT.Publication,
         sortDate: new Date(pub.date).valueOf(),
         authors: authorRefs.map(toAuthor),            // authors already include self
-        links: dedupeLinks([...extraLinks(pub.urls), ...extraLinks(pub.features)]),
+        // Paper link leads the chips, matching the Works cards + drawer.
+        links: dedupeLinks([
+          ...paperLink(pub.url),
+          ...extraLinks(pub.urls),
+          ...extraLinks(pub.features),
+        ]),
         years: yr == null ? [] : [yr],
         marks,
       });

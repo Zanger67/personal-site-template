@@ -29,7 +29,7 @@ import { resolvePeople, collaboratorHref } from './collaborators';
 import { peopleRefs, peopleMarks, marksFor, type Contributions, type PersonEntry } from './marks';
 import { roleRef, experienceRefHref } from './experienceRefs';
 import { getReadingTime } from './reading-time';
-import { extraLinks, type UrlEntry, type Link as WorkLink } from './links';
+import { extraLinks, paperLink, type UrlEntry, type Link as WorkLink } from './links';
 import type { Metrics } from './metrics';
 import publications from '../data/publications.json';
 import organizations from '../data/organizations.json';
@@ -454,7 +454,15 @@ export async function getWorkItems(): Promise<WorkItem[]> {
       affiliations: pub.affiliations ?? [],
       tags: pub.tags ?? [],
       metrics: pub.metrics ?? {},
-      links: dedupeLinks([...extraLinks(pub.urls), ...extraLinks(pub.features)]),
+      // The paper link is the title's href AND earns its own leading chip, so the
+      // card's link row offers it explicitly rather than hiding it in the title
+      // (paperLink brands it by host — "OpenReview"/"arXiv" — else "Read"; a
+      // `urls` entry pointing at the same URL de-dupes away).
+      links: dedupeLinks([
+        ...paperLink(pub.url),
+        ...extraLinks(pub.urls),
+        ...extraLinks(pub.features),
+      ]),
     }));
 
   const posts: WorkItem[] = (isRouteEnabled('blog') ? (await getCollection('blog')).filter(p => !p.data.draft) : [])

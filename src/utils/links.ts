@@ -24,6 +24,7 @@ const KNOWN_HOSTS: Record<string, string> = {
   'github.com': 'GitHub',
   'devpost.com': 'Devpost',
   'arxiv.org': 'arXiv',
+  'openreview.net': 'OpenReview',
   'lesswrong.com': 'LessWrong',
   'substack.com': 'Substack',
   'linkedin.com': 'LinkedIn',
@@ -63,6 +64,17 @@ const registrable = (parts: string[]): string =>
 export function knownHostLabel(raw: string): string | null {
   const parts = hostParts(raw);
   return parts ? (KNOWN_HOSTS[registrable(parts)] ?? null) : null;
+}
+
+// A publication's paper `url` → the chip that leads its link row, or nothing when
+// the paper has no link. Named after where it lives when it IS a known platform
+// ("OpenReview ↗", "arXiv ↗") and only falling back to the generic "Read" for a
+// venue the site doesn't recognize — the same rule a person's primary link follows
+// (see knownHostLabel). Every surface that lists papers goes through this, so the
+// label reads identically on a Works card, the /collaborators list and the
+// experience drawer.
+export function paperLink(url?: string | null): Link[] {
+  return url ? [{ label: knownHostLabel(url) ?? 'Read', url }] : [];
 }
 
 export function hostLabel(raw: string): string {
