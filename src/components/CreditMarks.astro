@@ -53,7 +53,7 @@ const spoken = marks.map(m => m.note || m.symbol).join('; ');
               <span class:list={['ctip-row', isOrgLevel(l.level) && 'ctip-org', own.has(l.symbol) && 'is-own']}>
                 <span class="ctip-sym">{l.symbol}</span>{l.icon && (l.icon.kind === 'image'
                   ? <img class="ctip-icon" src={l.icon.value} alt="" loading="lazy" decoding="async" />
-                  : <span class="ctip-icon">{l.icon.value}</span>)}{l.note}
+                  : <span class="ctip-icon">{l.icon.value}</span>)}<span class="ctip-name">{l.note}</span>
               </span>
             ))}
           </span>

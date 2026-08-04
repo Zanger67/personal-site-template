@@ -211,7 +211,7 @@ const fallbackLegend = asideLegend;
           {l.icon && (l.icon.kind === 'image'
             ? <img class="affil-icon" src={l.icon.value} alt="" loading="lazy" decoding="async" />
             : <span class="affil-icon">{l.icon.value}</span>)}
-          {l.note}
+          <span class="wa-name">{l.note}</span>
         </span>
       ))}
     </aside>
@@ -483,6 +483,18 @@ const fallbackLegend = asideLegend;
     flex: none;
   }
 
+  /* Highlighting a row must not change its METRICS. This column is 12.5rem, and a
+     long institution ("Georgia Tech AI Safety Initiative") measures within a few
+     px of that: normal it fits on one line, semibold it doesn't. Bolding on hover
+     therefore re-wrapped the row and shuffled the ones under it.
+       So the row is lit by COLOUR alone — the dim rows are already muted, so the
+     contrast carries it — and every row keeps one weight at all times. Reserving
+     the bold width instead (a hidden bold copy sizing the box) fixes the shuffle
+     but not the cause: the row would then stand permanently two lines tall with a
+     blank second line, in exactly the band where the wrap happens. */
+  .wa-name {
+    min-width: 0;
+  }
 
   /* Institutions are their own group, same gap the superscripts use. */
   .wa-row:not(.wa-org) + .wa-org {
@@ -490,10 +502,9 @@ const fallbackLegend = asideLegend;
   }
 
   /* Lit by the script below while the pointer is on a name that carries this
-     row; the rest stay muted, present for context. */
+     row; the rest stay muted, present for context. Colour only — see .wa-name. */
   .wa-row.is-own {
     color: var(--text);
-    font-weight: 600;
   }
 
   /* The margin only exists on a wide enough viewport: the content column is

@@ -332,10 +332,13 @@ img {
    popup's rows in the first place, and two surfaces can't answer the same
    question at once. See WorkCard.astro. */
 
-/* This person's own marks — the other rows stay muted, present for context. */
+/* This person's own marks — the other rows stay muted, present for context.
+   Lit by COLOUR alone, never by weight: this popup is sized to its content
+   (`width: max-content`), so bolding one row would widen the whole popup and
+   re-wrap its neighbours as the pointer moves from name to name. The muted rows
+   already carry the contrast. Same rule as the margin column's .wa-row. */
 .ctip-row.is-own {
   color: var(--text);
-  font-weight: 600;
 }
 
 .ctip-sym {
