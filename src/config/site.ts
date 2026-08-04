@@ -128,6 +128,45 @@ export function splitPastAffiliations(): boolean {
   return affiliationsBlock.splitPast;
 }
 
+// Author institutions — the per-author affiliation marks on a publication's credit
+// line (an institution's emoji, or a number when it has none; see
+// src/utils/institutions.ts and the `authorAffiliations` field on a publication).
+export const authorInstitutions = {
+  // Master switch. false → no institution marks anywhere: names keep their
+  // contributor symbols alone, the key and the legend rows disappear, and a
+  // paper's `authorAffiliations` data is simply left unread. Flip this rather
+  // than emptying the data, which stays useful the moment it's switched back on.
+  enabled: true,
+  // Where a Works card shows a PERMANENT legend — one always on screen, as opposed
+  // to the popup that floats off a name on hover, which every credited name has
+  // either way:
+  //   'none'  — no permanent legend; the floating popup is the only key (default,
+  //             and what keeps a card to its credits)
+  //   'below' — the institution key on its own line under the authors
+  //             ("🐝 Georgia Tech · 🔥 MATS")
+  //   'aside' — the WHOLE legend, both families, as a static panel in the card's
+  //             right-hand column, top-aligned with the item. Moving between names
+  //             lights that person's own rows in it, so it answers what the popup
+  //             answers without anything floating — and the popup is suppressed on
+  //             those cards. Narrow screens drop it back under the card.
+  // The experience drawer prints its own legend regardless, having no hover to
+  // fall back on.
+  permanentLegend: 'none',
+} as const;
+
+/** Where a Works card shows its permanent credit legend. */
+export type PermanentLegend = 'none' | 'below' | 'aside';
+
+/** Should publications carry their per-author institution marks at all? */
+export function showAuthorInstitutions(): boolean {
+  return authorInstitutions.enabled;
+}
+
+/** Where the permanent legend goes — 'none' whenever the marks are off entirely. */
+export function permanentInstitutionLegend(): PermanentLegend {
+  return authorInstitutions.enabled ? authorInstitutions.permanentLegend : 'none';
+}
+
 // Experience-page timeline behaviour.
 export const timeline = {
   // Future-dated entries — whose start MONTH is later than the current month —

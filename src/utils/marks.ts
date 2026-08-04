@@ -77,8 +77,33 @@ export function markLevel(key: string): string | null {
   return slug && STANDARD_MARKS[slug] ? slug : null;
 }
 
-/** Where a key sits in contributionMarks.json — unrecognised keys sort last. */
+// ── A second mark family: institutional affiliations ────────────────────────
+// Author affiliations are the same idea as contributor levels — a per-item map
+// from a group to the people in it, superscripted on each name with a legend
+// underneath — so they render as ordinary MarkInfo and reuse everything here.
+// They're built in src/utils/institutions.ts, which owns their numbering, and
+// namespaced `org:<slug>` so the two families can never collide on a level.
+// A name carries its contributor symbols first, then its institution numbers
+// ("Buzz*¹,²") — set apart by a gap, since they answer different questions.
+export const ORG_LEVEL = 'org:';
+/** Is this an institution level rather than a contributor level? */
+export const isOrgLevel = (level: string): boolean => level.startsWith(ORG_LEVEL);
+
+/** Two adjacent numeric marks need separating — "¹²" reads as twelve, not 1 and 2.
+ *  (Only the institution family numbers its marks, so this never fires on symbols.) */
+export const isNumericSymbol = (symbol: string): boolean => /^\d+$/.test(symbol);
+
+/** The superscripts for one name, comma-joining any run of numbers: ["1", ",2", "†"]. */
+export const supSymbols = (marks: MarkInfo[]): string[] =>
+  marks.map((m, i) =>
+    (i > 0 && isNumericSymbol(m.symbol) && isNumericSymbol(marks[i - 1].symbol) ? ',' : '') + m.symbol);
+
+/** Where a key sits in contributionMarks.json — unrecognised keys sort last, and
+ *  institution levels sort after even those: a name reads "†¹" (what, then where),
+ *  so its legend has to list the contributor meanings before the institutions.
+ *  Within the family the sort stays stable, which keeps them in numbering order. */
 const rank = (key: string) => {
+  if (isOrgLevel(key)) return MARK_LEVELS.length + 1;
   const i = MARK_LEVELS.indexOf(markLevel(key) ?? '');
   return i === -1 ? MARK_LEVELS.length : i;
 };
@@ -91,11 +116,21 @@ export interface Contribution {
 }
 export type Contributions = Record<string, Contribution>;
 
+/** A mark's optional icon, already resolved to what it should render as, so every
+ *  renderer (card tooltip, drawer legend) just branches on `kind` — see
+ *  src/utils/institutions.ts, which is the only thing that sets one today. */
+export interface MarkIcon {
+  kind: 'glyph' | 'image';
+  value: string;
+}
+
 export interface MarkInfo {
-  /** The level slug this mark assigns (`advisor`, `equal-first`, …). */
+  /** The level slug this mark assigns (`advisor`, `equal-first`, `org:mats`, …). */
   level: string;
   symbol: string;
   note: string | null;
+  /** Legend-row icon, when the level has one (institutions may; contributions don't). */
+  icon?: MarkIcon | null;
 }
 
 /** slug → every mark that person carries on ONE item (usually just one). */
@@ -172,10 +207,6 @@ export function legendOf(lists: (MarkInfo[] | null | undefined)[]): MarkInfo[] {
 /** Same, straight off a MarkMap. */
 export const legendFromMap = (map: MarkMap | null | undefined): MarkInfo[] =>
   legendOf(Object.values(map ?? {}));
-
-/** Plain-text form ("†*") — for contexts that can't render superscripts (the
- *  experience drawer builds its author line as an inline-markdown string). */
-export const marksText = (marks: MarkInfo[]): string => marks.map(m => m.symbol).join('');
 
 // ── People lists that carry their marks inline ──────────────────────────────
 // An entry in a people list (a publication's `authors`) is EITHER a plain

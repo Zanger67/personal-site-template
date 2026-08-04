@@ -26,7 +26,8 @@
 import { getCollection } from 'astro:content';
 import { isRouteEnabled } from '@config/site';
 import { resolvePeople, collaboratorHref } from './collaborators';
-import { peopleRefs, peopleMarks, marksFor, type Contributions, type PersonEntry } from './marks';
+import { peopleRefs, peopleMarks, marksFor, type Contributions, type MarkInfo, type PersonEntry } from './marks';
+import { affiliationMarks, type AuthorAffiliations } from './institutions';
 import { roleRef, experienceRefHref } from './experienceRefs';
 import { getReadingTime } from './reading-time';
 import { extraLinks, paperLink, type UrlEntry, type Link as WorkLink } from './links';
@@ -118,6 +119,9 @@ interface Publication {
   // Plain refs, or { ref: [level, …] } pairs carrying marks — peopleRefs() /
   // peopleMarks() read either (the related-row model only needs the names).
   authors: PersonEntry[];
+  // Which institution each author sat in — keyed institution → people, numbered
+  // for display by order of first appearance (see src/utils/institutions.ts).
+  authorAffiliations?: AuthorAffiliations;
   venue: string;
   date: string;
   // Authorship/contributor role (e.g. "Lead author") — folds into the subtitle.
@@ -357,13 +361,16 @@ export interface WorkItem {
   description?: string;
   subtitle?: string | null;
   // Credited names (publications only) — pre-resolved into linkable chips so the
-  // card can render each one individually instead of a flat joined string.
+  // card can render each one individually instead of a flat joined string. `marks`
+  // holds BOTH mark families in reading order — institution numbers, then
+  // contributor symbols ("Buzz¹†") — since the card renders and derives its
+  // legends straight off the names (see marks.ts / institutions.ts).
   authors?: {
     name: string;
     href: string | null;
     external: boolean;
     self: boolean;
-    marks: { symbol: string; note: string | null }[];
+    marks: MarkInfo[];
   }[];
   affiliations: string[];
   tags: string[];
@@ -438,15 +445,18 @@ export async function getWorkItems(): Promise<WorkItem[]> {
       dateLabel: fmtPubDate(String(pub.date)),
       // `authors` are people-registry refs (slugs). Each resolves to a display name
       // that links to their /collaborators dropdown when they have one (falling back
-      // to their own site), carrying any contributor-level marks this paper defines.
+      // to their own site), carrying both the contributor-level marks this paper
+      // defines and its institution numbers — symbols first, so a name reads
+      // "Buzz†¹": what, then where.
       authors: (() => {
         const { refs, marks } = peopleMarks(pub.authors, pub.contributions);
+        const affils = affiliationMarks(refs, pub.authorAffiliations);
         return resolvePeople(refs).map(a => ({
           name: a.name,
           href: a.isSelf ? null : a.listed ? collaboratorHref(a.slug) : a.url,
           external: !a.isSelf && !a.listed && !!a.url,
           self: a.isSelf,
-          marks: marksFor(marks, a.slug),
+          marks: [...marksFor(marks, a.slug), ...marksFor(affils.marks, a.slug)],
         }));
       })(),
       // Authorship role leads the venue when present ("Lead author · Venue").

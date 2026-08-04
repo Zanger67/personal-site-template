@@ -184,11 +184,14 @@ img {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ---- Contributor-level marks -------------------------------------------
-   The conventional footnote symbols (* † ‡ § ‖ ¶) annotating a contributor or
-   author name. Wordings are standardised site-wide in
-   src/data/contributionMarks.json; an item only says who carries which symbol
-   (see src/utils/marks.ts). Hovering a name — or its symbols — opens the item's
+/* ---- Credit marks ------------------------------------------------------
+   The superscripts annotating a contributor or author name — the conventional
+   footnote symbols (* † ‡ § ‖ ¶) for contributor LEVELS, and numbers (1, 2, 3)
+   for the author's INSTITUTION. Level wordings are standardised site-wide in
+   src/data/contributionMarks.json and institutions come from the registry
+   src/data/institutions.json; either way an item only says who carries what
+   (see src/utils/marks.ts + institutions.ts). Hovering a name — or its
+   superscripts — opens the item's
    WHOLE legend, that person's own rows lit and the rest dimmed, so the other
    symbols never need hunting down. Markup comes from CreditMarks.astro; the
    styles are global because marks render identically on the project + blog
@@ -203,16 +206,37 @@ img {
   cursor: help;
 }
 
+/* The two families sit in their own groups on a name — contributor symbols, a
+   gap, then the institution marks ("Buzz*🐝🔥"). They answer different questions,
+   so running them together would read as one string of footnotes. */
+.cmark:not(.cmark-org) + .cmark-org {
+  margin-left: 0.35em;
+}
+
+/* An institution's mark is normally its emoji, which turns to a speck at the
+   default superscript size — so it keeps closer to the text size and takes a
+   smaller lift, with the line box left alone so a tall glyph can't open up the
+   spacing between lines. */
+.cmark-org {
+  font-size: 0.95em;
+  vertical-align: 0.2em;
+  line-height: 0;
+}
+
 .ctip {
   position: absolute;
   bottom: calc(100% + 0.4rem);
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
-  display: grid;
-  gap: 0.15rem;
+  /* Two columns: contributor levels, then institutions (see CreditMarks.astro).
+     Wraps to a stack if they can't sit side by side. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 0.35rem 1.1rem;
   width: max-content;
-  max-width: min(20rem, 70vw);
+  max-width: min(32rem, 88vw);
   padding: 0.35rem 0.55rem;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -236,6 +260,31 @@ img {
   visibility: visible;
 }
 
+/* One family's rows. */
+.ctip-col {
+  display: grid;
+  gap: 0.15rem;
+}
+
+/* On a narrow screen there isn't room for two columns of prose, so the families
+   stack — the same order, just above one another. */
+@media (max-width: 560px) {
+  .ctip {
+    flex-direction: column;
+  }
+}
+
+/* Where a Works card puts its legend in the margin instead
+   (authorInstitutions.permanentLegend: 'aside'), the two would answer the same
+   question at once — so above the width that margin needs, the floating one gives
+   way to it. Below that width the aside is the one hidden, and this is all that's
+   left. See `.work-aside` in WorkCard.astro. */
+@media (min-width: 1150px) {
+  .work-card.has-aside .ctip {
+    display: none;
+  }
+}
+
 /* This person's own marks — the other rows stay muted, present for context. */
 .ctip-row.is-own {
   color: var(--text);
@@ -248,6 +297,23 @@ img {
   margin-right: 0.35rem;
   color: var(--accent);
   font-weight: 700;
+}
+
+/* An institution's optional icon, at the head of its legend row (see
+   src/utils/institutions.ts). A glyph is text; an image is sized to the line. */
+.ctip-icon {
+  display: inline-block;
+  margin-right: 0.3rem;
+  font-size: 0.95em;
+  line-height: 1;
+  vertical-align: -0.05em;
+}
+
+img.ctip-icon {
+  width: 1em;
+  height: 1em;
+  object-fit: contain;
+  vertical-align: -0.12em;
 }
 
 /* Screen-reader-only text — the marks' meanings, which a popup can't convey. */

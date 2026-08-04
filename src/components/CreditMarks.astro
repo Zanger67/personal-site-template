@@ -1,5 +1,6 @@
 ---
-// A credited name plus the contributor-level marks it carries (* † ‡ § ‖ ¶).
+// A credited name plus the marks it carries — its institution NUMBER(s) first,
+// then its contributor-level symbols (* † ‡ § †† ¶): "Buzz¹,²*", where then what.
 //
 // The NAME itself is the slot, so every credit line keeps its own markup (a
 // /collaborators deep link on a detail page, a jump link on the collaborators
@@ -9,10 +10,12 @@
 // person's own rows highlighted and the rest dimmed for context, so a reader
 // never has to hunt down the other symbol's meaning. Items assign a LEVEL slug
 // (`advisor`, `equal-first`); the symbol and wording it draws are site-wide
-// (src/data/contributionMarks.json); see src/utils/marks.ts.
+// (src/data/contributionMarks.json); see src/utils/marks.ts. Institution numbers
+// come from the same MarkInfo shape — src/utils/institutions.ts numbers them and
+// may give a row an icon — so this component never distinguishes the two.
 //
 // A person carrying no marks renders as the bare slot: no wrapper, no popup.
-import type { MarkInfo } from '../utils/marks';
+import { supSymbols, isOrgLevel, type MarkInfo } from '../utils/marks';
 
 interface Props {
   /** The marks THIS person carries (marksFor(map, slug)). */
@@ -23,21 +26,36 @@ interface Props {
 const { marks = [], legend = [] } = Astro.props;
 
 const rows = legend.filter(l => l.note);
+// The popup runs the two families as side-by-side columns — contributor levels
+// left, institutions right — rather than one stack: they're separate keys, and a
+// paper with several of each makes a tall single column the name has to sit under.
+const cols = [rows.filter(l => !isOrgLevel(l.level)), rows.filter(l => isOrgLevel(l.level))]
+  .filter(c => c.length > 0);
 const own = new Set(marks.map(m => m.symbol));
+// A run of institution numbers is comma-joined — "¹²" would read as twelve.
+const sups = supSymbols(marks);
 // Read out inline for screen readers — the popup is decoration they can't hover.
 const spoken = marks.map(m => m.note || m.symbol).join('; ');
 ---
 
 {marks.length === 0 ? <slot /> : (
-  <span class="cperson">
+  <span class="cperson" data-levels={marks.map(m => m.level).join(' ')}>
     <slot />
-    {marks.map(m => <sup class="cmark">{m.symbol}</sup>)}
+    {/* The symbols are decoration — an emoji mark would otherwise be read out by
+        its unicode name. Their meanings follow in the sr-only text below. */}
+    {sups.map((s, i) => <sup class:list={['cmark', isOrgLevel(marks[i].level) && 'cmark-org']} aria-hidden="true">{s}</sup>)}
     {spoken && <span class="sr-only"> ({spoken})</span>}
     {rows.length > 0 && (
       <span class="ctip" aria-hidden="true">
-        {rows.map(l => (
-          <span class:list={['ctip-row', own.has(l.symbol) && 'is-own']}>
-            <span class="ctip-sym">{l.symbol}</span>{l.note}
+        {cols.map(col => (
+          <span class="ctip-col">
+            {col.map(l => (
+              <span class:list={['ctip-row', isOrgLevel(l.level) && 'ctip-org', own.has(l.symbol) && 'is-own']}>
+                <span class="ctip-sym">{l.symbol}</span>{l.icon && (l.icon.kind === 'image'
+                  ? <img class="ctip-icon" src={l.icon.value} alt="" loading="lazy" decoding="async" />
+                  : <span class="ctip-icon">{l.icon.value}</span>)}{l.note}
+              </span>
+            ))}
           </span>
         ))}
       </span>

@@ -22,23 +22,62 @@ import relationGroupLabels from '../data/relationGroupLabels.json';
 import { hostLabel, extraLinks, paperLink, type UrlEntry } from '../utils/links';
 import { normalizeMetrics, type Metrics, type NormalizedMetric } from '../utils/metrics';
 import { resolvePeople, collaboratorHref } from '../utils/collaborators';
-import { peopleRefs, type PersonEntry } from '../utils/marks';
+import { peopleMarks, marksFor, legendOf, supSymbols, type Contributions, type MarkInfo, type PersonEntry } from '../utils/marks';
+import { affiliationMarks, type AuthorAffiliations } from '../utils/institutions';
 
 import { withIncoming } from '../utils/incoming';
 import { roleRef } from '../utils/experienceRefs';
 import { joinRange, fmtMonthRange } from '../utils/works';
 
-// The drawer renders descriptions through inlineMarkdown, so a credited person who
-// has a /collaborators dropdown is emitted as a markdown link straight to it (the
-// page opens + scrolls to them on arrival). Contributor-level marks are deliberately
-// LEFT OFF here: inlineMarkdown's emphasis pass would read a pair of bare "*"s
-// across two names as italics, and it has no superscript to render them properly.
-// Takes the raw `authors` list, whose entries may carry marks inline — peopleRefs
-// drops back to plain references, which is all this line needs.
-const pubAuthorLine = (authors: PersonEntry[]): string =>
-  resolvePeople(peopleRefs(authors))
-    .map(a => (a.listed && !a.isSelf ? `[${a.name}](${collaboratorHref(a.slug)})` : a.name))
-    .join(', ');
+// A credited name on a publication, pre-resolved exactly as the Works cards
+// resolve theirs (see works.astro + WorkCard.astro): `href` already points wherever
+// the name should go — their /collaborators dropdown, else their own site — and
+// `marks` carries the contributor-level symbols this paper gives them.
+//   The author line used to be folded into the drawer's description string, which
+// meant no marks: it renders through inlineMarkdown, whose emphasis pass would read
+// a pair of bare "*"s across two names as italics, and it has no superscript. It's
+// its own structured line now (see renderCredits in the client script), so the
+// superscripts render exactly as they do on a Works card.
+//   Their LEGEND is the one thing the drawer does differently. A Works card hangs
+// it off each name as a hover popup (CreditMarks.astro's .ctip); in here that popup
+// would be unreadable — .tl-detail-panel scrolls (`overflow-y: auto`, which clips
+// both axes), so a tip rising off a name near the panel's top edge gets cut, and on
+// mobile this panel IS the whole surface, where there's no hover to begin with. So
+// the drawer prints the item's legend once, statically, beneath the names.
+interface AuthorChip {
+  name: string;
+  href: string | null;
+  external: boolean;
+  /** Me — rendered bold and never linked. */
+  self: boolean;
+  marks: MarkInfo[];
+  /** The superscripts to print, already run through supSymbols — a run of numeric
+   *  marks comes back comma-joined ("1", ",2") so it can't read as one number. */
+  sups: string[];
+}
+// Takes the raw `authors` list (entries may carry their marks inline), the paper's
+// own `contributions` legend — peopleMarks merges the two forms — and its
+// `authorAffiliations`, which affiliationMarks turns into the numbered institution
+// marks. A name carries the symbols first, then the numbers ("Buzz*¹").
+const pubAuthors = (
+  authors?: PersonEntry[] | null,
+  contributions?: Contributions | null,
+  affiliations?: AuthorAffiliations | null,
+): AuthorChip[] => {
+  const { refs, marks } = peopleMarks(authors, contributions);
+  const affils = affiliationMarks(refs, affiliations);
+  return resolvePeople(refs).map(a => {
+    const own = [...marksFor(marks, a.slug), ...marksFor(affils.marks, a.slug)];
+    return {
+      name: a.name,
+      href: a.isSelf ? null : a.listed ? collaboratorHref(a.slug) : a.url,
+      external: !a.isSelf && !a.listed && !!a.url,
+      self: a.isSelf,
+      marks: own,
+      sups: supSymbols(own),
+    };
+  });
+};
 
 if (!isRouteEnabled('experience')) return Astro.rewrite('/404');
 
@@ -366,6 +405,11 @@ interface Item {
   // Generic label→value stat chips (see src/utils/metrics.ts), rendered in the
   // drawer. Normalized server-side so the client just paints them.
   metrics: NormalizedMetric[];
+  // Credited names + the contributor marks each carries (publications; [] for
+  // everything else), with the item's whole legend derived from them. Both are
+  // resolved server-side — the client script only paints (see renderCredits).
+  authors: AuthorChip[];
+  authorLegend: MarkInfo[];
   // Data-derived deep-link handle (src/utils/experienceRefs.ts) for the entries
   // another page links to — org roles today. `id` is a per-build counter and
   // differs from the list view's, so a ref is what an outside link can name.
@@ -412,6 +456,7 @@ interface ItemOpts {
   detailUrl?: string | null;
   affiliations?: string[]; isWork?: boolean; main?: boolean; also?: CatKey[];
   relationGroups?: string[]; tags?: string[]; metrics?: Metrics; ref?: string | null;
+  authors?: AuthorChip[];
 }
 function mkItem(o: ItemOpts): Item | null {
   const s = parseDate(o.start);
@@ -454,6 +499,7 @@ function mkItem(o: ItemOpts): Item | null {
     .filter((l): l is { label: string; url: string } => !!l && !!l.url)
     .filter((l, i, arr) => arr.findIndex(x => x.url === l.url) === i);
   const description = o.description || null;
+  const authors = o.authors || [];
   // Grouping/lane keys stay on the ORIGINAL (untagged) title so an incoming role
   // still chains with its org's other bars and matches the list view.
   const entity = o.entity || o.title;
@@ -467,6 +513,10 @@ function mkItem(o: ItemOpts): Item | null {
     relationGroups: o.relationGroups || [],
     tags: o.tags || [],
     metrics: normalizeMetrics(o.metrics),
+    authors,
+    // Built from the marks the credited names actually carry, so a level nobody
+    // holds never reaches the legend (same derivation as WorkCard's authorLegend).
+    authorLegend: legendOf(authors.map(a => a.marks)),
     ref: o.ref ?? null,
     main: !!o.main, cats,
   };
@@ -601,7 +651,10 @@ const items: Item[] = [
     title: p.title, type: 'awards', start: p.date, point: true, entity: p.title, isWork: true,
     // Authorship role (e.g. "Lead author") reads as the drawer subtitle.
     subtitle: p.role ?? null,
-    description: [(p.authors && p.authors.length) ? pubAuthorLine(p.authors) : null, p.venue].filter(Boolean).join(' — '),
+    // Authors are their own structured line (see pubAuthors), so the description
+    // is left to the venue alone.
+    authors: pubAuthors(p.authors, p.contributions, p.authorAffiliations),
+    description: p.venue ?? null,
     // Partner labs/orgs — cross-link the paper to that org on the timeline, same as projects.
     affiliations: p.affiliations || [],
     links: [...paperLink(p.url), ...extraLinks(p.urls), ...extraLinks(p.features)], main: p.main,
@@ -1299,6 +1352,23 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .d-title { font-size: 1.1rem; margin: 0 1.5rem 0.4rem 0; line-height: 1.3; }
   .d-meta { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.85rem; }
   .d-subtitle { font-size: 0.88rem; color: var(--text); margin: -0.4rem 0 0.8rem; line-height: 1.45; }
+  /* Credited authors — the drawer's take on a Works card's `.work-authors`
+     (see renderCredits). The marks themselves are styled globally (.cperson /
+     .cmark), so only the line around them is set here. */
+  .d-authors { font-size: 0.85rem; color: var(--text-muted); margin: -0.5rem 0 0.5rem; line-height: 1.5; }
+  .d-authors .me { color: var(--text); font-weight: 700; }
+  .d-authors a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--border); }
+  .d-authors a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  /* The static symbol legend under them — a Works card hangs this off each name
+     as a hover popup, which this scrolling (and touch-first) panel would clip. */
+  .d-marks { list-style: none; padding: 0; margin: 0 0 0.85rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.45; }
+  .d-mark-sym { display: inline-block; min-width: 1em; margin-right: 0.35rem; color: var(--accent); font-weight: 700; }
+  /* Institution rows are a group of their own, set apart by the same gap the
+     superscripts use (see .cmark-org in global.css). */
+  .d-marks li:not(.d-mark-org) + .d-mark-org { margin-top: 0.3rem; }
+  /* An institution row's optional icon (see src/utils/institutions.ts). */
+  .d-mark-icon { display: inline-block; margin-right: 0.3rem; font-size: 0.95em; line-height: 1; vertical-align: -0.05em; }
+  img.d-mark-icon { width: 1em; height: 1em; object-fit: contain; vertical-align: -0.12em; }
   .d-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
   .d-desc { font-size: 0.9rem; margin-bottom: 0.9rem; line-height: 1.6; }
   /* Inline markdown inside drawer descriptions (see src/utils/markdown.ts). */
@@ -1743,12 +1813,27 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     // Normalized metric (mirrors NormalizedMetric in src/utils/metrics.ts) —
     // serialized into the timeline/list datasets, painted by renderMetrics().
     interface MetricRow { label: string; parts: { text: string; url: string | null }[]; }
+    // One credit mark — a contributor level or an institution — and one credited
+    // name carrying some (mirrors MarkInfo in src/utils/marks.ts + AuthorChip
+    // above). Both are resolved server-side; renderCredits only paints them. An
+    // `icon` arrives already classified (see src/utils/institutions.ts), so this
+    // side never has to work out what kind of value it is.
+    interface MarkRow {
+      level: string; symbol: string; note: string | null;
+      icon?: { kind: 'glyph' | 'image'; value: string } | null;
+    }
+    interface AuthorRow { name: string; href: string | null; external: boolean; self: boolean; marks: MarkRow[]; sups?: string[]; }
+    // Which family a mark belongs to — mirrors ORG_LEVEL / isOrgLevel in
+    // src/utils/marks.ts, kept as a literal rather than imported so this script
+    // doesn't pull the whole marks module (and its data) into the client bundle.
+    const isOrg = (level: string) => level.startsWith('org:');
     interface Item {
       id: number; title: string; type: string; start: number; end: number | null;
       startMonthNum: number; endMonthNum: number | null; dateLabel: string;
       description: string | null; subtitle: string | null; links: { label: string; url: string }[]; detailUrl: string | null;
       entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[]; isWork: boolean;
       tags: string[]; metrics: MetricRow[]; main: boolean; cats: string[]; laneKey?: string | null;
+      authors?: AuthorRow[]; authorLegend?: MarkRow[];   // credited names + their marks
       ref?: string | null;   // data-derived deep-link handle (see selectByRef)
     }
     // Paint a metrics list into `container` as "label value" chips — the client
@@ -1772,6 +1857,84 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         li.appendChild(lab); li.appendChild(val); ul.appendChild(li);
       }
       container.appendChild(ul);
+    }
+    // Paint a publication's author line into `container` — the client mirror of a
+    // Works card's `.work-authors` (see WorkCard.astro + CreditMarks.astro). Each
+    // name renders however it was resolved: bold-unlinked me, a link when it has
+    // somewhere to go, plain text otherwise — with its contributor marks as
+    // superscripts and the meanings read out inline for screen readers.
+    //   The legend follows as a static block rather than each name's hover popup:
+    // this panel scrolls and doubles as the mobile overlay, so a popup would be
+    // clipped by it and unreachable by touch (see the pubAuthors comment).
+    // No-op when empty, so callers can invoke it blindly.
+    function renderCredits(container: HTMLElement, authors?: AuthorRow[] | null, legend?: MarkRow[] | null) {
+      if (!authors || !authors.length) return;
+      const p = document.createElement('p'); p.className = 'd-authors';
+      authors.forEach((a, i) => {
+        if (i > 0) p.appendChild(document.createTextNode(', '));
+        let name: HTMLElement;
+        if (a.self) { name = document.createElement('strong'); name.className = 'me'; }
+        else if (a.href) {
+          const link = document.createElement('a'); link.href = a.href;
+          if (a.external) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+          name = link;
+        } else name = document.createElement('span');
+        name.textContent = a.name;
+        const marks = a.marks || [];
+        if (!marks.length) { p.appendChild(name); return; }
+        // .cperson/.cmark are global (see global.css) so a marked name reads the
+        // same here as on a card — minus the .ctip popup, which this panel clips.
+        const wrap = document.createElement('span'); wrap.className = 'cperson';
+        wrap.appendChild(name);
+        // `sups` are the symbols already spaced by supSymbols(); fall back to the
+        // raw ones so an item serialized without them still renders. `.cmark-org`
+        // is what sets the institution numbers apart from the contributor symbols
+        // (the gap rule lives with .cmark in global.css).
+        const sups = a.sups || marks.map(m => m.symbol);
+        marks.forEach((m, i) => {
+          const sup = document.createElement('sup');
+          sup.className = isOrg(m.level) ? 'cmark cmark-org' : 'cmark';
+          sup.textContent = sups[i] ?? m.symbol;
+          // Decoration — an emoji mark would otherwise be read out by its unicode
+          // name; the meanings follow in the sr-only text below.
+          sup.setAttribute('aria-hidden', 'true');
+          wrap.appendChild(sup);
+        });
+        const spoken = marks.map(m => m.note || m.symbol).join('; ');
+        if (spoken) {
+          const sr = document.createElement('span'); sr.className = 'sr-only'; sr.textContent = ` (${spoken})`;
+          wrap.appendChild(sr);
+        }
+        p.appendChild(wrap);
+      });
+      container.appendChild(p);
+      // The legend itself — hidden from screen readers, which already heard each
+      // meaning inline on the name that carries it.
+      const rows = (legend || []).filter(l => l.note);
+      if (!rows.length) return;
+      const key = document.createElement('ul'); key.className = 'd-marks'; key.setAttribute('aria-hidden', 'true');
+      for (const l of rows) {
+        const li = document.createElement('li');
+        if (isOrg(l.level)) li.className = 'd-mark-org';
+        const sym = document.createElement('span'); sym.className = 'd-mark-sym'; sym.textContent = l.symbol;
+        li.appendChild(sym);
+        // An institution may carry an icon — a glyph to print, or an image to load.
+        if (l.icon) {
+          let icon: HTMLElement;
+          if (l.icon.kind === 'image') {
+            const img = document.createElement('img');
+            img.src = l.icon.value; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+            icon = img;
+          } else {
+            icon = document.createElement('span'); icon.textContent = l.icon.value;
+          }
+          icon.className = 'd-mark-icon';
+          li.appendChild(icon);
+        }
+        li.appendChild(document.createTextNode(l.note!));
+        key.appendChild(li);
+      }
+      container.appendChild(key);
     }
     const items: Item[] = JSON.parse(dataEl.textContent || '[]');
     const cfg = JSON.parse(cfgEl.textContent || '{}');
@@ -1910,6 +2073,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         const sub = document.createElement('div'); sub.className = 'd-subtitle'; sub.textContent = it.subtitle;
         drawerBody.appendChild(sub);
       }
+      // Credited authors (publications) — sits under the authorship role and above
+      // the venue, the same order a Works card reads in.
+      renderCredits(drawerBody, it.authors, it.authorLegend);
       // Affiliation chips — orgs/labs this item is tied to (projects & publications).
       // Same outlined "@ org" chips as the Works cards; selecting the item also
       // lights these orgs up on the timeline and in the Related list below.

@@ -11,7 +11,8 @@
 //     next to the title (the tab itself already says what the item is).
 import Metrics from './Metrics.astro';
 import CreditMarks from './CreditMarks.astro';
-import { legendOf } from '../utils/marks';
+import { legendOf, isOrgLevel, type MarkInfo } from '../utils/marks';
+import { permanentInstitutionLegend } from '@config/site';
 import { normalizeMetrics, type Metrics as MetricsDict } from '../utils/metrics';
 
 interface WorkLink {
@@ -22,14 +23,15 @@ interface WorkLink {
 // One credited name on a card (publications). Pre-resolved by the caller so this
 // component stays a dumb renderer: `href` already points wherever the name should
 // go (a /collaborators dropdown, or the person's own site when `external`), and
-// `marks` carries the item's contributor-level symbols + legend text.
+// `marks` carries the item's marks + legend text — its institution numbers first,
+// then its contributor-level symbols ("Buzz¹†").
 interface AuthorChip {
   name: string;
   href?: string | null;
   external?: boolean;
   /** Me — rendered bold and never linked. */
   self?: boolean;
-  marks?: { symbol: string; note: string | null }[];
+  marks?: MarkInfo[];
 }
 
 interface Props {
@@ -80,12 +82,36 @@ const {
 
 const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
 const hasMetrics = normalizeMetrics(metrics).length > 0;
-// The item's whole contributor legend, read straight off the credited names —
-// every name's hover popup shows all of it, its own rows highlighted.
+// The item's whole legend, read straight off the credited names — every name's
+// hover popup shows all of it, its own rows highlighted.
 const authorLegend = legendOf(authors.map(a => a.marks));
+// The INSTITUTION half of it is also printed openly under the names, unlike the
+// contributor symbols: an emoji mark is only a guess without its key, and a hover
+// popup is unreachable by touch. Contributor symbols stay in the popup — "†" reads
+// as a footnote on its own, and its meaning is the same on every card.
+//   Config-gated on its own (`authorInstitutions.permanentLegend`, 'none' by
+// default): with no permanent legend the marks stay on the names and the hover
+// popup remains their only explanation.
+const legendMode = permanentInstitutionLegend();
+const affilKey = legendMode === 'below'
+  ? authorLegend.filter(l => isOrgLevel(l.level) && l.note)
+  : [];
+// 'aside' instead puts the WHOLE legend — both families — in its own column beside
+// the item, in the page margin: absolutely positioned off the card, so the works
+// column keeps exactly the width it has without a legend, and every card's legend
+// lines up at the same edge. It's the popup's content at a fixed address rather
+// than one that follows the cursor — it fades in while a name is hovered (see the
+// script below), lighting that person's own rows, and fades back out.
+//   The margin only exists on a wide enough viewport; under the breakpoint the CSS
+// hides it and the ordinary floating popup takes over, which is why the names keep
+// theirs rather than having it suppressed here.
+const asideLegend = legendMode === 'aside' ? authorLegend.filter(l => l.note) : [];
 ---
 
-<article class="work-card">
+{/* `.work-main` is always present so the card's markup doesn't change shape with
+    the config; it only becomes a column when there's an aside to sit beside. */}
+<article class:list={['work-card', asideLegend.length > 0 && 'has-aside']}>
+  <div class="work-main">
   {kind && (
     <div class="work-typerow">
       <span class="work-kind" style={kindColor ? `--cat: ${kindColor}` : undefined}>{kind}</span>
@@ -120,6 +146,24 @@ const authorLegend = legendOf(authors.map(a => a.marks));
       ))}
     </p>
   )}
+  {/* The institution key. Hidden from screen readers, which already heard each
+      one inline on the name that carries it (see CreditMarks). */}
+  {affilKey.length > 0 && (
+    <p class="work-affilkey" aria-hidden="true">
+      {affilKey.map((l, i) => (
+        <Fragment>
+          {i > 0 && <span class="sep">·</span>}
+          <span class="work-affil">
+            <span class="work-affil-mark">{l.symbol}</span>
+            {l.icon && (l.icon.kind === 'image'
+              ? <img class="affil-icon" src={l.icon.value} alt="" loading="lazy" decoding="async" />
+              : <span class="affil-icon">{l.icon.value}</span>)}
+            {l.note}
+          </span>
+        </Fragment>
+      ))}
+    </p>
+  )}
   {description && <p class="work-desc">{description}</p>}
 
   {/* Four independent groups (affiliations · tags · metrics · links). Base render
@@ -147,6 +191,23 @@ const authorLegend = legendOf(authors.map(a => a.marks));
         </div>
       )}
     </div>
+  )}
+  </div>
+
+  {/* The static legend. Hidden from screen readers, which already heard each
+      meaning inline on the name that carries it (see CreditMarks). */}
+  {asideLegend.length > 0 && (
+    <aside class="work-aside" aria-hidden="true">
+      {asideLegend.map(l => (
+        <span class:list={['wa-row', isOrgLevel(l.level) && 'wa-org']} data-level={l.level}>
+          <span class="wa-sym">{l.symbol}</span>
+          {l.icon && (l.icon.kind === 'image'
+            ? <img class="affil-icon" src={l.icon.value} alt="" loading="lazy" decoding="async" />
+            : <span class="affil-icon">{l.icon.value}</span>)}
+          {l.note}
+        </span>
+      ))}
+    </aside>
   )}
 </article>
 
@@ -264,6 +325,75 @@ const authorLegend = legendOf(authors.map(a => a.marks));
   };
 
   document.querySelectorAll<HTMLElement>('.work-metarow').forEach(setup);
+
+  // ── Institution key: no lone item on the last line ────────────────────────
+  // When the key wraps, a single institution stranded on its own line reads as an
+  // afterthought rather than part of the list, so the one before it is pulled down
+  // to join it. Only when the line it leaves keeps at least two: with three items
+  // over two lines every arrangement has a singleton somewhere, and trading "2 + 1"
+  // for "1 + 2" is no improvement, so that case is left alone.
+  const balanceKey = (key: HTMLElement) => {
+    key.querySelectorAll('.affilkey-break').forEach(b => b.remove());
+    const items = Array.from(key.querySelectorAll<HTMLElement>('.work-affil'));
+    if (items.length < 3) return;
+    const tops = items.map(i => Math.round(i.offsetTop));
+    const last = tops[tops.length - 1];
+    // All equal → one line (or a hidden tab panel, where every offsetTop is 0);
+    // either way there's nothing to balance. A hidden panel re-runs on show.
+    if (tops[0] === last) return;
+    if (tops.filter(t => t === last).length !== 1) return;
+    const prev = tops[tops.length - 2];
+    if (tops.filter(t => t === prev).length < 3) return;
+    // Break before the second-to-last item, so it wraps down with the orphan.
+    const br = document.createElement('br');
+    br.className = 'affilkey-break';
+    key.insertBefore(br, items[items.length - 2]);
+  };
+
+  // ── Margin legend: follow the pointer from name to name ───────────────────
+  // It shows only while a credited name is hovered — fading in at its fixed spot
+  // rather than floating off the name — and each name lights the rows it carries,
+  // so reading one after another walks the legend. Each name publishes its levels
+  // as `data-levels` (see CreditMarks.astro) and each row names its own, so this
+  // is a set test: no per-card data threading, and both mark families at once.
+  document.querySelectorAll<HTMLElement>('.work-aside').forEach(aside => {
+    const card = aside.closest('.work-card');
+    if (!card) return;
+    const rows = Array.from(aside.querySelectorAll<HTMLElement>('.wa-row'));
+    const close = () => {
+      aside.classList.remove('is-open');
+      for (const r of rows) r.classList.remove('is-own');
+    };
+    const open = (target: EventTarget | null) => {
+      const person = target instanceof Element ? target.closest<HTMLElement>('.cperson') : null;
+      // Anywhere in the card that isn't a name closes it again — the legend
+      // belongs to the names, not to the card as a whole.
+      if (!person) return close();
+      const levels = new Set((person.dataset.levels || '').split(' ').filter(Boolean));
+      for (const r of rows) r.classList.toggle('is-own', levels.has(r.dataset.level || ''));
+      aside.classList.add('is-open');
+    };
+    // mouseover (not mouseenter) so moving name→name re-fires without closing.
+    card.addEventListener('mouseover', e => open(e.target));
+    card.addEventListener('mouseleave', close);
+    // Keyboard: names are links, so tabbing through them walks the legend too.
+    card.addEventListener('focusin', e => open(e.target));
+    card.addEventListener('focusout', close);
+  });
+
+  document.querySelectorAll<HTMLElement>('.work-affilkey').forEach(key => {
+    balanceKey(key);
+    if ('ResizeObserver' in window) {
+      let raf = 0;
+      const ro = new ResizeObserver(() => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => balanceKey(key));
+      });
+      ro.observe(key);
+    } else {
+      window.addEventListener('resize', () => balanceKey(key));
+    }
+  });
 </script>
 
 <style>
@@ -274,6 +404,76 @@ const authorLegend = legendOf(authors.map(a => a.marks));
 
   .work-card:last-child {
     border-bottom: none;
+  }
+
+  /* ── Legend column (authorInstitutions.permanentLegend: 'aside') ────────────
+     A column of its own in the page margin: absolutely positioned off the card,
+     so the works column keeps exactly the width it has without one, and every
+     card's legend starts at the same edge. Top-aligned with its item, so it reads
+     as belonging to that card and not to the list.
+       It's the popup's content at a fixed address rather than one that chases the
+     cursor — hidden until a name is hovered, then faded in by `.is-open` (see the
+     script). Only cards that HAVE a legend get one; `.work-main` is a plain block
+     wrapper everywhere else and changes nothing. */
+  .work-card.has-aside {
+    position: relative;
+  }
+
+  .work-aside {
+    position: absolute;
+    top: 1.1rem; /* the card's own top padding — aligns with the first line */
+    left: 100%;
+    margin-left: 1.75rem;
+    width: 12.5rem;
+    display: grid;
+    gap: 0.15rem;
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+  }
+
+  .work-aside.is-open {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .work-aside {
+      transition: none;
+    }
+  }
+
+  .wa-sym {
+    display: inline-block;
+    min-width: 1em;
+    margin-right: 0.35rem;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* Institutions are their own group, same gap the superscripts use. */
+  .wa-row:not(.wa-org) + .wa-org {
+    margin-top: 0.35rem;
+  }
+
+  /* Lit by the script below while the pointer is on a name that carries this
+     row; the rest stay muted, present for context. */
+  .wa-row.is-own {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* The margin only exists on a wide enough viewport: the content column is
+     680px, so two ~14rem margins need ~1130px. Under that there is nowhere to put
+     this, and the ordinary floating popup takes over instead (see .ctip in
+     global.css, which is hidden the other way round above this width). */
+  @media (max-width: 1149px) {
+    .work-aside {
+      display: none;
+    }
   }
 
   /* ── Type row (Recent activity only) ───────────────────────────────────── */
@@ -390,6 +590,50 @@ const authorLegend = legendOf(authors.map(a => a.marks));
   .work-authors a:hover {
     color: var(--accent);
     border-bottom-color: var(--accent);
+  }
+
+  /* The institution key under the author line — smaller and quieter than the
+     names, since it's a footnote to them rather than content of its own. */
+  .work-affilkey {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    line-height: 1.5;
+    margin: 0.2rem 0 0;
+    opacity: 0.85;
+  }
+
+  .work-affilkey .sep {
+    margin: 0 0.4rem;
+    opacity: 0.5;
+  }
+
+  /* Keep a number and its institution on one line — the separators are the only
+     place this list may wrap. */
+  .work-affil {
+    white-space: nowrap;
+  }
+
+  /* The mark this row explains — an institution's emoji, or its fallback number.
+     Not a <sup> here: in the key it's a label, not a superscript on a name. */
+  .work-affil-mark {
+    color: var(--accent);
+    font-weight: 700;
+    margin-right: 0.25rem;
+  }
+
+  .affil-icon {
+    display: inline-block;
+    margin-right: 0.25rem;
+    font-size: 0.9em;
+    line-height: 1;
+    vertical-align: -0.05em;
+  }
+
+  img.affil-icon {
+    width: 1em;
+    height: 1em;
+    object-fit: contain;
+    vertical-align: -0.12em;
   }
 
   /* ── Meta row: affiliations · tags · metrics · links ───────────────────────
