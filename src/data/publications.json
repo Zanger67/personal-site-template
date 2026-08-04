@@ -6,7 +6,7 @@
     "date": "2025",
     "role": "Lead author",
     "affiliations": ["Buzz Robotics Society", "Georgia Institute of Technology"],
-    "url": null,
+    "url": "https://example.com/wing-aerodynamics",
     "urls": [
       { "title": "PDF", "url": "https://example.com/wing-aerodynamics.pdf" },
       { "url": "https://arxiv.org/abs/2501.00000" }
