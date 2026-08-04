@@ -5,6 +5,6 @@
   "equal-fourth": { "symbol": "††", "note": "Equal fourth author", "solo": "Fourth author" },
   "equal-fifth": { "symbol": "‡‡", "note": "Equal fifth author", "solo": "Fifth author" },
   "equal-sixth": { "symbol": "§§", "note": "Equal sixth author", "solo": "Sixth author" },
-  "corresponding": { "symbol": "*", "note": "Corresponding author" },
+  "corresponding": { "symbol": "＊", "note": "Corresponding author" },
   "advisor": { "symbol": "¶", "note": "Advisor" }
 }
