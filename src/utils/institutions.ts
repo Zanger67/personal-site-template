@@ -49,7 +49,7 @@
 // Deliberately NOT derived from `url` through a favicon service: that would put a
 // third-party request on every page crediting a paper, which this site's cookieless,
 // no-third-party analytics stance rules out. Icons are opt-in, per institution.
-import { showAuthorInstitutions } from '@config/site';
+import { institutionLegendNames, showAuthorInstitutions } from '@config/site';
 import { slugify, fallbackName } from './collaborators';
 import { ORG_LEVEL, type MarkIcon, type MarkInfo, type MarkMap } from './marks';
 import institutions from '../data/institutions.json';
@@ -57,7 +57,8 @@ import institutions from '../data/institutions.json';
 export interface Institution {
   /** Full institution name — what a paper's affiliation block would print. */
   name: string;
-  /** Compact form, used in the legend when the full name is unwieldy ("UIUC"). */
+  /** Compact form, for when the full name is unwieldy ("UIUC"). Printed in the
+   *  legend only under `authorInstitutions.legendNames: 'short'`. */
   short?: string | null;
   /** Homepage. Stored so a legend row can be linked later; nothing links it today. */
   url?: string | null;
@@ -75,7 +76,8 @@ export interface ResolvedInstitution {
   slug: string;
   /** Full name — for anything that wants it spelled out (aria, structured data). */
   name: string;
-  /** What the legend prints: the short form when there is one, else the full name. */
+  /** What the legend prints — the full name by default, the short form (falling
+   *  back to the full one) under `authorInstitutions.legendNames: 'short'`. */
   display: string;
   url: string | null;
   icon: MarkIcon | null;
@@ -97,7 +99,11 @@ export function institutionInfo(ref: string): ResolvedInstitution {
   return {
     slug,
     name,
-    display: (info?.short || '').trim() || name,
+    // One choke point for the name form, so every legend that exists — aside,
+    // below, popup, drawer — says the same thing about the same institution.
+    display: institutionLegendNames() === 'short'
+      ? (info?.short || '').trim() || name
+      : name,
     url: info?.url || null,
     icon: institutionIcon(info?.icon),
   };

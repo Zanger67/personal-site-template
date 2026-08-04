@@ -446,12 +446,28 @@ const asideLegend = legendMode === 'aside' ? authorLegend.filter(l => l.note) : 
     }
   }
 
+  /* A name too long for a 12.5rem column wraps, and its later lines hang clear of
+     the mark instead of running back under it. A flex row rather than a text
+     indent, because the indent would have to guess the mark's width: it varies per
+     row (an emoji, a "††", a number), so any fixed value is wrong on most of them.
+     The trailing name is an anonymous flex item, so it wraps inside its own box. */
+  .wa-row {
+    display: flex;
+    align-items: baseline;
+  }
+
   .wa-sym {
+    flex: none;
     display: inline-block;
     min-width: 1em;
     margin-right: 0.35rem;
     color: var(--accent);
     font-weight: 700;
+  }
+
+  /* Same reason as the mark: an icon holds its width and the name wraps beside it. */
+  .wa-row .affil-icon {
+    flex: none;
   }
 
   /* Institutions are their own group, same gap the superscripts use. */

@@ -1362,12 +1362,17 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   /* The static symbol legend under them — a Works card hangs this off each name
      as a hover popup, which this scrolling (and touch-first) panel would clip. */
   .d-marks { list-style: none; padding: 0; margin: 0 0 0.85rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.45; }
-  .d-mark-sym { display: inline-block; min-width: 1em; margin-right: 0.35rem; color: var(--accent); font-weight: 700; }
+  /* A row whose name outruns the panel wraps with its later lines hanging clear
+     of the mark — a flex row rather than a text indent, since the mark's width
+     varies per row (an emoji, a "††", a number) and no fixed indent fits them all.
+     Same treatment as a Works card's aside legend (.wa-row in WorkCard.astro). */
+  .d-marks li { display: flex; align-items: baseline; }
+  .d-mark-sym { flex: none; display: inline-block; min-width: 1em; margin-right: 0.35rem; color: var(--accent); font-weight: 700; }
   /* Institution rows are a group of their own, set apart by the same gap the
      superscripts use (see .cmark-org in global.css). */
   .d-marks li:not(.d-mark-org) + .d-mark-org { margin-top: 0.3rem; }
   /* An institution row's optional icon (see src/utils/institutions.ts). */
-  .d-mark-icon { display: inline-block; margin-right: 0.3rem; font-size: 0.95em; line-height: 1; vertical-align: -0.05em; }
+  .d-mark-icon { flex: none; display: inline-block; margin-right: 0.3rem; font-size: 0.95em; line-height: 1; vertical-align: -0.05em; }
   img.d-mark-icon { width: 1em; height: 1em; object-fit: contain; vertical-align: -0.12em; }
   .d-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
   .d-desc { font-size: 0.9rem; margin-bottom: 0.9rem; line-height: 1.6; }

@@ -152,10 +152,24 @@ export const authorInstitutions = {
   // The experience drawer prints its own legend regardless, having no hover to
   // fall back on.
   permanentLegend: 'none',
+  // How a legend ROW names its institution — everywhere a legend prints: the
+  // aside/below key on a Works card, the hover popup, the drawer's static key.
+  //   'full'  — the registry's full `name` ("Georgia Institute of Technology").
+  //             The default: a legend exists to be read by someone who does NOT
+  //             already know what the mark stands for, and an abbreviation asks
+  //             them to know one more thing.
+  //   'short' — the registry's `short` form when it has one ("Georgia Tech"),
+  //             falling back to the full name. For a narrow legend column, or a
+  //             page whose readers know the abbreviations.
+  // The registry keeps both either way — this only picks which one prints.
+  legendNames: 'full',
 } as const;
 
 /** Where a Works card shows its permanent credit legend. */
 export type PermanentLegend = 'none' | 'below' | 'aside';
+
+/** Which name form a legend row prints for its institution. */
+export type InstitutionLegendNames = 'full' | 'short';
 
 /** Should publications carry their per-author institution marks at all? */
 export function showAuthorInstitutions(): boolean {
@@ -165,6 +179,11 @@ export function showAuthorInstitutions(): boolean {
 /** Where the permanent legend goes — 'none' whenever the marks are off entirely. */
 export function permanentInstitutionLegend(): PermanentLegend {
   return authorInstitutions.enabled ? authorInstitutions.permanentLegend : 'none';
+}
+
+/** Full institution names in legend rows, or their short forms. */
+export function institutionLegendNames(): InstitutionLegendNames {
+  return authorInstitutions.legendNames;
 }
 
 // Experience-page timeline behaviour.
