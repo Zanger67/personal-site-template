@@ -11,8 +11,8 @@
 //     next to the title (the tab itself already says what the item is).
 import Metrics from './Metrics.astro';
 import CreditMarks from './CreditMarks.astro';
-import { legendOf, isOrgLevel, type MarkInfo } from '../utils/marks';
-import { permanentInstitutionLegend } from '@config/site';
+import { legendOf, isOrgLevel, markFamily, type MarkInfo } from '../utils/marks';
+import { worksLegend } from '@config/site';
 import { normalizeMetrics, type Metrics as MetricsDict } from '../utils/metrics';
 
 interface WorkLink {
@@ -82,30 +82,32 @@ const {
 
 const extAttrs = external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
 const hasMetrics = normalizeMetrics(metrics).length > 0;
-// The item's whole legend, read straight off the credited names — every name's
-// hover popup shows all of it, its own rows highlighted.
-const authorLegend = legendOf(authors.map(a => a.marks));
-// The INSTITUTION half of it is also printed openly under the names, unlike the
-// contributor symbols: an emoji mark is only a guess without its key, and a hover
-// popup is unreachable by touch. Contributor symbols stay in the popup — "†" reads
-// as a footnote on its own, and its meaning is the same on every card.
-//   Config-gated on its own (`authorInstitutions.permanentLegend`, 'none' by
-// default): with no permanent legend the marks stay on the names and the hover
-// popup remains their only explanation.
-const legendMode = permanentInstitutionLegend();
-const affilKey = legendMode === 'below'
-  ? authorLegend.filter(l => isOrgLevel(l.level) && l.note)
-  : [];
-// 'aside' instead puts the WHOLE legend — both families — in its own column beside
-// the item, in the page margin: absolutely positioned off the card, so the works
-// column keeps exactly the width it has without a legend, and every card's legend
-// lines up at the same edge. It's the popup's content at a fixed address rather
-// than one that follows the cursor — it fades in while a name is hovered (see the
-// script below), lighting that person's own rows, and fades back out.
-//   The margin only exists on a wide enough viewport; under the breakpoint the CSS
-// hides it and the ordinary floating popup takes over, which is why the names keep
-// theirs rather than having it suppressed here.
-const asideLegend = legendMode === 'aside' ? authorLegend.filter(l => l.note) : [];
+// The item's whole legend, read straight off the credited names.
+const authorLegend = legendOf(authors.map(a => a.marks)).filter(l => l.note);
+// Each family goes wherever it is configured to go, INDEPENDENTLY of the other
+// (`creditLegends` in src/config/site.ts) — so a card can print its institutions
+// openly while leaving the contributor symbols to a hover popup, which is the
+// default: "†" reads as a footnote on its own and means the same on every card,
+// whereas an institution's emoji is only a guess without its key.
+//   Splitting here, server-side, is what keeps the surfaces from arguing: a row
+// lands in exactly one of these three, so the popup can never restate what the
+// margin column is already showing.
+const rowsFor = (mode: 'popup' | 'below' | 'aside') =>
+  authorLegend.filter(l => worksLegend(markFamily(l.level)) === mode);
+const popupLegend = rowsFor('popup');
+const asideLegend = rowsFor('aside');
+// 'aside' puts a family in its own column beside the item, in the page margin:
+// absolutely positioned off the card, so the works column keeps exactly the width
+// it has without a legend, and every card's legend lines up at the same edge. It's
+// the popup's content at a fixed address rather than one that follows the cursor —
+// it fades in while a name is hovered (see the script below), lighting that
+// person's own rows, and fades back out.
+//   That margin only exists on a wide enough viewport. Under the breakpoint the
+// CSS hides the column and these rows print as an ordinary 'below' key instead:
+// the legend has to survive on a phone, where there is no hover for either a popup
+// or the column's own fade-in to hang off.
+const belowLegend = rowsFor('below');
+const fallbackLegend = asideLegend;
 ---
 
 {/* `.work-main` is always present so the card's markup doesn't change shape with
@@ -137,7 +139,7 @@ const asideLegend = legendMode === 'aside' ? authorLegend.filter(l => l.note) : 
       {authors.map((a, i) => (
         <Fragment>
           {i > 0 && ', '}
-          <CreditMarks marks={a.marks ?? []} legend={authorLegend}>
+          <CreditMarks marks={a.marks ?? []} legend={popupLegend}>
             {a.self
               ? <strong class="me">{a.name}</strong>
               : a.href
@@ -146,11 +148,16 @@ const asideLegend = legendMode === 'aside' ? authorLegend.filter(l => l.note) : 
       ))}
     </p>
   )}
-  {/* The institution key. Hidden from screen readers, which already heard each
-      one inline on the name that carries it (see CreditMarks). */}
-  {affilKey.length > 0 && (
-    <p class="work-affilkey" aria-hidden="true">
-      {affilKey.map((l, i) => (
+  {/* The permanent key — whichever families are placed 'below'. Hidden from screen
+      readers, which already heard each meaning inline on the name that carries it
+      (see CreditMarks). A second copy carries the 'aside' families for viewports
+      too narrow for the margin column; the CSS shows exactly one of the two. */}
+  {[
+    { rows: belowLegend, fallback: false },
+    { rows: fallbackLegend, fallback: true },
+  ].filter(k => k.rows.length > 0).map(k => (
+    <p class:list={['work-affilkey', k.fallback && 'is-fallback']} aria-hidden="true">
+      {k.rows.map((l, i) => (
         <Fragment>
           {i > 0 && <span class="sep">·</span>}
           <span class="work-affil">
@@ -163,7 +170,7 @@ const asideLegend = legendMode === 'aside' ? authorLegend.filter(l => l.note) : 
         </Fragment>
       ))}
     </p>
-  )}
+  ))}
   {description && <p class="work-desc">{description}</p>}
 
   {/* Four independent groups (affiliations · tags · metrics · links). Base render
@@ -476,6 +483,7 @@ const asideLegend = legendMode === 'aside' ? authorLegend.filter(l => l.note) : 
     flex: none;
   }
 
+
   /* Institutions are their own group, same gap the superscripts use. */
   .wa-row:not(.wa-org) + .wa-org {
     margin-top: 0.35rem;
@@ -489,11 +497,19 @@ const asideLegend = legendMode === 'aside' ? authorLegend.filter(l => l.note) : 
   }
 
   /* The margin only exists on a wide enough viewport: the content column is
-     680px, so two ~14rem margins need ~1130px. Under that there is nowhere to put
-     this, and the ordinary floating popup takes over instead (see .ctip in
-     global.css, which is hidden the other way round above this width). */
+     680px, so two ~14rem margins need ~1130px. Under that there is nowhere to
+     put the column, and its rows print as an ordinary key under the authors
+     instead (`.work-affilkey.is-fallback`, rendered alongside it above) — a
+     phone has no hover, so neither the column's fade-in nor a floating popup
+     would be reachable there. Exactly one of the two shows at any width. */
   @media (max-width: 1149px) {
     .work-aside {
+      display: none;
+    }
+  }
+
+  @media (min-width: 1150px) {
+    .work-affilkey.is-fallback {
       display: none;
     }
   }

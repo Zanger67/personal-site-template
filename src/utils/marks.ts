@@ -89,6 +89,16 @@ export const ORG_LEVEL = 'org:';
 /** Is this an institution level rather than a contributor level? */
 export const isOrgLevel = (level: string): boolean => level.startsWith(ORG_LEVEL);
 
+/** The two families a mark can belong to. They render identically but are
+ *  EXPLAINED separately — each surface places their legends independently
+ *  (`creditLegends` in src/config/site.ts), because a standard symbol can be
+ *  read without a key and an institution's emoji cannot. */
+export type MarkFamily = 'contributions' | 'institutions';
+
+/** Which family a level belongs to — the split every legend placement keys on. */
+export const markFamily = (level: string): MarkFamily =>
+  isOrgLevel(level) ? 'institutions' : 'contributions';
+
 /** Two adjacent numeric marks need separating — "¹²" reads as twelve, not 1 and 2.
  *  (Only the institution family numbers its marks, so this never fires on symbols.) */
 export const isNumericSymbol = (symbol: string): boolean => /^\d+$/.test(symbol);

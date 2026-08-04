@@ -13,6 +13,9 @@
 // Hrefs are root-relative (no `base` prefix). Consumers prepend
 // `import.meta.env.BASE_URL` so this file stays portable across both repos.
 // ─────────────────────────────────────────────────────────────────────────────
+// Type-only: which family a credit mark belongs to (see `creditLegends` below).
+// A type import, so this file still pulls no runtime code into any bundle.
+import type { MarkFamily } from '../utils/marks';
 
 /** A navigable destination — one entry per top-level page/route. */
 export interface RouteConfig {
@@ -137,21 +140,6 @@ export const authorInstitutions = {
   // paper's `authorAffiliations` data is simply left unread. Flip this rather
   // than emptying the data, which stays useful the moment it's switched back on.
   enabled: true,
-  // Where a Works card shows a PERMANENT legend — one always on screen, as opposed
-  // to the popup that floats off a name on hover, which every credited name has
-  // either way:
-  //   'none'  — no permanent legend; the floating popup is the only key (default,
-  //             and what keeps a card to its credits)
-  //   'below' — the institution key on its own line under the authors
-  //             ("🐝 Georgia Tech · 🔥 MATS")
-  //   'aside' — the WHOLE legend, both families, as a static panel in the card's
-  //             right-hand column, top-aligned with the item. Moving between names
-  //             lights that person's own rows in it, so it answers what the popup
-  //             answers without anything floating — and the popup is suppressed on
-  //             those cards. Narrow screens drop it back under the card.
-  // The experience drawer prints its own legend regardless, having no hover to
-  // fall back on.
-  permanentLegend: 'none',
   // How a legend ROW names its institution — everywhere a legend prints: the
   // aside/below key on a Works card, the hover popup, the drawer's static key.
   //   'full'  — the registry's full `name` ("Georgia Institute of Technology").
@@ -165,9 +153,6 @@ export const authorInstitutions = {
   legendNames: 'full',
 } as const;
 
-/** Where a Works card shows its permanent credit legend. */
-export type PermanentLegend = 'none' | 'below' | 'aside';
-
 /** Which name form a legend row prints for its institution. */
 export type InstitutionLegendNames = 'full' | 'short';
 
@@ -176,14 +161,70 @@ export function showAuthorInstitutions(): boolean {
   return authorInstitutions.enabled;
 }
 
-/** Where the permanent legend goes — 'none' whenever the marks are off entirely. */
-export function permanentInstitutionLegend(): PermanentLegend {
-  return authorInstitutions.enabled ? authorInstitutions.permanentLegend : 'none';
-}
-
 /** Full institution names in legend rows, or their short forms. */
 export function institutionLegendNames(): InstitutionLegendNames {
   return authorInstitutions.legendNames;
+}
+
+// ── Where each family of credit marks explains itself ────────────────────────
+// A credited name can carry marks from two families (src/utils/marks.ts):
+//
+//   contributions — the authorship-level symbols († ‡ § ＊ ¶): equal-first,
+//                   corresponding author, advisor. Standard notation, the same
+//                   meaning on every item, and a reader who knows it needs no key.
+//   institutions  — where each author sat (🐝 🛡️, or a number when the institution
+//                   has no glyph). Item-specific and unguessable: an emoji means
+//                   nothing at all without its key.
+//
+// They are configured INDEPENDENTLY, per surface, because that difference is the
+// whole point: a mark you can guess wants a legend on demand, a mark you cannot
+// wants one on screen. Each surface takes ONE placement per family:
+//
+//   'none'  — no legend for this family here; its marks still print on the names.
+//   'popup' — the floating key that fades in off a hovered (or focused) name,
+//             showing the item's whole legend with that person's rows lit.
+//   'below' — a permanent key printed under the author line, as a wrapping clump.
+//   'aside' — WORKS CARDS ONLY: a permanent column in the page margin, top-aligned
+//             with the card, which fades in while a name is hovered and lights that
+//             person's rows. Needs a wide viewport for the margin to exist; under
+//             the breakpoint it falls back to 'below' so the key stays reachable
+//             (a touch device has no hover to fall back on).
+//
+// Nothing stops a family from being 'popup' on one surface and 'below' on another —
+// that IS the default: institutions print openly, contribution symbols stay on
+// demand.
+export const creditLegends = {
+  contributions: {
+    /** Works cards: 'none' | 'popup' | 'below' | 'aside'. */
+    works: 'popup',
+    /** Experience timeline drawer: 'none' | 'popup' | 'below'. */
+    drawer: 'popup',
+  },
+  institutions: {
+    works: 'popup',
+    drawer: 'below',
+  },
+} as const;
+
+/** Where a family's legend goes on a Works card. */
+export type WorksLegend = 'none' | 'popup' | 'below' | 'aside';
+
+/** Where a family's legend goes in the experience drawer — no margin, so no 'aside'. */
+export type DrawerLegend = 'none' | 'popup' | 'below';
+
+// The institutions master switch folds in here, so a single choke point turns the
+// family off on every surface at once and no caller has to check both.
+const legendFor = (family: MarkFamily) =>
+  family === 'institutions' && !authorInstitutions.enabled ? null : creditLegends[family];
+
+/** Where this family's legend goes on a Works card. */
+export function worksLegend(family: MarkFamily): WorksLegend {
+  return legendFor(family)?.works ?? 'none';
+}
+
+/** Where this family's legend goes in the experience drawer. */
+export function drawerLegend(family: MarkFamily): DrawerLegend {
+  return legendFor(family)?.drawer ?? 'none';
 }
 
 // Experience-page timeline behaviour.

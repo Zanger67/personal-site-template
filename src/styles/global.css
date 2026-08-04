@@ -326,16 +326,11 @@ img {
   }
 }
 
-/* Where a Works card puts its legend in the margin instead
-   (authorInstitutions.permanentLegend: 'aside'), the two would answer the same
-   question at once — so above the width that margin needs, the floating one gives
-   way to it. Below that width the aside is the one hidden, and this is all that's
-   left. See `.work-aside` in WorkCard.astro. */
-@media (min-width: 1150px) {
-  .work-card.has-aside .ctip {
-    display: none;
-  }
-}
+/* Nothing suppresses the popup wholesale any more: each family is placed on
+   exactly one surface server-side (`creditLegends` in src/config/site.ts), so a
+   family shown in the margin column or in a permanent key never reaches this
+   popup's rows in the first place, and two surfaces can't answer the same
+   question at once. See WorkCard.astro. */
 
 /* This person's own marks — the other rows stay muted, present for context. */
 .ctip-row.is-own {

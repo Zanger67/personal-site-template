@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { isRouteEnabled, showIncomingEntries } from '@config/site';
+import { isRouteEnabled, showIncomingEntries, drawerLegend } from '@config/site';
 import { getCollection } from 'astro:content';
 import affiliations from '../data/affiliations.json';
 import education from '../data/education.json';
@@ -22,7 +22,7 @@ import relationGroupLabels from '../data/relationGroupLabels.json';
 import { hostLabel, extraLinks, paperLink, type UrlEntry } from '../utils/links';
 import { normalizeMetrics, type Metrics, type NormalizedMetric } from '../utils/metrics';
 import { resolvePeople, collaboratorHref } from '../utils/collaborators';
-import { peopleMarks, marksFor, legendOf, supSymbols, type Contributions, type MarkInfo, type PersonEntry } from '../utils/marks';
+import { peopleMarks, marksFor, legendOf, supSymbols, markFamily, type Contributions, type MarkInfo, type PersonEntry } from '../utils/marks';
 import { affiliationMarks, type AuthorAffiliations } from '../utils/institutions';
 
 import { withIncoming } from '../utils/incoming';
@@ -38,12 +38,19 @@ import { joinRange, fmtMonthRange } from '../utils/works';
 // a pair of bare "*"s across two names as italics, and it has no superscript. It's
 // its own structured line now (see renderCredits in the client script), so the
 // superscripts render exactly as they do on a Works card.
-//   Their LEGEND is the one thing the drawer does differently. A Works card hangs
-// it off each name as a hover popup (CreditMarks.astro's .ctip); in here that popup
-// would be unreadable — .tl-detail-panel scrolls (`overflow-y: auto`, which clips
-// both axes), so a tip rising off a name near the panel's top edge gets cut, and on
-// mobile this panel IS the whole surface, where there's no hover to begin with. So
-// the drawer prints the item's legend once, statically, beneath the names.
+//   Their LEGEND is placed per FAMILY, exactly as on a Works card and from the same
+// config (`creditLegends` in src/config/site.ts) — but with its own settings, since
+// this panel is a different surface: it scrolls, and on mobile it IS the whole
+// screen. By default the institutions print as a permanent key beneath the names
+// and the contributor symbols stay on a hover popup, the same division of labour
+// the cards use — a standard symbol can be read without a key, an institution's
+// emoji cannot.
+//   The popup here can't be the cards' `.ctip`: that is absolutely positioned, and
+// .tl-detail-panel scrolls (`overflow-y: auto` clips both axes), so a tip rising off
+// a name near the panel's top edge would be cut off. The drawer's is positioned
+// `fixed` from script instead — see positionTip in renderCredits. It is still a
+// HOVER surface, so on a touch device only the permanent key is reachable; that is
+// the reason institutions default to 'below' in here rather than to a popup.
 interface AuthorChip {
   name: string;
   href: string | null;
@@ -59,6 +66,14 @@ interface AuthorChip {
 // own `contributions` legend — peopleMarks merges the two forms — and its
 // `authorAffiliations`, which affiliationMarks turns into the numbered institution
 // marks. A name carries the symbols first, then the numbers ("Buzz*¹").
+// The legend rows this drawer places at `mode`, read off the marks the credited
+// names actually carry — so a level nobody holds never reaches it. Each family
+// lands in exactly one mode, which is what keeps the key and the popup from
+// explaining the same symbol twice.
+const drawerRows = (authors: AuthorChip[], mode: 'popup' | 'below'): MarkInfo[] =>
+  legendOf(authors.map(a => a.marks))
+    .filter(l => l.note && drawerLegend(markFamily(l.level)) === mode);
+
 const pubAuthors = (
   authors?: PersonEntry[] | null,
   contributions?: Contributions | null,
@@ -515,8 +530,11 @@ function mkItem(o: ItemOpts): Item | null {
     metrics: normalizeMetrics(o.metrics),
     authors,
     // Built from the marks the credited names actually carry, so a level nobody
-    // holds never reaches the legend (same derivation as WorkCard's authorLegend).
-    authorLegend: legendOf(authors.map(a => a.marks)),
+    // holds never reaches the legend (same derivation as WorkCard's authorLegend),
+    // then split by where each family is configured to explain itself in here —
+    // a permanent key under the names, or a popup off each name (see pubAuthors).
+    authorLegend: drawerRows(authors, 'below'),
+    authorPopup: drawerRows(authors, 'popup'),
     ref: o.ref ?? null,
     main: !!o.main, cats,
   };
@@ -1359,8 +1377,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .d-authors .me { color: var(--text); font-weight: 700; }
   .d-authors a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--border); }
   .d-authors a:hover { color: var(--accent); border-bottom-color: var(--accent); }
-  /* The static symbol legend under them — a Works card hangs this off each name
-     as a hover popup, which this scrolling (and touch-first) panel would clip. */
+  /* The permanent key under the names, for whichever families are placed 'below'
+     in here (see creditLegends in src/config/site.ts). Contributor levels are
+     prose, so they stack one row per line. */
   .d-marks { list-style: none; padding: 0; margin: 0 0 0.85rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.45; }
   /* A row whose name outruns the panel wraps with its later lines hanging clear
      of the mark — a flex row rather than a text indent, since the mark's width
@@ -1368,9 +1387,43 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
      Same treatment as a Works card's aside legend (.wa-row in WorkCard.astro). */
   .d-marks li { display: flex; align-items: baseline; }
   .d-mark-sym { flex: none; display: inline-block; min-width: 1em; margin-right: 0.35rem; color: var(--accent); font-weight: 700; }
-  /* Institution rows are a group of their own, set apart by the same gap the
-     superscripts use (see .cmark-org in global.css). */
-  .d-marks li:not(.d-mark-org) + .d-mark-org { margin-top: 0.3rem; }
+
+  /* Institutions instead read as a CLUMP: short labels, laid out along the line
+     with room between them rather than one per line, which in a panel this narrow
+     would otherwise be a tall stack of mostly-empty rows. Each item is an
+     inline-flex box, so a name that won't fit takes its mark down to the next line
+     WITH it — the item is what wraps, never the gap between a mark and its name. */
+  .d-affilkey {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.9rem;
+    margin: -0.35rem 0 0.85rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+  }
+  .d-affilkey-item { display: inline-flex; align-items: baseline; }
+  .d-affilkey-mark { flex: none; margin-right: 0.25rem; color: var(--accent); font-weight: 700; }
+  .d-affilkey-item .d-mark-icon { flex: none; }
+
+  /* The drawer's hover popup. It is the ordinary `.ctip` (global.css) with one
+     change: `fixed` instead of absolute, because .tl-detail-panel scrolls and
+     would clip an absolutely-positioned tip against its own edges. Fixed takes it
+     out of that clip entirely — at the cost of needing coordinates, which the
+     script sets on hover (see positionTip in renderCredits).
+       Written as `.ctip.d-ctip` so it outranks `.ctip` on specificity rather than
+     on source order — the two live in different stylesheets (global.css vs this
+     page), and which one is emitted last isn't ours to depend on. (No `:global()`
+     wrapper: this whole block is already `is:global`, and there it would survive
+     into the output verbatim and kill the rule.) */
+  .ctip.d-ctip {
+    position: fixed;
+    bottom: auto;
+    left: 0;
+    top: 0;
+    transform: none;
+    z-index: 60;
+  }
   /* An institution row's optional icon (see src/utils/institutions.ts). */
   .d-mark-icon { flex: none; display: inline-block; margin-right: 0.3rem; font-size: 0.95em; line-height: 1; vertical-align: -0.05em; }
   img.d-mark-icon { width: 1em; height: 1em; object-fit: contain; vertical-align: -0.12em; }
@@ -1839,7 +1892,10 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       description: string | null; subtitle: string | null; links: { label: string; url: string }[]; detailUrl: string | null;
       entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[]; isWork: boolean;
       tags: string[]; metrics: MetricRow[]; main: boolean; cats: string[]; laneKey?: string | null;
-      authors?: AuthorRow[]; authorLegend?: MarkRow[];   // credited names + their marks
+      // Credited names + their marks. The legend arrives pre-split by where each
+      // family is placed in here (see drawerRows): `authorLegend` prints as the
+      // permanent key under the names, `authorPopup` as the popup off each one.
+      authors?: AuthorRow[]; authorLegend?: MarkRow[]; authorPopup?: MarkRow[];
       ref?: string | null;   // data-derived deep-link handle (see selectByRef)
     }
     // Paint a metrics list into `container` as "label value" chips — the client
@@ -1869,12 +1925,17 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     // name renders however it was resolved: bold-unlinked me, a link when it has
     // somewhere to go, plain text otherwise — with its contributor marks as
     // superscripts and the meanings read out inline for screen readers.
-    //   The legend follows as a static block rather than each name's hover popup:
-    // this panel scrolls and doubles as the mobile overlay, so a popup would be
-    // clipped by it and unreachable by touch (see the pubAuthors comment).
-    // No-op when empty, so callers can invoke it blindly.
-    function renderCredits(container: HTMLElement, authors?: AuthorRow[] | null, legend?: MarkRow[] | null) {
+    //   The legend arrives already split by placement (see drawerRows): `legend`
+    // rows print as a permanent key under the names, `popup` rows hang off each
+    // name that carries them. No-op when empty, so callers can invoke it blindly.
+    function renderCredits(
+      container: HTMLElement,
+      authors?: AuthorRow[] | null,
+      legend?: MarkRow[] | null,
+      popup?: MarkRow[] | null,
+    ) {
       if (!authors || !authors.length) return;
+      const popRows = (popup || []).filter(l => l.note);
       const p = document.createElement('p'); p.className = 'd-authors';
       authors.forEach((a, i) => {
         if (i > 0) p.appendChild(document.createTextNode(', '));
@@ -1911,36 +1972,124 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
           const sr = document.createElement('span'); sr.className = 'sr-only'; sr.textContent = ` (${spoken})`;
           wrap.appendChild(sr);
         }
+        // The hover popup, when a family is placed there — the whole popup legend
+        // with this person's own rows lit, exactly as CreditMarks.astro builds it.
+        // `.d-ctip` is the positioning difference: fixed rather than absolute, so
+        // the scrolling panel can't clip it (positioned below, on hover).
+        if (popRows.length) {
+          const own = new Set(marks.map(m => m.symbol));
+          const tip = document.createElement('span');
+          tip.className = 'ctip d-ctip'; tip.setAttribute('aria-hidden', 'true');
+          const col = document.createElement('span'); col.className = 'ctip-col';
+          for (const l of popRows) {
+            const row = document.createElement('span');
+            row.className = 'ctip-row'
+              + (isOrg(l.level) ? ' ctip-org' : '')
+              + (own.has(l.symbol) ? ' is-own' : '');
+            const sym = document.createElement('span'); sym.className = 'ctip-sym'; sym.textContent = l.symbol;
+            row.appendChild(sym);
+            row.appendChild(markIcon(l, 'ctip-icon'));
+            const nm = document.createElement('span');
+            nm.className = 'ctip-name'; nm.textContent = l.note!;
+            row.appendChild(nm);
+            col.appendChild(row);
+          }
+          tip.appendChild(col);
+          wrap.appendChild(tip);
+        }
         p.appendChild(wrap);
       });
       container.appendChild(p);
-      // The legend itself — hidden from screen readers, which already heard each
-      // meaning inline on the name that carries it.
+      // A fixed-position tip has to be told where to go, and the panel scrolls
+      // under it — so each name positions its own on the way in, and a scroll
+      // while one is open re-runs it. Centred on the name and clamped to the
+      // viewport; above it when there's room, below it when there isn't.
+      if (popRows.length) {
+        let openTip: HTMLElement | null = null;
+        const place = (person: HTMLElement) => {
+          const tip = person.querySelector<HTMLElement>('.d-ctip');
+          if (!tip) return;
+          openTip = tip;
+          const pr = person.getBoundingClientRect();
+          const tr = tip.getBoundingClientRect();
+          const left = Math.max(8, Math.min(pr.left + pr.width / 2 - tr.width / 2, window.innerWidth - tr.width - 8));
+          const above = pr.top - tr.height - 8;
+          // These are viewport coordinates, which is what `fixed` normally takes —
+          // EXCEPT that a transformed ancestor becomes the containing block for
+          // its fixed descendants, and below the overlay breakpoint .tl-detail is
+          // transformed (it slides in). There, subtract that box's own origin so
+          // the tip still lands where the pointer is.
+          const host = person.closest<HTMLElement>('.tl-detail');
+          const origin = host && getComputedStyle(host).transform !== 'none'
+            ? host.getBoundingClientRect()
+            : { left: 0, top: 0 };
+          tip.style.left = `${left - origin.left}px`;
+          tip.style.top = `${(above < 8 ? pr.bottom + 8 : above) - origin.top}px`;
+        };
+        const from = (t: EventTarget | null) => {
+          const person = t instanceof Element ? t.closest<HTMLElement>('.cperson') : null;
+          if (person) place(person); else openTip = null;
+        };
+        // mouseover (not mouseenter) so moving name→name re-positions.
+        p.addEventListener('mouseover', e => from(e.target));
+        p.addEventListener('focusin', e => from(e.target));
+        p.addEventListener('mouseleave', () => { openTip = null; });
+        const panel = container.closest('.tl-detail-panel');
+        panel?.addEventListener('scroll', () => {
+          if (!openTip) return;
+          const person = openTip.parentElement;
+          if (person) place(person);
+        }, { passive: true });
+      }
+      // The permanent key — hidden from screen readers, which already heard each
+      // meaning inline on the name that carries it. Contributor rows are prose
+      // ("Equal first author") and stack one per line; institutions are short
+      // labels and read better as a wrapping CLUMP, each mark staying with its
+      // own name and the whole item moving to the next line when it won't fit.
       const rows = (legend || []).filter(l => l.note);
       if (!rows.length) return;
-      const key = document.createElement('ul'); key.className = 'd-marks'; key.setAttribute('aria-hidden', 'true');
-      for (const l of rows) {
-        const li = document.createElement('li');
-        if (isOrg(l.level)) li.className = 'd-mark-org';
-        const sym = document.createElement('span'); sym.className = 'd-mark-sym'; sym.textContent = l.symbol;
-        li.appendChild(sym);
-        // An institution may carry an icon — a glyph to print, or an image to load.
-        if (l.icon) {
-          let icon: HTMLElement;
-          if (l.icon.kind === 'image') {
-            const img = document.createElement('img');
-            img.src = l.icon.value; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
-            icon = img;
-          } else {
-            icon = document.createElement('span'); icon.textContent = l.icon.value;
-          }
-          icon.className = 'd-mark-icon';
-          li.appendChild(icon);
+      const stacked = rows.filter(l => !isOrg(l.level));
+      const clumped = rows.filter(l => isOrg(l.level));
+      if (stacked.length) {
+        const key = document.createElement('ul'); key.className = 'd-marks'; key.setAttribute('aria-hidden', 'true');
+        for (const l of stacked) {
+          const li = document.createElement('li');
+          const sym = document.createElement('span'); sym.className = 'd-mark-sym'; sym.textContent = l.symbol;
+          li.appendChild(sym);
+          li.appendChild(markIcon(l, 'd-mark-icon'));
+          li.appendChild(document.createTextNode(l.note!));
+          key.appendChild(li);
         }
-        li.appendChild(document.createTextNode(l.note!));
-        key.appendChild(li);
+        container.appendChild(key);
       }
-      container.appendChild(key);
+      if (clumped.length) {
+        const key = document.createElement('p'); key.className = 'd-affilkey'; key.setAttribute('aria-hidden', 'true');
+        for (const l of clumped) {
+          const item = document.createElement('span'); item.className = 'd-affilkey-item';
+          const sym = document.createElement('span'); sym.className = 'd-affilkey-mark'; sym.textContent = l.symbol;
+          item.appendChild(sym);
+          item.appendChild(markIcon(l, 'd-mark-icon'));
+          item.appendChild(document.createTextNode(l.note!));
+          key.appendChild(item);
+        }
+        container.appendChild(key);
+      }
+    }
+    // A legend row's optional icon — a glyph to print, or an image to load —
+    // already classified server-side (see src/utils/institutions.ts). Returns an
+    // empty fragment when there is none, so callers can append it blindly.
+    function markIcon(l: MarkRow, cls: string): Node {
+      if (!l.icon) return document.createDocumentFragment();
+      let icon: HTMLElement;
+      if (l.icon.kind === 'image') {
+        const img = document.createElement('img');
+        img.src = l.icon.value; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+        icon = img;
+      } else {
+        icon = document.createElement('span'); icon.textContent = l.icon.value;
+      }
+      icon.className = cls;
+      return icon;
     }
     const items: Item[] = JSON.parse(dataEl.textContent || '[]');
     const cfg = JSON.parse(cfgEl.textContent || '{}');
@@ -2081,7 +2230,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       }
       // Credited authors (publications) — sits under the authorship role and above
       // the venue, the same order a Works card reads in.
-      renderCredits(drawerBody, it.authors, it.authorLegend);
+      renderCredits(drawerBody, it.authors, it.authorLegend, it.authorPopup);
       // Affiliation chips — orgs/labs this item is tied to (projects & publications).
       // Same outlined "@ org" chips as the Works cards; selecting the item also
       // lights these orgs up on the timeline and in the Related list below.
