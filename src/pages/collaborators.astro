@@ -2,15 +2,16 @@
 // The /collaborators page — everyone who appears as a co-author / collaborator on
 // a project, publication, blog, or an attached experience role, each as a native
 // <details> dropdown listing the works (and roles/periods) we share. In every
-// author line, MY name is bolded and the row's collaborator is accent-highlighted.
+// author line, the two names the row is about — mine and the person whose dropdown
+// it is — read as bold white against the muted rest of the line.
 // All data + the deterministic year label come from ../utils/people (getCollaborators).
-import BaseLayout from '../layouts/BaseLayout.astro';
 //
 // Credit marks: both families (contributor levels + author institutions) ride on
 // each work's single mark map, and their legends live ONLY in the hover popup,
 // side by side — this page has no card margin for an aside and no permanent key,
 // so `creditLegends` (which places them per surface on the Works cards and the
 // experience drawer) has no say here.
+import BaseLayout from '../layouts/BaseLayout.astro';
 import { isRouteEnabled } from '@config/site';
 import { getCollaborators } from '../utils/people';
 import { marksFor, legendFromMap } from '../utils/marks';
@@ -613,16 +614,15 @@ const intro = (profile as any).pageMeta?.collaborators
     line-height: 1.5;
     margin-top: 0.1rem;
   }
-  /* Me — bold, a bit whiter and slightly softened (opacity) so I read as
-     secondary to the collaborator's crisp bold white. */
-  .au-self {
+  /* The two names the row is ABOUT — me, and the person whose dropdown this is —
+     both bold body-white, lifted out of the muted line. Deliberately NOT told
+     apart from each other: the dropdown already says whose list it is, and having
+     me sit dimmer than them just made the pair harder to pick out at a glance. */
+  .au-self,
+  .au-them {
     font-weight: 700;
-    /* A bit whiter than plain muted grey — blended part-way toward the body text. */
-    color: color-mix(in srgb, var(--text-muted), var(--text) 45%);
-    opacity: 0.9;
+    color: var(--text);
   }
-  /* This row's collaborator (whose list this is) — bold white, so they stand out. */
-  .au-them { font-weight: 700; color: var(--text); }
 
   /* A co-author who has their own dropdown on this page — clicking jumps to it.
      Keeps whatever colour/weight its au-* class gave it; only the dotted underline

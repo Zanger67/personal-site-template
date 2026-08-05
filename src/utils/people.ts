@@ -28,7 +28,8 @@
 // 2023 and Feb 2026 is ordered on Feb 2026 (not the Mar 2026 range end), while
 // their label still spans the lot as ’23–’26.
 // Self (profile.self) is excluded from the list and flagged in each author line so
-// the page can bold my name and accent-highlight the row's collaborator.
+// the page can pick out the two names the row is about — me and the person whose
+// dropdown it is — from the rest of the line.
 import { getCollection } from 'astro:content';
 import { isRouteEnabled } from '@config/site';
 import { slugify, fallbackName, isSelfSlug } from './collaborators';
@@ -279,12 +280,12 @@ async function collectWorks(): Promise<PersonWork[]> {
       // `authors` may write a name's marks inline ({ ref: [level, …] }) — take the
       // plain refs out, and read the legend from BOTH there and `contributions`.
       const { refs: authorRefs, marks } = peopleMarks(pub.authors, pub.contributions);
-      out.push({
       // Author institutions — the second family, numbered off the author ORDER
       // (hence authorRefs, not the resolved names). Merged into one map so a name
       // reads "Buzz†🐝" and the popup keys both; `affiliationMarks` is the master
       // switch's choke point, so this falls silent on its own when it's off.
       const affils = affiliationMarks(authorRefs, pub.authorAffiliations);
+      out.push({
         kind: 'Publication',
         title: pub.title,
         href: pub.url || `${base}/works#publications`,
