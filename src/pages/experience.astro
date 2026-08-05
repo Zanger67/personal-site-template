@@ -2105,18 +2105,24 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     // anchors their recency sort key below.
     const nd = new Date();
     const nowMonthNum = nd.getFullYear() * 12 + nd.getMonth() + 1;
+    const order: Record<string, number> = cfg.typeOrder;
     // Recency order (newest first): compare by end MONTH. A "present" (open-ended)
     // role has no end month, so it sorts as the current month plus a half-month
     // nudge — landing it AHEAD of anything that merely ended this month, yet BEHIND
     // any future/incoming role, whose end month is genuinely later. (Present used to
     // key as MAX_SAFE_INTEGER, a finite value that still beat real future dates and
     // so buried incoming roles beneath ongoing ones.) Ties fall back to newest
-    // start, then alphabetical (organisation, then title). Shared by the drawer's
-    // "Related" list and arrow-key navigation.
+    // start, then to the CHART'S OWN VERTICAL ORDER rather than to the alphabet:
+    // category rank, then data order — exactly the keys layout() sorts a year's
+    // bars by before packing them into lanes. So a set of items sharing a date
+    // (three papers from one month, say) reads down the "Related" list in the
+    // order its bars stack down the chart, and reordering the source JSON moves
+    // both at once. Used by the drawer's "Related" list; arrow-key navigation
+    // walks rendered geometry instead (see navMove).
     const byRecency = (a: Item, b: Item) => {
       const ka = a.endMonthNum ?? nowMonthNum + 0.5, kb = b.endMonthNum ?? nowMonthNum + 0.5;
       return kb - ka || b.start - a.start
-        || a.entity.localeCompare(b.entity) || a.title.localeCompare(b.title);
+        || (order[a.type] ?? 5) - (order[b.type] ?? 5) || a.id - b.id;
     };
     // Lane chains: every bar of a multi-bar entity is kept on ONE timeline lane
     // (see layout()), so an org's roles read as a single continuous progression —
@@ -2149,7 +2155,6 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
       const names = [...new Set((groups || []).map(g => relationGroupLabels[g]).filter(Boolean))];
       return names.length ? ` (${names.join(', ')})` : '';
     };
-    const order: Record<string, number> = cfg.typeOrder;
     // nowMonthNum (defined above) is the exclusive end column present items fill
     // through — the first of next month, matching item.*MonthNum.
 
