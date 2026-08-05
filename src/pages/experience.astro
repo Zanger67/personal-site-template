@@ -1402,6 +1402,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     color: var(--text-muted);
     line-height: 1.45;
   }
+  /* That -0.35rem tuck is for the key trailing the contributor one (.d-marks,
+     which leaves 0.85rem under itself). Straight after the names it collapses
+     the author line's own 0.5rem down to 0.15rem and the key all but touches
+     them — so in that case give the names back their full gap. */
+  .d-authors + .d-affilkey { margin-top: 0; }
   .d-affilkey-item { display: inline-flex; align-items: baseline; }
   .d-affilkey-mark { flex: none; margin-right: 0.25rem; color: var(--accent); font-weight: 700; }
   .d-affilkey-item .d-mark-icon { flex: none; }
