@@ -218,6 +218,26 @@ export function legendOf(lists: (MarkInfo[] | null | undefined)[]): MarkInfo[] {
 export const legendFromMap = (map: MarkMap | null | undefined): MarkInfo[] =>
   legendOf(Object.values(map ?? {}));
 
+/** Union of several per-person mark maps. The two families are built separately —
+ *  contributor levels here, institutions in src/utils/institutions.ts — but a name
+ *  renders ONE list of superscripts, so a surface showing both hands them over as
+ *  a single map (the alternative, threading two maps to every call site, is what
+ *  works.ts does because its card places the families' legends independently).
+ *  Rank-ordered per person, so contributor symbols precede institution numbers,
+ *  and a level reaching someone twice is kept once. */
+export function mergeMarkMaps(...maps: (MarkMap | null | undefined)[]): MarkMap {
+  const out: MarkMap = {};
+  for (const map of maps) {
+    for (const [slug, marks] of Object.entries(map ?? {})) {
+      const cur = out[slug] ?? (out[slug] = []);
+      for (const m of marks ?? []) if (!cur.some(x => x.level === m.level)) cur.push(m);
+    }
+  }
+  // Stable sort, so institutions keep their numbering order within the family.
+  for (const marks of Object.values(out)) marks.sort((a, b) => rank(a.level) - rank(b.level));
+  return out;
+}
+
 // ── People lists that carry their marks inline ──────────────────────────────
 // An entry in a people list (a publication's `authors`) is EITHER a plain
 // reference or a one-pair object mapping that reference to the levels it carries:

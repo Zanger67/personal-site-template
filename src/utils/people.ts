@@ -34,7 +34,8 @@ import { isRouteEnabled } from '@config/site';
 import { slugify, fallbackName, isSelfSlug } from './collaborators';
 import { KIND_CAT, fmtFullDate, fmtPubDate, fmtMonthRange, joinRange, type WorkKind } from './works';
 import { extraLinks, knownHostLabel, paperLink, type Link } from './links';
-import { markMap, peopleMarks, type MarkMap } from './marks';
+import { markMap, peopleMarks, mergeMarkMaps, type MarkMap } from './marks';
+import { affiliationMarks } from './institutions';
 import registryData from '../data/collaborators.json';
 import organizations from '../data/organizations.json';
 import affiliations from '../data/affiliations.json';
@@ -159,7 +160,10 @@ export interface PersonWork {
   authors: Author[];          // full ordered line incl. self, for highlighting
   links: Link[];              // Live / Repo / … chips — same set as the Works page
   years: number[];
-  marks: MarkMap;             // this item's contributor-level marks, by slug
+  // This item's credit marks by slug — BOTH families in one map: contributor
+  // levels and, on a publication, its author institutions. The page shows them
+  // side by side in the hover popup, which is the only legend it has.
+  marks: MarkMap;
 }
 export interface PersonRole {
   title: string;              // "Role · OrgShort" / "OrgShort · Member"
@@ -276,6 +280,11 @@ async function collectWorks(): Promise<PersonWork[]> {
       // plain refs out, and read the legend from BOTH there and `contributions`.
       const { refs: authorRefs, marks } = peopleMarks(pub.authors, pub.contributions);
       out.push({
+      // Author institutions — the second family, numbered off the author ORDER
+      // (hence authorRefs, not the resolved names). Merged into one map so a name
+      // reads "Buzz†🐝" and the popup keys both; `affiliationMarks` is the master
+      // switch's choke point, so this falls silent on its own when it's off.
+      const affils = affiliationMarks(authorRefs, pub.authorAffiliations);
         kind: 'Publication',
         title: pub.title,
         href: pub.url || `${base}/works#publications`,
@@ -292,7 +301,7 @@ async function collectWorks(): Promise<PersonWork[]> {
           ...extraLinks(pub.features),
         ]),
         years: yr == null ? [] : [yr],
-        marks,
+        marks: mergeMarkMaps(marks, affils.marks),
       });
     }
   }

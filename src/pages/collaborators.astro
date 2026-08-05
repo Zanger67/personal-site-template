@@ -5,6 +5,12 @@
 // author line, MY name is bolded and the row's collaborator is accent-highlighted.
 // All data + the deterministic year label come from ../utils/people (getCollaborators).
 import BaseLayout from '../layouts/BaseLayout.astro';
+//
+// Credit marks: both families (contributor levels + author institutions) ride on
+// each work's single mark map, and their legends live ONLY in the hover popup,
+// side by side — this page has no card margin for an aside and no permanent key,
+// so `creditLegends` (which places them per surface on the Works cards and the
+// experience drawer) has no say here.
 import { isRouteEnabled } from '@config/site';
 import { getCollaborators } from '../utils/people';
 import { marksFor, legendFromMap } from '../utils/marks';
