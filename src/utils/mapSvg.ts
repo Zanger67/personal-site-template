@@ -18,6 +18,10 @@ interface City {
   type: string;
   labelAnchor: 'start' | 'middle' | 'end';
   labelOffset: { dx: number; dy: number };
+  // Nudges the text only, leaving the leader line's endpoint where labelOffset
+  // put it. Needed for `middle`-anchored labels, where the line would otherwise
+  // end at the baseline underneath the text and run visibly into it.
+  textOffset?: { dx: number; dy: number };
 }
 
 export interface MapPaths {
@@ -64,8 +68,9 @@ export function buildMapSvg(paths: MapPaths, config: MapConfig): string {
         : c.type === 'hometown'
           ? `<rect x="${c.x - 2.5}" y="${c.y - 2.5}" width="5" height="5" class="city-square"/>`
           : `<circle cx="${c.x}" cy="${c.y}" r="2.5" class="city-dot"/>`;
-    const lx = c.x + c.labelOffset.dx + (c.labelAnchor === 'start' ? 3 : -3);
-    const ly = c.y + c.labelOffset.dy;
+    const lx =
+      c.x + c.labelOffset.dx + (c.textOffset?.dx ?? 0) + (c.labelAnchor === 'start' ? 3 : -3);
+    const ly = c.y + c.labelOffset.dy + (c.textOffset?.dy ?? 0);
     return (
       `<g class="city-marker">` +
       `<line x1="${c.x}" y1="${c.y}" x2="${c.x + c.labelOffset.dx}" y2="${c.y + c.labelOffset.dy}" class="city-line"/>` +
