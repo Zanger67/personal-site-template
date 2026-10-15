@@ -77,17 +77,16 @@ export { isSelfSlug };
 // ── Year helpers ────────────────────────────────────────────────────────────
 
 // Abbreviated, deterministic year label: a SINGLE oldest–newest span — gaps are
-// NOT listed out. "’19–present" / "’19–23" / "’22" (single year). The newest year
-// renders as "present" when it's the current year; the others are a two-digit
-// "’YY" (the range end drops the apostrophe: "’19–23").
+// NOT listed out. "’19–26" / "’19–23" / "’22" (single year). Every year is a
+// two-digit "’YY", the current one included (the range end drops the
+// apostrophe: "’19–23"). The current year prints as itself, not "present": the
+// label is a span of years, and "’24–26" keeps one shape in every row.
 export function formatYearRanges(years: number[]): string {
   if (!years.length) return '';
   const lo = Math.min(...years);
   const hi = Math.max(...years);
   const yy = (y: number) => String(y % 100).padStart(2, '0');
-  const start = (y: number) => (y === CURRENT_YEAR ? 'present' : `’${yy(y)}`);
-  const end = (y: number) => (y === CURRENT_YEAR ? 'present' : yy(y));
-  return lo === hi ? start(lo) : `${start(lo)}–${end(hi)}`;
+  return lo === hi ? `’${yy(lo)}` : `’${yy(lo)}–${yy(hi)}`;
 }
 
 // Inclusive integer range lo..hi (order-insensitive).
