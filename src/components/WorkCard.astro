@@ -139,12 +139,14 @@ const fallbackLegend = asideLegend;
       {authors.map((a, i) => (
         <Fragment>
           {i > 0 && ', '}
+          {/* `.work-name` on every variant: a name with no marks has no `.cperson`
+              wrapper, and the margin legend still has to find it (see the script). */}
           <CreditMarks marks={a.marks ?? []} legend={popupLegend}>
             {a.self
-              ? <strong class="me">{a.name}</strong>
+              ? <strong class="me work-name">{a.name}</strong>
               : a.href
-                ? <a href={a.href} {...(a.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{a.name}</a>
-                : <span>{a.name}</span>}</CreditMarks></Fragment>
+                ? <a class="work-name" href={a.href} {...(a.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{a.name}</a>
+                : <span class="work-name">{a.name}</span>}</CreditMarks></Fragment>
       ))}
     </p>
   )}
@@ -358,11 +360,15 @@ const fallbackLegend = asideLegend;
   };
 
   // ── Margin legend: follow the pointer from name to name ───────────────────
-  // It shows only while a credited name is hovered — fading in at its fixed spot
-  // rather than floating off the name — and each name lights the rows it carries,
-  // so reading one after another walks the legend. Each name publishes its levels
+  // It shows only while a name is hovered — fading in at its fixed spot rather
+  // than floating off the name — and each name lights the rows it carries, so
+  // reading one after another walks the legend. Each name publishes its levels
   // as `data-levels` (see CreditMarks.astro) and each row names its own, so this
   // is a set test: no per-card data threading, and both mark families at once.
+  //   A name carrying NO marks still opens it, with nothing lit: the column only
+  // exists when someone on the card has marks, so it's still the key to the rest
+  // of the line, and it shouldn't blink out as the pointer crosses an unmarked
+  // name on the way to a marked one.
   document.querySelectorAll<HTMLElement>('.work-aside').forEach(aside => {
     const card = aside.closest('.work-card');
     if (!card) return;
@@ -372,7 +378,10 @@ const fallbackLegend = asideLegend;
       for (const r of rows) r.classList.remove('is-own');
     };
     const open = (target: EventTarget | null) => {
-      const person = target instanceof Element ? target.closest<HTMLElement>('.cperson') : null;
+      const el = target instanceof Element ? target : null;
+      // `.cperson` first: a marked name's own `.work-name` sits inside it and
+      // carries no levels, so the nearer match would light nothing.
+      const person = el?.closest<HTMLElement>('.cperson') ?? el?.closest<HTMLElement>('.work-name');
       // Anywhere in the card that isn't a name closes it again — the legend
       // belongs to the names, not to the card as a whole.
       if (!person) return close();
