@@ -21,7 +21,8 @@
       {
         "label": "BuzzLabs",
         "url": "https://github.com/orgs/buzzlabs/",
-        "display": "github.com/orgs/buzzlabs"
+        "display": "github.com/orgs/buzzlabs",
+        "note": "Georgia Tech"
       }
     ]
   }

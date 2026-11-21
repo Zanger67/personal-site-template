@@ -10,6 +10,9 @@ interface SubLink {
   label?: string;
   url: string;
   display: string;
+  // Unlinked aside after the link, rendered in parentheses (e.g. the org a
+  // work account belongs to).
+  note?: string;
 }
 
 // Split-and-join + encoded email: each fragment is base64(rot12(piece)) of a
@@ -71,6 +74,7 @@ const scheduleCall = contacts.find(item => item.label === 'Book a Call' && item.
                     <div class="sub-row">
                       <span class="bracket">{glyph}</span>
                       <a href={sub.url} target="_blank" rel="noopener noreferrer">{sub.label ?? sub.display}</a>
+                      {sub.note && <span class="sub-note">({sub.note})</span>}
                     </div>
                   );
                 })}
@@ -166,6 +170,12 @@ const scheduleCall = contacts.find(item => item.label === 'Book a Call' && item.
     width: 1.2rem;
     flex-shrink: 0;
     user-select: none;
+  }
+
+  /* Flex drops the whitespace between children, so the gap is a margin. */
+  .sub-note {
+    margin-left: 0.35em;
+    color: var(--text-muted);
   }
 
 </style>
