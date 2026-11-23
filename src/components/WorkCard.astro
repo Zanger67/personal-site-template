@@ -136,11 +136,9 @@ const fallbackLegend = asideLegend;
     {dateLabel && <span class="work-date">{dateLabel}</span>}
   </div>
 
+  {/* One line on purpose: a line break here renders as a space before the separator. */}
   {(subtitle || distinction) && (
-    <p class="work-subtitle">
-      {subtitle}
-      {distinction && <span class="work-distinction">{distinction}</span>}
-    </p>
+    <p class="work-subtitle">{subtitle}{distinction && <span class="work-distinction">{subtitle && <span class="work-distinction-sep" aria-hidden="true">·</span>}{distinction}</span>}</p>
   )}
   {authors.length > 0 && (
     <p class="work-authors">
@@ -627,23 +625,27 @@ const fallbackLegend = asideLegend;
     margin: 0.25rem 0 0;
   }
 
-  /* Oral / Spotlight / Best Paper — an upright accent pill closing the venue line. */
+  /* Oral / Spotlight / Best Paper — "Venue · ORAL": upright accent small caps,
+     the same status-label voice as "★ Featured", closing the venue line. A
+     bordered pill read as a button and fought the "@ org" chips below. */
   .work-distinction {
-    display: inline-block;
     font-style: normal;
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--accent);
-    border: 1px solid currentColor;
-    border-radius: 3px;
-    padding: 0.05rem 0.35rem;
-    margin-left: 0.4rem;
-    vertical-align: 0.1em;
+    vertical-align: 0.06em;
     white-space: nowrap;
   }
-  .work-subtitle > .work-distinction:first-child { margin-left: 0; }
+  .work-distinction-sep {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    margin: 0 0.4rem;
+    vertical-align: -0.06em;
+  }
 
   .work-desc {
     color: var(--text-muted);

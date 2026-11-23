@@ -1450,7 +1450,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .d-tag { font-size: 0.75rem; color: var(--accent); background: var(--accent-light); padding: 0.15rem 0.5rem; border-radius: 3px; }
   /* Affiliation chips — outlined "@ org", distinct from the filled topic tags. */
   .d-affils { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: -0.2rem 0 1rem; }
-  .d-distinction { display: inline-block; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); border: 1px solid currentColor; border-radius: 3px; padding: 0.05rem 0.35rem; margin-left: 0.4rem; vertical-align: 0.1em; white-space: nowrap; }
+  /* "Venue · ORAL" — mirrors .work-distinction on the Works cards. */
+  .d-distinction { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); vertical-align: 0.06em; white-space: nowrap; }
+  .d-distinction-sep { color: var(--text-muted); font-size: 0.9rem; font-weight: 400; letter-spacing: 0; margin: 0 0.4rem; vertical-align: -0.06em; }
   .d-affil { font-size: 0.75rem; color: var(--text-muted); border: 1px solid var(--border); padding: 0.15rem 0.5rem; border-radius: 3px; }
   .d-affil::before { content: '@'; margin-right: 0.15rem; opacity: 0.6; }
   .d-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
@@ -2263,7 +2265,9 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         const p = document.createElement('p'); p.className = 'd-desc'; p.innerHTML = inlineMarkdown(it.description);
         // Publication distinction ("Oral", …) closes the venue line, as on a Works card.
         if (it.distinction) {
-          const b = document.createElement('span'); b.className = 'd-distinction'; b.textContent = it.distinction;
+          const b = document.createElement('span'); b.className = 'd-distinction';
+          const sep = document.createElement('span'); sep.className = 'd-distinction-sep'; sep.setAttribute('aria-hidden', 'true'); sep.textContent = '·';
+          b.append(sep, it.distinction);
           p.appendChild(b);
         }
         drawerBody.appendChild(p);
