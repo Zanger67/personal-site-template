@@ -123,6 +123,9 @@ interface Publication {
   // for display by order of first appearance (see src/utils/institutions.ts).
   authorAffiliations?: AuthorAffiliations;
   venue: string;
+  // Presentation distinction at that venue ("Oral", "Spotlight", "Best Paper") —
+  // a badge beside the venue. null/omitted for a regular acceptance.
+  distinction?: string | null;
   date: string;
   // Authorship/contributor role (e.g. "Lead author") — folds into the subtitle.
   role?: string;
@@ -360,6 +363,8 @@ export interface WorkItem {
   dateLabel: string;
   description?: string;
   subtitle?: string | null;
+  /** Publication distinction ("Oral", "Spotlight", …) — a badge after the subtitle. */
+  distinction?: string | null;
   // Credited names (publications only) — pre-resolved into linkable chips so the
   // card can render each one individually instead of a flat joined string. `marks`
   // holds BOTH mark families in reading order — institution numbers, then
@@ -461,6 +466,7 @@ export async function getWorkItems(): Promise<WorkItem[]> {
       })(),
       // Authorship role leads the venue when present ("Lead author · Venue").
       subtitle: pub.role ? `${pub.role} · ${pub.venue}` : pub.venue,
+      distinction: pub.distinction ?? null,
       affiliations: pub.affiliations ?? [],
       tags: pub.tags ?? [],
       metrics: pub.metrics ?? {},

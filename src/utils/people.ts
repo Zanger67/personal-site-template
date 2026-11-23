@@ -290,7 +290,7 @@ async function collectWorks(): Promise<PersonWork[]> {
         href: pub.url || `${base}/works#publications`,
         external: !!pub.url,
         dateLabel: fmtPubDate(String(pub.date)),
-        meta: pub.venue ?? null,   // venue only — no authorship role ("Lead author"/…)
+        meta: [pub.venue, pub.distinction].filter(Boolean).join(' · ') || null,   // venue (+ distinction) — no authorship role ("Lead author"/…)
         color: KIND_CAT.Publication,
         sortDate: new Date(pub.date).valueOf(),
         authors: authorRefs.map(toAuthor),            // authors already include self

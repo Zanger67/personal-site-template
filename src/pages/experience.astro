@@ -397,6 +397,7 @@ interface Item {
   dateLabel: string;
   description: string | null;
   subtitle: string | null;   // org · location context line (clubs/work-style items)
+  distinction: string | null; // publication distinction ("Oral", …) — badge after the venue
   links: { label: string; url: string }[];
   // Internal link to this item's OWN detail page (projects). Rendered as a light
   // "see full" affordance under the description — not a boxed d-links button —
@@ -472,6 +473,7 @@ interface ItemOpts {
   affiliations?: string[]; isWork?: boolean; main?: boolean; also?: CatKey[];
   relationGroups?: string[]; tags?: string[]; metrics?: Metrics; ref?: string | null;
   authors?: AuthorChip[];
+  distinction?: string | null;
 }
 function mkItem(o: ItemOpts): Item | null {
   const s = parseDate(o.start);
@@ -522,7 +524,7 @@ function mkItem(o: ItemOpts): Item | null {
   const cats = Array.from(new Set<CatKey>([o.type, ...(o.also || [])]));
   return {
     id: _id++, title, type: o.type, start, end, startMonthNum: monthNum(s), endMonthNum, dateLabel,
-    description, subtitle: o.subtitle || null, links, detailUrl: o.detailUrl ?? null, entity, entityShort, group: `${o.type}::${entity}`,
+    description, subtitle: o.subtitle || null, distinction: o.distinction || null, links, detailUrl: o.detailUrl ?? null, entity, entityShort, group: `${o.type}::${entity}`,
     affiliations: o.affiliations || [],
     isWork: !!o.isWork,
     relationGroups: o.relationGroups || [],
@@ -673,6 +675,7 @@ const items: Item[] = [
     // is left to the venue alone.
     authors: pubAuthors(p.authors, p.contributions, p.authorAffiliations),
     description: p.venue ?? null,
+    distinction: p.distinction ?? null,
     // Partner labs/orgs — cross-link the paper to that org on the timeline, same as projects.
     affiliations: p.affiliations || [],
     links: [...paperLink(p.url), ...extraLinks(p.urls), ...extraLinks(p.features)], main: p.main,
@@ -1447,6 +1450,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
   .d-tag { font-size: 0.75rem; color: var(--accent); background: var(--accent-light); padding: 0.15rem 0.5rem; border-radius: 3px; }
   /* Affiliation chips — outlined "@ org", distinct from the filled topic tags. */
   .d-affils { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: -0.2rem 0 1rem; }
+  .d-distinction { display: inline-block; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); border: 1px solid currentColor; border-radius: 3px; padding: 0.05rem 0.35rem; margin-left: 0.4rem; vertical-align: 0.1em; white-space: nowrap; }
   .d-affil { font-size: 0.75rem; color: var(--text-muted); border: 1px solid var(--border); padding: 0.15rem 0.5rem; border-radius: 3px; }
   .d-affil::before { content: '@'; margin-right: 0.15rem; opacity: 0.6; }
   .d-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
@@ -1894,7 +1898,7 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
     interface Item {
       id: number; title: string; type: string; start: number; end: number | null;
       startMonthNum: number; endMonthNum: number | null; dateLabel: string;
-      description: string | null; subtitle: string | null; links: { label: string; url: string }[]; detailUrl: string | null;
+      description: string | null; subtitle: string | null; distinction?: string | null; links: { label: string; url: string }[]; detailUrl: string | null;
       entity: string; entityShort: string; group: string; affiliations: string[]; relationGroups: string[]; isWork: boolean;
       tags: string[]; metrics: MetricRow[]; main: boolean; cats: string[]; laneKey?: string | null;
       // Credited names + their marks. The legend arrives pre-split by where each
@@ -2257,6 +2261,11 @@ const cfg = { categories: CATEGORIES, typeOrder: TYPE_ORDER, summerCols: SUMMER_
         // Inline markdown (bold/italic/code/strike/links + line breaks) — see
         // src/utils/markdown.ts. Authored HTML is escaped, so innerHTML is safe.
         const p = document.createElement('p'); p.className = 'd-desc'; p.innerHTML = inlineMarkdown(it.description);
+        // Publication distinction ("Oral", …) closes the venue line, as on a Works card.
+        if (it.distinction) {
+          const b = document.createElement('span'); b.className = 'd-distinction'; b.textContent = it.distinction;
+          p.appendChild(b);
+        }
         drawerBody.appendChild(p);
       }
       // "See full" affordance — an internal link to this item's own detail page
