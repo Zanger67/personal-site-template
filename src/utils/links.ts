@@ -72,9 +72,13 @@ export function knownHostLabel(raw: string): string | null {
 // venue the site doesn't recognize — the same rule a person's primary link follows
 // (see knownHostLabel). Every surface that lists papers goes through this, so the
 // label reads identically on a Works card, the /collaborators list and the
-// experience drawer.
-export function paperLink(url?: string | null): Link[] {
-  return url ? [{ label: knownHostLabel(url) ?? 'Read', url }] : [];
+// experience drawer. To name it explicitly, list the same URL with a `title` in
+// the paper's `urls`/`features` (pass those lists here): that title wins, and the
+// duplicate entry de-dupes away downstream.
+export function paperLink(url?: string | null, ...lists: (UrlEntry[] | null | undefined)[]): Link[] {
+  if (!url) return [];
+  const titled = lists.flat().find(u => u?.url === url && u.title?.trim())?.title?.trim();
+  return [{ label: titled ?? knownHostLabel(url) ?? 'Read', url }];
 }
 
 export function hostLabel(raw: string): string {

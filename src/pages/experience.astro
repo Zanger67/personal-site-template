@@ -678,7 +678,7 @@ const items: Item[] = [
     distinction: p.distinction ?? null,
     // Partner labs/orgs — cross-link the paper to that org on the timeline, same as projects.
     affiliations: p.affiliations || [],
-    links: [...paperLink(p.url), ...extraLinks(p.urls), ...extraLinks(p.features)], main: p.main,
+    links: [...paperLink(p.url, p.urls, p.features), ...extraLinks(p.urls), ...extraLinks(p.features)], main: p.main,
     relationGroups: p.relationGroups, metrics: p.metrics,
   })),
   ...(awards as any[]).map(a => mkItem({

@@ -472,10 +472,11 @@ export async function getWorkItems(): Promise<WorkItem[]> {
       metrics: pub.metrics ?? {},
       // The paper link is the title's href AND earns its own leading chip, so the
       // card's link row offers it explicitly rather than hiding it in the title
-      // (paperLink brands it by host — "OpenReview"/"arXiv" — else "Read"; a
-      // `urls` entry pointing at the same URL de-dupes away).
+      // (paperLink brands it by host — "OpenReview"/"arXiv" — else "Read", unless
+      // a titled `urls`/`features` entry for the same URL names it; that entry
+      // then de-dupes away).
       links: dedupeLinks([
-        ...paperLink(pub.url),
+        ...paperLink(pub.url, pub.urls, pub.features),
         ...extraLinks(pub.urls),
         ...extraLinks(pub.features),
       ]),

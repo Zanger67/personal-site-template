@@ -296,7 +296,7 @@ async function collectWorks(): Promise<PersonWork[]> {
         authors: authorRefs.map(toAuthor),            // authors already include self
         // Paper link leads the chips, matching the Works cards + drawer.
         links: dedupeLinks([
-          ...paperLink(pub.url),
+          ...paperLink(pub.url, pub.urls, pub.features),
           ...extraLinks(pub.urls),
           ...extraLinks(pub.features),
         ]),
